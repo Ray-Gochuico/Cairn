@@ -74,17 +74,22 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 // constants (noUnusedLocals); the per-version diffs live in `diffFromPrevious`
 // below and the full history is in git.
 // v1.3 (W1, 2026-08-25) adds the Stress Test card to the doc's coverage: a
-// both-surfaces opening + the bracket line scoped to the Backtest tool. W2
-// takes v1.3 → v1.4 for the History view — one owner per version number.
-const BACKTEST_TEXT_v1_3 = `**About the Historical Backtest**
+// both-surfaces opening + the bracket line scoped to the Backtest tool.
+// v1.3 (stress surfaces) superseded by v1.4 (History view added): W2
+// (2026-09-02) widens the opening to a THIRD view — the History fan on the
+// Path to FI and Compound Interest calculators — and appends one paragraph
+// describing it. Every other v1.3 paragraph is carried over byte-identically.
+const BACKTEST_TEXT_v1_4 = `**About the Historical Backtest**
 
-This data replays your plan against U.S. market data from 1871 to 2022, in two views. The **Backtest tool** replays every historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 1973, and so on; only start years with a full horizon of data are shown (for a 30-year horizon the latest start is 1993, since the data ends in 2022). The **Stress Test card** replays a handful of named historical windows — specific starting sequences from the same dataset (the 1929 crash, the 1970s inflation run, and so on) — against the portfolio and contributions you hold today. Both are history replayed, never a forecast.
+This data replays your plan against U.S. market data from 1871 to 2022, in three views. The **Backtest tool** replays every historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 1973, and so on; only start years with a full horizon of data are shown (for a 30-year horizon the latest start is 1993, since the data ends in 2022). The **Stress Test card** replays a handful of named historical windows — specific starting sequences from the same dataset (the 1929 crash, the 1970s inflation run, and so on) — against the portfolio and contributions you hold today, and the **History view** on the Path to FI and Compound Interest calculators replays your contribution plan against every full-length stretch in the same dataset. All three are history replayed, never a forecast.
 
 **Past results do not predict future returns.** This is the most important sentence on this page. The U.S. market has only ~120 *overlapping* 30-year windows since 1871 — they share most of their years, so they are **not independent samples**, and a "94 of 120" success count is **not a 94/120 probability**. The next 30 years will be a new window not in this dataset. Backtests systematically miss tail risks that have not happened yet (a U.S. default, a multi-decade stagnation, a regime change in tax law). A named stress window is one sequence that happened once — it is not a probability of anything.
 
 The **success rate is a count of past outcomes, not a probability** of future success. Raising the *goal ending amount* above $0 makes "success" stricter — you are asking the plan to also leave a margin — but it stays a tally of what *did* happen, never a forecast of what will.
 
-Everything in these replays is computed in **real (CPI-adjusted) dollars** — both your inputs and the results are stated in today's purchasing power. The returns applied each year are **real (CPI-adjusted) total returns for a stock/bond blend**: the stock leg is Shiller's CPI-deflated S&P total return and the bond leg is a 10-year U.S. Treasury total return deflated to real, weighted by the stock percentage you chose and rebalanced annually. Those returns are applied **gross of fees** — your own real portfolio will diverge based on fund expense ratios, asset location, and how your actual allocation differs from the chosen stock percentage. **Tax brackets are held at 2026 levels** across the Backtest tool's entire 1871-to-2022 replay — historical brackets are not reconstructed, so any income-tax treatment is approximate; the Stress Test card applies no tax treatment at all. See *Settings → Disclosures* for the full assumption set.`;
+Everything in these replays is computed in **real (CPI-adjusted) dollars** — both your inputs and the results are stated in today's purchasing power. The returns applied each year are **real (CPI-adjusted) total returns for a stock/bond blend**: the stock leg is Shiller's CPI-deflated S&P total return and the bond leg is a 10-year U.S. Treasury total return deflated to real, weighted by the stock percentage you chose and rebalanced annually. Those returns are applied **gross of fees** — your own real portfolio will diverge based on fund expense ratios, asset location, and how your actual allocation differs from the chosen stock percentage. **Tax brackets are held at 2026 levels** across the Backtest tool's entire 1871-to-2022 replay — historical brackets are not reconstructed, so any income-tax treatment is approximate; the Stress Test card applies no tax treatment at all. See *Settings → Disclosures* for the full assumption set.
+
+The **History view** on the Path to FI and Compound Interest calculators replays a contribution plan (no withdrawals) against the same dataset: every full-length historical stretch at a fixed 75% stock / 25% bond real-return blend, rebalanced annually. At each year it reports the middle half (25th–75th percentile) and median of the balances those stretches had reached, and — where a target exists — a count of the stretches that reached the target within the horizon. The same rules apply: overlapping stretches are not independent samples, the count is a tally of past outcomes and never a probability, returns are real (CPI-adjusted) and gross of fees, and the view is history, not a forecast.`;
 
 const LEARNING_TEXT_v1_0 = `**About the Learning feature**
 
@@ -147,11 +152,11 @@ export const DISCLOSURES = {
       'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
   } satisfies DisclosureDocument,
   backtest: {
-    version: '1.3',
+    version: '1.4',
     title: 'About the Historical Backtest',
-    body: BACKTEST_TEXT_v1_3,
+    body: BACKTEST_TEXT_v1_4,
     diffFromPrevious:
-      'Version 1.3 adds the Stress Test card to what this disclosure covers. The card replays five named historical windows — specific starting sequences from the same 1871-to-2022 dataset, using the same real (CPI-adjusted) stock/bond return basis — against the portfolio and contributions you hold today. The opening paragraph now describes both views, the tail-risk paragraph notes that a named window is one sequence that happened once, and the tax-bracket line is scoped to the Backtest tool (the Stress Test card applies no tax treatment). No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.2. Please re-read and re-accept.',
+      'Version 1.4 adds the History view on the Path to FI and Compound Interest calculators: the same 1871–2022 dataset now also drives an accumulation-side percentile band (the middle half and median across every full-length historical stretch) plus a reached-the-target count on those two cards. The opening now names those surfaces alongside the surfaces named in v1.3. No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.3. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
   } satisfies DisclosureDocument,

@@ -119,10 +119,10 @@ describe('DISCLOSURES', () => {
 });
 
 describe('backtest disclosure', () => {
-  it('is registered at v1.3 with a non-empty body + acceptance label', () => {
+  it('is registered at v1.4 with a non-empty body + acceptance label', () => {
     const d = DISCLOSURES.backtest;
     expect(d).toBeDefined();
-    expect(d.version).toBe('1.3');
+    expect(d.version).toBe('1.4');
     expect(d.body.length).toBeGreaterThan(200);
     expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
   });
@@ -161,21 +161,50 @@ describe('backtest disclosure', () => {
     expect(body).not.toMatch(/\b2000\b/);
   });
 
-  it('v1.3 ships a diffFromPrevious that explains the stress-test addition (house rule: body change ⇒ bump + diff)', () => {
+  it('ships a diffFromPrevious for the current version (house rule: body change ⇒ bump + diff)', () => {
     const diff = DISCLOSURES.backtest.diffFromPrevious;
     expect(diff).toBeTruthy();
-    expect(diff).toContain('Stress Test');
     expect(diff).toMatch(/2022/); // names the same 1871-to-2022 dataset
     expect(diff).toContain('re-read and re-accept');
   });
 
-  it('v1.3 covers BOTH W1 surfaces, scopes the bracket line, and does not pre-describe W2', () => {
+  it('v1.4 covers all THREE surfaces and keeps W1’s scoped bracket line', () => {
     const body = DISCLOSURES.backtest.body;
     expect(body).toContain('Backtest tool');
     expect(body).toContain('Stress Test card');
     expect(body).toContain('applies no tax treatment');
     expect(body).toContain('history replayed, never a forecast');
-    // W2 owns v1.4 and the History-view framing — v1.3 must not claim it.
-    expect(body).not.toMatch(/history view/i);
+    // W2's surface joined the enumeration at v1.4 (the v1.3 pin asserted its
+    // ABSENCE — retargeted here, deliberately, by the wave that owns v1.4).
+    expect(body).toMatch(/history view/i);
+  });
+
+  it('backtest v1.4 body names the History view surfaces and keeps the framing', () => {
+    const body = DISCLOSURES.backtest.body;
+    expect(body).toContain('History view');
+    expect(body).toContain('Path to FI and Compound Interest');
+    expect(body).toContain('never a probability');
+    expect(body).toContain('not independent samples');
+    // The v1.3 stress framing survives verbatim.
+    expect(body).toContain('one sequence that happened once');
+  });
+
+  it('backtest v1.4 diff describes exactly the History addition against v1.3', () => {
+    const diff = DISCLOSURES.backtest.diffFromPrevious!;
+    expect(diff.length).toBeGreaterThan(40);
+    expect(diff).toContain('History view');
+    expect(diff).toContain('Path to FI');
+    expect(diff).toContain('Compound Interest');
+    expect(diff).toMatch(/Please re-read and re-accept\.$/);
+    // References no OTHER change:
+    expect(diff).toContain(
+      'No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing',
+    );
+  });
+
+  it('backtest v1.4 keeps the acceptance checkbox label byte-identical to v1.3', () => {
+    expect(DISCLOSURES.backtest.acceptanceCheckboxLabel).toBe(
+      'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
+    );
   });
 });

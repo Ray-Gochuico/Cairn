@@ -1,11 +1,11 @@
 /**
  * W1 Task 4 — StressTestCard: window chips, KEEP/PORTFOLIO modes, in-card
- * v1.3 disclosure gate, honesty lines, deterministic replay pins.
+ * in-card disclosure gate, honesty lines, deterministic replay pins.
  *
  * Priming block copied from PathToFiCard.test.tsx (the house fixture):
  * pinned date 2026-05-14, Alice dob 1990-01-01. Default bar: portfolio
  * $100k (snapshot), $12k/yr contributions (12 × $1,000/mo), Moderate 6%,
- * SWR 4%, inflation 3%. Acceptance seeded at backtest '1.3' so most tests
+ * SWR 4%, inflation 3%. Acceptance seeded at backtest '1.4' so most tests
  * render ungated.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -280,7 +280,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(PINNED_DATE);
   primeStores();
-  seedAcceptance('backtest', '1.3');
+  seedAcceptance('backtest', '1.4');
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -320,15 +320,15 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByTestId('stress-window-picker')).toBeInTheDocument();
-    expect(accept).toHaveBeenCalledWith('backtest', '1.3');
+    expect(accept).toHaveBeenCalledWith('backtest', '1.4');
   });
 
-  it('the button mounts DisclosureModal (v1.3 + diff box); Escape cancels without accepting', () => {
+  it('the button mounts DisclosureModal (v1.4 + diff box); Escape cancels without accepting', () => {
     seedAcceptance('backtest', '1.2');
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.3')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.4')).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('disclosure-modal-body')).not.toBeInTheDocument();
@@ -336,8 +336,8 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     expect(screen.getByTestId('stress-test-meaning')).toHaveTextContent('Accept the Historical Backtest disclosure');
   });
 
-  it('accepted at exactly 1.3 → the chips render', () => {
-    renderCard(); // default seed: '1.3'
+  it('accepted at exactly 1.4 → the chips render', () => {
+    renderCard(); // default seed: '1.4'
     expect(screen.getByTestId('stress-window-picker')).toBeInTheDocument();
   });
 });

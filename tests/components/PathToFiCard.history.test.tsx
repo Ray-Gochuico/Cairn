@@ -317,6 +317,9 @@ describe('PathToFiCard — History fan rendering (D-UB8, CH-3, CH-9)', () => {
     expect(screen.getByTestId('path-to-fi-history-caption')).toHaveTextContent(
       fanCaption({ M: 123, H: 30 }),
     );
+    // CH-3 drift-guard: the caption paraphrases DISCLOSURES.backtest — a future
+    // body edit bumps the version, trips this pin, and forces a conscious review.
+    expect(DISCLOSURES.backtest.version).toBe('1.4');
   });
 
   it('STOP holds line is byte-exact (CH-2 worked literal)', () => {
