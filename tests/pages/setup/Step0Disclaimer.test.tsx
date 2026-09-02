@@ -102,4 +102,40 @@ describe('Step0Disclaimer', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     expect(explore).toBeEnabled();
   });
+
+  // W4 (D-S7): the parent must hold Step 0 mounted across the acceptance
+  // write, or FlowShell mounts for an instant and writes the REAL
+  // setupWizard.progress.v2 key on the way into the sample profile.
+  it('W4: signals onExploreEntering(true) BEFORE the acceptance write', async () => {
+    const order: string[] = [];
+    const acceptDisclaimer = vi.fn().mockImplementation(async () => void order.push('accept'));
+    useHouseholdStore.setState({ acceptDisclaimer } as any);
+    const enter = vi
+      .spyOn(exploreTransitions, 'enterExploreMode')
+      .mockImplementation(async () => void order.push('enter'));
+    render(
+      <Step0Disclaimer
+        onComplete={vi.fn()}
+        onExploreEntering={(v) => order.push(`entering:${v}`)}
+      />,
+    );
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+    await waitFor(() => expect(order).toEqual(['entering:true', 'accept', 'enter']));
+    enter.mockRestore();
+  });
+
+  it('W4: releases the hold when the entry fails, so the wizard is not stuck on Step 0', async () => {
+    const calls: boolean[] = [];
+    const acceptDisclaimer = vi.fn().mockRejectedValue(new Error('db down'));
+    useHouseholdStore.setState({ acceptDisclaimer } as any);
+    render(
+      <Step0Disclaimer onComplete={vi.fn()} onExploreEntering={(v) => calls.push(v)} />,
+    );
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+    await waitFor(() => expect(calls).toEqual([true, false]));
+    // The modal surfaces the failure inline and re-enables the action.
+    expect(await screen.findByText('db down')).toBeInTheDocument();
+  });
 });

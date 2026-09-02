@@ -5,6 +5,16 @@ import { enterExploreMode } from '@/lib/explore-transitions';
 
 interface Props {
   onComplete: () => void;
+  /**
+   * W4 (D-S7): fired `true` the moment the explore entry starts and `false`
+   * if it fails. Recording the app_wide acceptance flips the wizard's
+   * `disclaimerSatisfied` predicate, which would swap Step 0 for FlowShell in
+   * the instant before `window.location.assign('/')` commits — and FlowShell's
+   * mount effect WRITES the real `setupWizard.progress.v2` key. The parent
+   * holds Step 0 mounted while this is true, so no real device-local key is
+   * ever written on the way into the sample profile.
+   */
+  onExploreEntering?: (entering: boolean) => void;
 }
 
 /**
@@ -19,7 +29,7 @@ interface Props {
  * current version is already accepted, so Step 0 is a no-op if it even
  * renders.
  */
-function Step0Disclaimer({ onComplete }: Props) {
+function Step0Disclaimer({ onComplete, onExploreEntering }: Props) {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
 
   // First-run path — the user has nothing to "diff from." Build a
@@ -58,14 +68,23 @@ function Step0Disclaimer({ onComplete }: Props) {
         helper: 'See a filled-in Cairn before entering your own numbers.',
         busyLabel: 'Opening sample data…',
         onSelect: async () => {
-          // 1. Acceptance on the REAL DB — the same write path the primary
-          //    action uses; the flag is not set yet, so getDatabase() is real.
-          await acceptDisclaimer('app_wide', firstRunDoc.version);
-          // 2. close (flush) → flag → navigate('/'): explore boot takes over.
-          //    The seed then writes the app_wide acceptance into the SAMPLE DB
-          //    at the registry version — justified because the flag is only
-          //    ever set after this genuine acceptance (D-S3).
-          await enterExploreMode();
+          // 0. Hold Step 0 mounted for the whole transition (see the prop's
+          //    doc comment) — otherwise step 1 flips the wizard to FlowShell,
+          //    which writes the REAL setupWizard.progress.v2 key.
+          onExploreEntering?.(true);
+          try {
+            // 1. Acceptance on the REAL DB — the same write path the primary
+            //    action uses; the flag is not set yet, so getDatabase() is real.
+            await acceptDisclaimer('app_wide', firstRunDoc.version);
+            // 2. close (flush) → flag → navigate('/'): explore boot takes over.
+            //    The seed then writes the app_wide acceptance into the SAMPLE
+            //    DB at the registry version — justified because the flag is
+            //    only ever set after this genuine acceptance (D-S3).
+            await enterExploreMode();
+          } catch (e) {
+            onExploreEntering?.(false); // release the hold; the modal shows the error
+            throw e;
+          }
         },
       }}
     />
