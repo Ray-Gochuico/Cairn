@@ -52,6 +52,11 @@ const NAMESPACED: ReadonlySet<string> = new Set([
   // namespaces it anyway: an explore session must leave NOTHING behind, and
   // the `explore.` sweep on exit reaps it.
   'src/lib/calculators/dollar-basis.ts',
+  // W2's per-card Assumed | History return source ('calc-chart-source:<cardId>').
+  // Same ruling as the basis key above, for the same reason: the stored value
+  // is an enum, but an explore session must leave nothing behind — a sample-era
+  // History selection has no business surviving into the real profile.
+  'src/lib/calculators/use-chart-source.ts',
   // Update-check stamp — also disabled in explore (D-S7 offline).
   'src/components/settings/UpdaterSection.tsx',
   // The helper's own home.
