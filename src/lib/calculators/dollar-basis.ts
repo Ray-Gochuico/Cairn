@@ -18,8 +18,13 @@ function readInitial(pageId: string): DollarBasis {
   }
 }
 
-/** Test seam only — mirrors next-dollar-store's readInitialForTests. */
-export const readInitialForTests = readInitial;
+/**
+ * Test seam only — the next-dollar-store idiom, renamed with the store's own
+ * name so the reader ratchet can pin it by bare identifier (P12) without
+ * dragging that unrelated store's identically-named seam into
+ * STORE_ALLOWLIST. Reading the raw basis anywhere else is a policy failure.
+ */
+export const __readInitialDollarBasisForTests = readInitial;
 
 interface DollarBasisState {
   /** Per-page basis; a page absent here reads sessionStorage lazily. */

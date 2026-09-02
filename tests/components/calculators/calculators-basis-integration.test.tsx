@@ -1,4 +1,4 @@
-import { render, screen, act, cleanup } from '@testing-library/react';
+import { render, screen, act, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -124,6 +124,28 @@ describe('W5 page integration: one control, page-wide effect, session semantics'
       'aria-pressed',
       'true',
     );
+  });
+
+  it("the bar's 'Reset to my data' clears the scenario and leaves the basis alone", async () => {
+    // Sibling of the scope-flip pin below: the basis is VIEW state (D-T2/D-T8),
+    // never override machinery, so the bar's override Reset must not touch it.
+    const user = userEvent.setup();
+    renderPage(); // seedDemoScenario() in beforeEach → the Reset control mounts
+    await user.click(screen.getByRole('button', { name: 'Future $' }));
+    expect(screen.getByTestId('compound-headline').textContent).toContain('in future dollars');
+
+    await user.click(screen.getByRole('button', { name: /^reset to my data$/i }));
+
+    // The scenario overrides are gone…
+    await waitFor(() => expect(screen.queryByTestId('scenario-edited-count')).toBeNull());
+    // …and the display basis is exactly where the user left it.
+    expect(useDollarBasisStore.getState().byPage[CALCULATORS_PAGE_ID]).toBe('future');
+    expect(sessionStorage.getItem('calc-basis:calculators')).toBe('future');
+    expect(screen.getByRole('button', { name: 'Future $' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('compound-headline').textContent).toContain('in future dollars');
   });
 
   it('person-scope flips leave the basis untouched (orthogonality pin)', () => {

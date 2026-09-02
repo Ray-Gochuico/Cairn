@@ -194,7 +194,12 @@ describe('CompoundInterestCard', () => {
       // Extract the FIGURE only (e.g. "$19,672" → 19672) — the basis phrase
       // beside it carries the inflation percent's digits (W5 D-T4).
       const rendered = Number((headlineText.match(/\$[\d,]+/)?.[0] ?? '').replace(/[$,]/g, ''));
-      expect(rendered).toBeGreaterThan(0);
+      // Bracket the NOMINAL leg from BOTH sides. The old `> 0` floor let a
+      // Today's-$ (real) rendering — 19,672/1.03^10 ≈ $14,637 at this
+      // fixture's fallback inflation — satisfy an assertion that claims to
+      // read the nominal one; $19,000 sits above every real rendering and
+      // below the APY figure (≈ $19,672).
+      expect(rendered).toBeGreaterThan(19_000);
       expect(rendered).toBeLessThan(APR_DIRECT_VALUE);
     });
   });

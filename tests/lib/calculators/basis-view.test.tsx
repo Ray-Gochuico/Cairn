@@ -25,6 +25,7 @@ import {
   __resetDollarBasisForTests,
   useDollarBasisStore,
 } from '@/lib/calculators/dollar-basis';
+import { formatCurrency } from '@/lib/format';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -186,6 +187,29 @@ describe('usePathToFiBasisView (the conversion boundary, D-T5)', () => {
     expect(result.current!.fmt.monthlyExpenses).toBe('$5,000');
   });
 
+  it('a return at/below inflation floors ONLY the coast solve: full target, $1,300,000 gap, table rate still negative', () => {
+    // Review MAJOR-0 anchor. The 6% fixture above cannot separate floored from
+    // unfloored (realRateOf === realRateOfUnfloored at 6%/3%); this one can.
+    const { result } = renderHook(() =>
+      usePathToFiBasisView({
+        ...ARGS,
+        fiSeries: [{ label: 'Moderate', rate: 0.02, years: Infinity }],
+      }),
+    );
+    const row = result.current!.coastRows[0];
+    // FLOORED coast (realRateOf clamps to 0): discounting at 0% real leaves the
+    // FULL FI target standing — exactly what the card's floored note asserts.
+    expect(row.coastNeededToday).toBe(1_500_000);
+    expect(row.gapFmt).toBe('$1,300,000'); // 1,500,000 − 200,000
+    // …while the TABLE rate stays UNFLOORED (and negative): 1.02/1.03 − 1.
+    expect(row.realRate).toBeCloseTo(1.02 / 1.03 - 1, 10);
+    expect(row.realRate).toBeLessThan(0);
+    // Anti-pin — the unfloored coast solve, 1.5M/(1.02/1.03)^29 = $1,990,517
+    // (gap $1,790,517): a figure that would contradict the note beside it.
+    expect(formatCurrency(row.coastNeededToday)).not.toBe('$1,990,517');
+    expect(row.gapFmt).not.toBe('$1,790,517');
+  });
+
   it('today: flat REAL target; future: target grows by 1.03^t — the wiring the render sweep cannot see', () => {
     const { result } = renderHook(() => usePathToFiBasisView(ARGS));
     const data = result.current!.chartData;
@@ -207,6 +231,27 @@ describe('usePathToFiBasisView (the conversion boundary, D-T5)', () => {
     expect(result.current!.teachingBridge).toBe(PATH_TO_FI_BRIDGE);
     expect(result.current!.chartLabel).toBe('Path to FI (future $)');
     expect(result.current!.coastRows[0].gapFmt).toBe(todayGap); // year-0 figure: invariant
+  });
+
+  it('the inflation wire is the RESOLVER, not a 3% constant (non-3% fixture moves rate, gap, phrase and target)', () => {
+    // Every other PathToFi fixture in W5 seeds 3%, so a hardcoded
+    // `const inflation = 0.03` inside the hook would be indistinguishable.
+    useHouseholdStore.setState({
+      household: {
+        ...(useHouseholdStore.getState().household as Household),
+        inflationAssumption: 0.024,
+      },
+      isLoading: false,
+      error: null,
+    });
+    __resetScenarioAssumptionsForTests();
+    const { result } = renderHook(() => usePathToFiBasisView(ARGS));
+    const row = result.current!.coastRows[0];
+    expect(row.realRate).toBeCloseTo(1.06 / 1.024 - 1, 10); // 3.515625% real, NOT 2.9126%
+    expect(row.gapFmt).toBe('$350,706'); // 1.5M/1.03515625^29 − 200k, NOT $452,380
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(result.current!.phrase).toBe('in future dollars, at your 2.4% inflation assumption');
+    expect(result.current!.chartData[30].target).toBeCloseTo(1_500_000 * Math.pow(1.024, 30), 4);
   });
 
   it('STOP at/past retirement (horizon 0) → empty chart, rows still computed; null fiSeries → null', () => {

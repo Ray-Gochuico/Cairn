@@ -580,6 +580,13 @@ describe('PathToFiCard — Stop today (Coast mode)', () => {
         /A scenario's return is at or below inflation — its real rate is floored at 0, so its coast target equals the full FI number\./,
       ),
     ).toBeInTheDocument();
+    // …and the FIGURES beside the note must SAY what the note says: the coast
+    // target IS the full $1,500,000 FI number, so the gap is $1,300,000 and
+    // the headline is 13% of CoastFI. An unfloored coast solve would render
+    // $1,790,517 / "10% of CoastFI" next to a sentence contradicting it.
+    expect(screen.getByTestId('ptf-gap').textContent).toBe('$1,300,000');
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toBe('13% of CoastFI');
+    expect(screen.queryByText('$1,790,517')).toBeNull();
   });
 
   it('at/past retirement: headline "—" + the verbatim guard sentence', async () => {
