@@ -6,6 +6,7 @@ import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -114,6 +115,7 @@ const renderBar = () => render(<MemoryRouter><ScenarioBar /></MemoryRouter>);
 describe('ScenarioBar', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     resetStores();
     primeBaseline();
@@ -133,6 +135,18 @@ describe('ScenarioBar', () => {
     expect(region).not.toHaveAttribute('aria-live');
     expect(region.querySelector('[role="status"]')).toBeNull();
     expect(region.querySelector('[aria-live]')).toBeNull();
+  });
+
+  it('W5: hosts the page dollar-basis control with its scope note', () => {
+    renderBar();
+    const group = screen.getByRole('group', { name: 'Dollar basis' });
+    expect(within(group).getByRole('button', { name: "Today's $" })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByTestId('dollar-basis-scope-note').textContent).toBe(
+      'Applies to Path to FI & Compound Interest',
+    );
   });
 
   it('renders identity chips (filing status · state · tax year · salary) linking to Inputs', () => {
@@ -229,6 +243,7 @@ describe('ScenarioBar', () => {
 describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     resetStores();
     primeBaseline();
@@ -343,6 +358,7 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     resetStores();
@@ -452,6 +468,7 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
 describe('ScenarioBar — Send-to-What-If handoff (Wave C C11/DC6)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     resetStores();
@@ -550,6 +567,7 @@ describe('ScenarioBar — Send-to-What-If handoff (Wave C C11/DC6)', () => {
 describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     resetStores();
@@ -581,6 +599,7 @@ describe('ScenarioBar — scope-flip legibility (Wave C N2)', () => {
 
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     resetStores();
@@ -620,6 +639,7 @@ describe('ScenarioBar — scope-flip legibility (Wave C N2)', () => {
 describe('ScenarioBar — two-row layout + app-defaults qualifier (Wave C N1+N8)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     resetStores();
