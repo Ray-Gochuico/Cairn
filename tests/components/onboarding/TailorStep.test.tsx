@@ -127,7 +127,7 @@ describe('TailorStep', () => {
     expect(applied).toEqual(ALL_TOS.filter((to) => to !== '/property'));
   });
 
-  it('on Done writes a COMPLETE calculatorCardLayout for the 10 ids with the right hidden flags', async () => {
+  it('on Done writes a COMPLETE calculatorCardLayout for the 12 ids with the right hidden flags', async () => {
     const update = installStore();
     const user = userEvent.setup();
     render(
@@ -136,13 +136,14 @@ describe('TailorStep', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }));
 
     const { calculatorCardLayout } = soleUpdatePayload(update);
-    // Wave 18 B6: the merged 10-id list (supplemental-pay, path-to-fi).
-    const TEN = [
+    // Wave 18 B6: the merged id list (supplemental-pay, path-to-fi);
+    // W1: + retirement-age and stress-test in the path-to-fi group → 12 ids.
+    const TWELVE = [
       'paycheck', 'supplemental-pay', 'overtime', 'retirement-401k-withdrawal',
-      'path-to-fi', 'compound-interest', 'backtest',
+      'path-to-fi', 'retirement-age', 'compound-interest', 'backtest', 'stress-test',
       'debt-payoff', 'equity', 'contribution-allocator',
     ];
-    expect(calculatorCardLayout.map((e) => e.id).sort()).toEqual([...TEN].sort());
+    expect(calculatorCardLayout.map((e) => e.id).sort()).toEqual([...TWELVE].sort());
     // supplemental-pay recommended off → hidden:true; overtime on → hidden:false.
     expect(calculatorCardLayout.find((e) => e.id === 'supplemental-pay')!.hidden).toBe(true);
     expect(calculatorCardLayout.find((e) => e.id === 'overtime')!.hidden).toBe(false);

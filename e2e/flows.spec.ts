@@ -319,3 +319,36 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   await expect(card).toContainText('About how much goes toward college savings each month?');
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('calculators: stress card gates in-card on the v1.3 backtest disclosure; solver shows an honest bisection', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/calculators');
+  // The page itself is NOT blocked by the card's gate — the scope control renders.
+  await expect(page.getByRole('group', { name: 'Calculator scope' })).toBeVisible({ timeout: 30_000 });
+  // Open the stress card: gated in-card (seed has no backtest acceptance — and a
+  // v1.2 acceptance would equally re-gate on the exact-version compare).
+  await page.getByTestId('stress-test-trigger').click();
+  await expect(page.getByTestId('stress-test-meaning')).toContainText('Accept the Historical Backtest disclosure');
+  await page.getByRole('button', { name: 'Read and accept the Backtest disclosure' }).click();
+  // exact:true — the v1.3 diff box's first sentence ('Version 1.3 adds the
+  // Stress Test card…') would otherwise substring-match too (strict mode).
+  await expect(page.getByText('Version 1.3', { exact: true })).toBeVisible();
+  await expect(page.getByText('What changed since you last accepted:')).toBeVisible();
+  await page.getByRole('checkbox', { name: /historical outcomes only/ }).check();
+  // DisclosureModal's continueLabel default is 'Continue' (verified at execution).
+  await page.getByRole('button', { name: 'Continue' }).click();
+  // Chips render; pick 2008 (the chip is a <label> wrapping a sr-only radio);
+  // the verdict lands in the shell's role=status headline. Client-side only
+  // from here — no hard navigation after the acceptance write (the sql.js
+  // shim's ~250ms IndexedDB debounce would reload a pre-write DB and re-gate).
+  await page.locator('label', { hasText: 'The 2008 crash' }).click();
+  await expect(page.getByTestId('stress-test-headline')).toHaveText(/[−+]\d+% real/);
+  await expect(page.getByText('the same return basis as the Historical Backtest', { exact: false })).toBeVisible();
+  await expect(page.getByText('History that happened once — not a forecast, not a probability.')).toBeVisible();
+  // Solver card: criterion + probes in an ordered list + the verdict row.
+  await page.getByTestId('retirement-age-trigger').click();
+  await expect(page.getByText(/Holds means: the projected portfolio/)).toBeVisible();
+  await expect(page.getByTestId('retirement-age-probes').getByRole('listitem').first()).toBeVisible();
+  await expect(page.getByTestId('retirement-age-verdict')).toContainText('Earliest:');
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
