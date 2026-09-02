@@ -52,6 +52,7 @@ import {
   type Milestones,
   type MonthlyState,
 } from '@/lib/scenarios';
+import { localTodayISO } from '@/lib/dates';
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
@@ -267,8 +268,12 @@ export default function WhatIf() {
       Object.fromEntries(loans.map((l) => [l.id, l.name] as const)) as Record<number, string>,
     [loans],
   );
-  // The libs never read a clock (D-W3-9); the page injects the date.
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // The libs never read a clock (D-W3-9); the page injects the date — and it
+  // is the LOCAL calendar day, the same one useLocalToday feeds /monthly, the
+  // sidebar dot and Dashboard. ONE clock per page (review MINOR 12; the T2
+  // UTC lesson): toISOString().slice(0,10) is the UTC day, which flips hours
+  // early west of UTC and would let G3 disagree with every sibling surface.
+  const todayIso = useMemo(() => localTodayISO(), []);
 
   // D-W3-3/P3: the compare pair is a LENS — session-only, never persisted,
   // never writes visible/isActive. Hoisted here because ModelGaps' G10 names
@@ -291,6 +296,20 @@ export default function WhatIf() {
     return false;
   }, [roadmapCtx]);
 
+  // G2's consequence ("the portfolio starts at $0 in these projections") is
+  // only true when the ENGINE seed is zero. state-snapshot.ts seeds 529s and
+  // falls back to holdings for accounts without a snapshot, neither of which
+  // the FI-eligible provenance scan sees (review MINOR 1/14) — so positive
+  // evidence from the compared lines' month 0 suppresses the row.
+  const engineStartsAtZero = useMemo(() => {
+    for (const s of [comparePair.a, comparePair.b]) {
+      if (s?.id == null) continue;
+      const first = projections.get(s.id)?.[0];
+      if (first && totalInvestments(first) + first.cash !== 0) return false;
+    }
+    return true;
+  }, [comparePair, projections]);
+
   const gapsInput: ModelGapsInput = useMemo(() => ({
     household: household ?? null,
     settings: settingsForDisplay,
@@ -299,11 +318,12 @@ export default function WhatIf() {
     snapshots,
     contributions,
     roadmapHasUnanswered,
+    engineStartsAtZero,
     sides: [comparePair.a, comparePair.b]
       .filter((s): s is NonNullable<typeof s> => s != null)
       .map((s) => ({ name: s.name, payload: s.leverPayload })),
     todayIso,
-  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, comparePair, todayIso]);
+  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, todayIso]);
 
   // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
   // above this early return. Hooks must always run in the same order

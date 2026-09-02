@@ -18,7 +18,8 @@
  * PURE: todayIso injected; the only Date construction is from that ISO.
  */
 import { buildScenarioDefaults } from '@/lib/calculators/scenario-assumptions';
-import { monthlyInputPendingFor } from '@/lib/input-pending';
+import { monthlyInputUnconfirmedFor } from '@/lib/input-pending';
+import { dateFromLocalISO } from '@/lib/dates';
 import type { LeverPayload } from '@/lib/scenarios';
 import type { Account, AccountSnapshot, AppSettings, Contribution, Household, Person } from '@/types/schema';
 
@@ -42,9 +43,18 @@ export interface ModelGapsInput {
   /** ≥1 roadmap rule-engine node with status 'unanswered' (page computes via
    *  evaluate(useRoadmap()); false when the roadmap context is unavailable). */
   roadmapHasUnanswered: boolean;
+  /** Does the ENGINE actually seed month 0 at zero? G2's condition is the
+   *  canonical snapshot-only provenance string, but its consequence claims
+   *  the projection's starting balance — and state-snapshot.ts seeds 529s and
+   *  a holdings fallback the provenance never sees (review MINOR 1/14). The
+   *  page computes this from the compared projections' first MonthlyState. */
+  engineStartsAtZero: boolean;
   /** The compared pair (2 entries) or the only scenario (1). */
   sides: ModelGapsSide[];
-  /** 'YYYY-MM-DD' — injected; the lib never reads a clock. */
+  /** 'YYYY-MM-DD' — injected (localTodayISO at the page layer, ONE clock per
+   *  page); the lib never reads a clock and parses this LOCALLY, so the
+   *  calendar day it reasons over is the same day every other monthly-pending
+   *  surface uses. */
   todayIso: string;
 }
 
@@ -60,14 +70,21 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   if (i.household != null && i.household.monthlyExpenseBaseline <= 0) {
     rows.push({ id: 'G1', text: "No monthly expense baseline — FI dates can't be computed, so they aren't shown.", cta: OPEN_HOUSEHOLD });
   }
-  if (provenance.portfolio === 'no account snapshots yet') {
+  // The CONDITION is the canonical provenance string (CI-26b); the second
+  // guard keeps the CONSEQUENCE true — the engine seeds month 0 from a wider
+  // universe than the FI-eligible snapshot scan (D-W3-P1 review, MINOR 1/14).
+  if (provenance.portfolio === 'no account snapshots yet' && i.engineStartsAtZero) {
     rows.push({ id: 'G2', text: 'No account snapshots yet — the portfolio starts at $0 in these projections.', cta: { label: 'Open Accounts →', to: '/investments?manage=accounts' } });
   }
-  if (monthlyInputPendingFor(new Date(`${i.todayIso}T12:00:00Z`), i.accounts, i.snapshots)) {
+  // A register row states a FACT: monthlyInputPendingFor would also fire on
+  // the 1st of the month with last month fully confirmed (the nudge day) and
+  // stay silent during the 2..7 grace window. The row reads the predicate
+  // underneath instead (review MINOR 12), on the LOCAL calendar day.
+  if (monthlyInputUnconfirmedFor(dateFromLocalISO(i.todayIso), i.accounts, i.snapshots)) {
     rows.push({ id: 'G3', text: "Last month's balances aren't confirmed — lines start from the latest figures you've confirmed.", cta: { label: 'Open monthly check-in →', to: '/monthly' } });
   }
   if (provenance.annualContribution === 'no contributions in the last 12 months') {
-    rows.push({ id: 'G4', text: 'No contributions in the last 12 months — ongoing contributions enter these prefills as $0.', cta: { label: 'Open Contributions →', to: '/investments?manage=contributions' } });
+    rows.push({ id: 'G4', text: "No contributions in the last 12 months — the projection assumes none beyond the scenario's contribution levers.", cta: { label: 'Open Contributions →', to: '/investments?manage=contributions' } });
   }
   if (provenance.returnPct === 'app default 6%') {
     rows.push({ id: 'G5', text: 'Growth rate: app default 6% — no growth scenarios set.', cta: OPEN_HOUSEHOLD });

@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import { buildModelGaps, type ModelGapsInput } from '@/lib/model-gaps';
 import { makeAccount, makeHousehold, makePerson } from '../factories';
 import { AccountType, ContributionSource, SnapshotSource } from '@/types/enums';
 import type { AccountSnapshot, AppSettings, Contribution } from '@/types/schema';
+import { ADVICE_LEXICON, RESERVED_PHRASES } from '../helpers/advice-lexicon';
 
 // Fixture notes (Step 0 recorded the SHIPPED shapes):
 // - Contribution's date field is `date`, NOT `contributionDate`.
@@ -41,6 +42,7 @@ export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput
   snapshots: [confirmedSnapshot],
   contributions: [recentContribution],
   roadmapHasUnanswered: false,
+  engineStartsAtZero: true,
   sides: [
     { name: 'Baseline', payload: P() },
     { name: 'Aggressive payoff', payload: P() },
@@ -84,17 +86,75 @@ describe('buildModelGaps — absence is the calm outcome', () => {
       .toBe("Last month's balances aren't confirmed — lines start from the latest figures you've confirmed.");
   });
 
+  // Review MINOR 12: G3 states a FACT. isMonthlyInputPending layers a day-1
+  // nudge and a 2..7 grace window on top of the underlying predicate; a panel
+  // row that says "aren't confirmed" must read the predicate, not the nudge.
+  it('G3 is SILENT on the 1st when last month WAS confirmed (the day-1 nudge is not a fact)', () => {
+    const augConfirmed: AccountSnapshot = { ...confirmedSnapshot, snapshotDate: '2026-08-31' };
+    const rows = buildModelGaps(settledInput({ todayIso: '2026-09-01', snapshots: [augConfirmed] })).rows;
+    expect(rows.find((r) => r.id === 'G3')).toBeUndefined();
+  });
+
+  it('G3 still fires on the 1st when last month is genuinely unconfirmed', () => {
+    const augAuto: AccountSnapshot = {
+      ...confirmedSnapshot, snapshotDate: '2026-08-31', source: SnapshotSource.AUTO_DERIVED,
+    };
+    const rows = buildModelGaps(settledInput({ todayIso: '2026-09-01', snapshots: [augAuto] })).rows;
+    expect(rows.find((r) => r.id === 'G3')?.text)
+      .toBe("Last month's balances aren't confirmed — lines start from the latest figures you've confirmed.");
+  });
+
+  it('G3 fires inside the 2..7 grace window too — the row is a fact, not a nudge schedule', () => {
+    const augAuto: AccountSnapshot = {
+      ...confirmedSnapshot, snapshotDate: '2026-08-31', source: SnapshotSource.AUTO_DERIVED,
+    };
+    const rows = buildModelGaps(settledInput({ todayIso: '2026-09-03', snapshots: [augAuto] })).rows;
+    expect(rows.find((r) => r.id === 'G3')).toBeDefined();
+  });
+
+  describe('the injected day is read TZ-invariantly (no UTC slip inside the lib)', () => {
+    const ORIGINAL_TZ = process.env.TZ;
+    beforeEach(() => { process.env.TZ = 'Pacific/Auckland'; });  // UTC+12/+13
+    afterEach(() => {
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
+
+    it("todayIso '2026-08-31' resolves last month to July east of UTC, not August", () => {
+      // A UTC-noon parse of 2026-08-31 lands on 2026-09-01 in Auckland, which
+      // would make "last month" August and fire the row against a July-clean
+      // household.
+      const rows = buildModelGaps(settledInput({ todayIso: '2026-08-31' })).rows;
+      expect(rows.find((r) => r.id === 'G3')).toBeUndefined();
+    });
+  });
+
+  // Review MINOR 1/14: the CONDITION is the canonical provenance string
+  // (snapshot-only), but the CONSEQUENCE claims the engine seed. Holdings
+  // without snapshots (and 529-only snapshots) seed a non-zero month 0.
+  it('G2 is silent when the engine seed is NOT zero (holdings without snapshots)', () => {
+    const rows = buildModelGaps(settledInput({ snapshots: [], engineStartsAtZero: false })).rows;
+    expect(rows.find((r) => r.id === 'G2')).toBeUndefined();
+    expect(rows.find((r) => r.id === 'G3')).toBeDefined();  // the sibling row is unaffected
+  });
+
+  it('G2 fires only when the provenance string AND the zero engine seed agree', () => {
+    const rows = buildModelGaps(settledInput({ snapshots: [], engineStartsAtZero: true })).rows;
+    expect(rows.find((r) => r.id === 'G2')?.text)
+      .toBe('No account snapshots yet — the portfolio starts at $0 in these projections.');
+  });
+
   it('G4: no contributions in the trailing 12 months', () => {
     const rows = buildModelGaps(settledInput({ contributions: [] })).rows;
     expect(rows.find((r) => r.id === 'G4')?.text)
-      .toBe('No contributions in the last 12 months — ongoing contributions enter these prefills as $0.');
+      .toBe("No contributions in the last 12 months — the projection assumes none beyond the scenario's contribution levers.");
     expect(rows.find((r) => r.id === 'G4')?.cta).toEqual({ label: 'Open Contributions →', to: '/investments?manage=contributions' });
   });
 
   it('G4: a contribution older than the trailing window still fires the row', () => {
     const stale: Contribution = { ...recentContribution, date: '2024-06-15' };
     expect(buildModelGaps(settledInput({ contributions: [stale] })).rows.find((r) => r.id === 'G4')?.text)
-      .toBe('No contributions in the last 12 months — ongoing contributions enter these prefills as $0.');
+      .toBe("No contributions in the last 12 months — the projection assumes none beyond the scenario's contribution levers.");
   });
 
   it('G5 + G6: growth and withdrawal app-defaults surface as named facts', () => {
@@ -198,19 +258,27 @@ describe('buildModelGaps — absence is the calm outcome', () => {
       .toBe(JSON.stringify(buildModelGaps(settledInput({ snapshots: [] }))));
   });
 
-  it('no advice lexeme, no reserved phrase in any row', () => {
+  it('no advice lexeme, no reserved phrase in any row (EVERY row shape, incl. G10n)', () => {
+    const seq = { ...P(), withdrawalStrategy: 'sequential' as const };
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
       snapshots: [], contributions: [], roadmapHasUnanswered: true, settings: null,
       persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 })],
-      sides: [{ name: 'Baseline', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }, { name: 'B2', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }],
+      sides: [{ name: 'Baseline', payload: seq }, { name: 'B2', payload: seq }],
     })).rows;
+    // …plus the one row shape the all-rows fixture cannot reach: G10n, whose
+    // text interpolates a scenario name (review MINOR 0 — the scan must cover
+    // every row, not just the ones one fixture happens to produce).
+    const named = buildModelGaps(settledInput({
+      settings: null,
+      sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: seq }],
+    })).rows.filter((r) => r.id === 'G10');
     expect(rows.length).toBeGreaterThanOrEqual(8);
-    const ADVICE = /\b(should|recommend|recommendation|consider|suggest|suggested|ought|advise|advice|winner|act now)\b/i;
-    for (const r of rows) {
-      expect(r.text).not.toMatch(ADVICE);
-      expect(r.text).not.toContain('Suggested next step');
-      expect(r.text).not.toContain('Note — not a warning.');
+    expect(named).toHaveLength(1);
+    for (const r of [...rows, ...named]) {
+      expect(r.text).not.toMatch(ADVICE_LEXICON);
+      expect(r.cta.label).not.toMatch(ADVICE_LEXICON);
+      for (const phrase of RESERVED_PHRASES) expect(r.text).not.toContain(phrase);
       expect(r.text).not.toContain('!');
       // The spec's no-percentages rule targets completeness meters, not the
       // canonical assumption strings — G5/G6 embed 'app default 6%' /
@@ -234,4 +302,4 @@ describe('buildModelGaps — absence is the calm outcome', () => {
 // ── Golden byte pin ─────────────────────────────────────────────────────────
 // Materialized from a reviewed first run (D-W3-P14): printed once, checked
 // row by row against the CR-G contract table, then locked.
-const GOLDEN_ALL_ROWS = '{"rows":[{"id":"G1","text":"No monthly expense baseline — FI dates can\'t be computed, so they aren\'t shown.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G2","text":"No account snapshots yet — the portfolio starts at $0 in these projections.","cta":{"label":"Open Accounts →","to":"/investments?manage=accounts"}},{"id":"G3","text":"Last month\'s balances aren\'t confirmed — lines start from the latest figures you\'ve confirmed.","cta":{"label":"Open monthly check-in →","to":"/monthly"}},{"id":"G4","text":"No contributions in the last 12 months — ongoing contributions enter these prefills as $0.","cta":{"label":"Open Contributions →","to":"/investments?manage=contributions"}},{"id":"G5","text":"Growth rate: app default 6% — no growth scenarios set.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G6","text":"Withdrawal rate: app default 4% — not set in Inputs.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G8:1","text":"Alex has no salary entered — the projection carries no income for them.","cta":{"label":"Open Persons →","to":"/inputs/persons"}},{"id":"G9","text":"The roadmap has questions you haven\'t answered — its checklist and frameworks assume less until you do.","cta":{"label":"Open Roadmap →","to":"/roadmap"}},{"id":"G10","text":"Drawdown tax rate isn\'t set — sequential withdrawals are modeled untaxed.","cta":{"label":"Open Settings →","to":"/settings"}}]}';
+const GOLDEN_ALL_ROWS = '{"rows":[{"id":"G1","text":"No monthly expense baseline — FI dates can\'t be computed, so they aren\'t shown.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G2","text":"No account snapshots yet — the portfolio starts at $0 in these projections.","cta":{"label":"Open Accounts →","to":"/investments?manage=accounts"}},{"id":"G3","text":"Last month\'s balances aren\'t confirmed — lines start from the latest figures you\'ve confirmed.","cta":{"label":"Open monthly check-in →","to":"/monthly"}},{"id":"G4","text":"No contributions in the last 12 months — the projection assumes none beyond the scenario\'s contribution levers.","cta":{"label":"Open Contributions →","to":"/investments?manage=contributions"}},{"id":"G5","text":"Growth rate: app default 6% — no growth scenarios set.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G6","text":"Withdrawal rate: app default 4% — not set in Inputs.","cta":{"label":"Open Household →","to":"/inputs/household"}},{"id":"G8:1","text":"Alex has no salary entered — the projection carries no income for them.","cta":{"label":"Open Persons →","to":"/inputs/persons"}},{"id":"G9","text":"The roadmap has questions you haven\'t answered — its checklist and frameworks assume less until you do.","cta":{"label":"Open Roadmap →","to":"/roadmap"}},{"id":"G10","text":"Drawdown tax rate isn\'t set — sequential withdrawals are modeled untaxed.","cta":{"label":"Open Settings →","to":"/settings"}}]}';

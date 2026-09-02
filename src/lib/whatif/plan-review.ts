@@ -260,6 +260,14 @@ function tradeoffLines(i: PlanReviewInput, bottom: Chosen): ReviewLine[] {
   }
   // Dedupe by rendered text (framework-cards idiom), seeded with the bottom
   // line so a tradeoff can never repeat it; structural cap at 4 (§1.4).
+  //
+  // UNREACHABLE BY CONSTRUCTION (recorded, review MINOR 15 — no vacuous test
+  // pretends otherwise): the candidate list above emits at most one bullet per
+  // template family (FI / DEBT / NW / DRAW / RETIRE) and skips the family the
+  // bottom line already consumed, so it can never exceed 4 entries; and every
+  // family's sentence shape is distinct, so the `seen` Set can never collide.
+  // Both are kept as structural belts — what IS reachable (candidate ORDER and
+  // the bottom-line family skip) is pinned by an exact ordered toEqual.
   const seen = new Set<string>([lineText(bottom.line)]);
   const out: ReviewLine[] = [];
   for (const l of cands) {
@@ -368,11 +376,21 @@ export function resolveComparePair(
   const a = byId(sel.aId) ?? baseline;
   const nonA = scenarios.filter((s) => s.id !== a?.id);
   const selB = byId(sel.bId);
+  const newest = (list: Scenario[]): Scenario | undefined =>
+    [...list].sort((x, y) => y.sortOrder - x.sortOrder)[0];
+  const users = nonA.filter((s) => !s.isBaseline);
+  // The two FALLBACK rungs prefer a VISIBLE candidate (review MINOR 11):
+  // projectedScenarios(real) projects visible scenarios only, so a hidden
+  // default pick would make the CR-9 refusal the card's first impression on
+  // every visit. An EXPLICIT selection and createdScenarioId stay unfiltered
+  // — the refusal must stay reachable when the user asks for that scenario.
   const b =
     (selB != null && selB.id !== a?.id ? selB : undefined)
     ?? nonA.find((s) => s.id === createdScenarioId)
+    ?? nonA.find((s) => s.isActive && !s.isBaseline && s.visible)
     ?? nonA.find((s) => s.isActive && !s.isBaseline)
-    ?? [...nonA].filter((s) => !s.isBaseline).sort((x, y) => y.sortOrder - x.sortOrder)[0]
+    ?? newest(users.filter((s) => s.visible))
+    ?? newest(users)
     ?? nonA[0]
     ?? null;
   return { a: a ?? null, b };

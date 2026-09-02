@@ -75,7 +75,9 @@ describe('computeAssumptionParity', () => {
       [{ ...base, returns: { ...base.returns, defaultRate: 0.055 } }, 'return 7% vs 5.5%'],
       [{ ...base, returns: { ...base.returns, overrides: { '2030': 0.02 } } }, 'year-specific return overrides differ'],
       [{ ...base, returns: { ...base.returns, cashRate: 0.045 } }, 'cash rate default APY vs 4.5%'],
-      [{ ...base, inflation: { ...base.inflation, defaultRate: 0.04 } }, 'inflation default vs 4%'],
+      // CR-P5 renders ENGINE-effective values (review MINOR 7): DEF.inflation
+      // 0.03 is what the engine reads for the null-lever side.
+      [{ ...base, inflation: { ...base.inflation, defaultRate: 0.04 } }, 'inflation 3% vs 4%'],
       [{ ...base, inflation: { ...base.inflation, overrides: { '2031': 0.05 } } }, 'year-specific inflation overrides differ'],
       [{ ...base, swrOverride: 0.035 }, 'withdrawal rate 4% vs 3.5%'],
       [{ ...base, withdrawalStrategy: 'sequential' }, 'withdrawal strategy proportional vs sequential'],
@@ -109,6 +111,45 @@ describe('computeAssumptionParity', () => {
     const customB = { ...base, customMonthly: 5_000 };
     expect(computeAssumptionParity(base, customB, HH, DEF).differences)
       .toEqual(['custom expenses $0/mo vs $5,000/mo']);
+  });
+
+  // Review MINOR 7 (CR-P5): the yardstick's clause 4 claims the PROJECTION's
+  // assumptions differ. A null inflation lever against a household/Settings
+  // default of the same number is the SAME number to the engine
+  // (engine.ts:196-201), so the claim would be false.
+  it('CR-P5 is engine-effective: a null lever against an equal engine default is SILENT', () => {
+    const a = { ...P(), inflation: { defaultRate: 0.03, overrides: {} } };
+    const r = computeAssumptionParity(a, P(), HH, { inflation: 0.03 });
+    expect(r.differences).toEqual([]);
+    expect(r.equal).toBe(true);
+  });
+
+  it('CR-P5 names the EFFECTIVE values when they genuinely differ', () => {
+    const a = { ...P(), inflation: { defaultRate: 0.03, overrides: {} } };
+    expect(computeAssumptionParity(a, P(), HH, { inflation: 0.025 }).differences)
+      .toEqual(['inflation 3% vs 2.5%']);
+    // Both sides null, engine default present → the engine sees one number.
+    expect(computeAssumptionParity(P(), P(), HH, { inflation: 0.025 }).differences).toEqual([]);
+  });
+
+  // Review MAJOR 4 (CR-P9 / CR-P12): the guards are "≥1 side", not "both
+  // sides" — the parameter is engine-live on the side that uses it.
+  it('CR-P9/CR-P12 fire at the ONE-side boundary (the engine-live side is named)', () => {
+    const base = P();
+    const seqA = { ...base, withdrawalStrategy: 'sequential' as const, effectiveDrawdownTaxRate: 0.22 };
+    expect(computeAssumptionParity(seqA, base, HH, { inflation: 0.03, defaultDrawdownTaxRate: 0.15 }).differences)
+      .toEqual(['withdrawal strategy sequential vs proportional', 'drawdown tax 22% vs 15%']);
+    const rollingA = { ...base, expenseSource: 'rolling12m' as const };
+    const customB = { ...base, expenseSource: 'custom' as const, customMonthly: 5_000 };
+    expect(computeAssumptionParity(rollingA, customB, HH, DEF).differences)
+      .toEqual(['expenses base 12-month average vs custom', 'custom expenses $0/mo vs $5,000/mo']);
+  });
+
+  // Review MINOR 18: pct is toFixed(2) trimmed — toFixed(1) would render 7.3%.
+  it('pct keeps two decimals (trimmed), never one', () => {
+    const base = P();
+    const b = { ...base, returns: { ...base.returns, defaultRate: 0.0725 } };
+    expect(computeAssumptionParity(base, b, HH, DEF).differences).toEqual(['return 7% vs 7.25%']);
   });
 
   it('fixed phrase order mirrors the contract table when several differ', () => {
@@ -163,6 +204,24 @@ describe('buildLeverDiff (FULL LeverPayload coverage — D-W3-8)', () => {
       'Contribute +$500/mo (Y1-∞)',
     ]);
     expect(d.onlyInB).toEqual([]);
+  });
+
+  // Review MINOR 19: the D-W3-P8 mirror is byte-identical today, but the
+  // shared fixture used only integers — rounding drift between the two copies
+  // would have shown up first on a fractional and a ≥1000 amount.
+  it('PARITY: fractional and ≥1000 amounts format identically in both copies', () => {
+    const payload: LeverPayload = {
+      ...P(),
+      extraLoanPayments: [{ loanId: 7, extraMonthly: 1234.5 }],
+      lumpSums: [{ when: '2026-09-01', amount: 12.25, destination: 'cash' }],
+    };
+    const summary = summarizeLevers(payload, { loanNames: LOANS });
+    const d = buildLeverDiff(payload, P(), { loanNames: LOANS });
+    expect(d.onlyInA).toEqual([
+      '+$1,234.5/mo on Car loan (Always)',
+      'Lump sum 2026-09: +$12.25 (cash)',
+    ]);
+    for (const phrase of d.onlyInA) expect(summary).toContain(phrase);
   });
 
   it('expense periods and windowed loan payments mirror the shipped phrase shapes', () => {
@@ -222,6 +281,18 @@ describe('buildLeverDiff (FULL LeverPayload coverage — D-W3-8)', () => {
       'Income event 2027-03: raise +$5,000 (person 1)',
       'Income event 2028-01: promotion to $150,000/yr (person 2)',
     ]);
+  });
+
+  // Review MINOR 5: CR-MD2 joins per-person raises with ' / ' (the
+  // lever-summary.ts:58-60 idiom) — the only two-person fixture had equal
+  // raises, so no changed line was produced and ', ' survived.
+  it('CR-MD2: per-person raises join with " / ", matching the shipped summary idiom', () => {
+    const withRaises = (rates: number[]): LeverPayload => ({
+      ...P(), income: { perPerson: rates.map((r) => ({ annualRaiseRate: r, events: [] })) },
+    });
+    const d = buildLeverDiff(withRaises([0.03, 0.02]), withRaises([0, 0]), { loanNames: {} });
+    expect(d.changed).toEqual(['Annual raises: 3% / 2% vs 0% / 0%']);
+    expect(summarizeLevers(withRaises([0.03, 0.02]), { loanNames: {} })).toContain('Raises: 3% / 2%');
   });
 
   it('CR-L6: same phrase, different canonical JSON → both sides marked "(details differ)"', () => {

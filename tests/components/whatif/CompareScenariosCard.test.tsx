@@ -10,6 +10,7 @@ import {
 } from '@/lib/whatif/plan-review';
 import { buildLeverDiff, computeAssumptionParity } from '@/lib/whatif/lever-diff';
 import { makeHousehold } from '../../factories';
+import { ADVICE_LEXICON, RESERVED_PHRASES } from '../../helpers/advice-lexicon';
 import type { Scenario } from '@/types/scenario';
 
 // SaveCurrentDialog reads the scenarios store at runtime — mirror the
@@ -135,6 +136,20 @@ describe('CompareScenariosCard', () => {
     expect(screen.queryByText('Bottom line')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '+ Save current' }));
     expect(screen.getByText('Save current as scenario')).toBeInTheDocument(); // SaveCurrentDialog title
+    // D-W3-P4 (review MINOR 10): defaultName mirrors ScenariosPanel.tsx:253 —
+    // `Scenario ${non-baseline count + 1}`, so a baseline-only page offers
+    // "Scenario 1" rather than skipping a number.
+    expect((screen.getByLabelText('Scenario name') as HTMLInputElement).value).toBe('Scenario 1');
+  });
+
+  it('the dialog default name counts USER scenarios, not the baseline', async () => {
+    const user = userEvent.setup();
+    // Two user scenarios present but only one rendered pair side → the prompt
+    // branch is driven by scenarios.length, so use a single-entry list whose
+    // one member is a non-baseline scenario.
+    renderCard({ scenarios: [other], pair: { a: other, b: null } });
+    await user.click(screen.getByRole('button', { name: '+ Save current' }));
+    expect((screen.getByLabelText('Scenario name') as HTMLInputElement).value).toBe('Scenario 2');
   });
 
   it('zero scenarios → nothing at all (the page empty states own the moment)', () => {
@@ -164,8 +179,27 @@ describe('CompareScenariosCard', () => {
 
   it('carries neither reserved phrase nor an exclamation mark', () => {
     const { container } = renderCard();
-    expect(container.textContent).not.toContain('Suggested next step');
-    expect(container.textContent).not.toContain('Note — not a warning.');
+    for (const phrase of RESERVED_PHRASES) expect(container.textContent).not.toContain(phrase);
     expect(container.textContent).not.toContain('!');
+  });
+
+  // Review MINOR 0: the same shared lexicon the lib tests use, applied to the
+  // RENDERED narrative lines. The fixed footer is a <div>, not a <p>, so the
+  // one contract-exempt string ("…not advice, not a recommendation.") stays
+  // out of the scan without a bespoke carve-out.
+  it('no prescriptive lexeme in any rendered narrative line', () => {
+    const rich = renderCard({
+      dollarMode: 'real',
+      milestones: new Map<number, Milestones>([
+        [1, { financialIndependenceISO: '2040-06', debtFreeISO: '2028-03', netWorth30y: 900_000 } as Milestones],
+        [2, { financialIndependenceISO: '2043-06', debtFreeISO: '2030-03', netWorth30y: 400_000 } as Milestones],
+      ]),
+    });
+    const lines = cardLines(rich.container);
+    expect(lines.length).toBeGreaterThanOrEqual(5);
+    for (const line of lines) {
+      expect(line).not.toMatch(ADVICE_LEXICON);
+      for (const phrase of RESERVED_PHRASES) expect(line).not.toContain(phrase);
+    }
   });
 });

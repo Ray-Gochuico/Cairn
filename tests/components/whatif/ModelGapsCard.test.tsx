@@ -7,6 +7,7 @@ import type { ModelGapsInput } from '@/lib/model-gaps';
 import { makeAccount, makeHousehold, makePerson } from '../../factories';
 import { AccountType, ContributionSource, SnapshotSource } from '@/types/enums';
 import type { AccountSnapshot, AppSettings, Contribution } from '@/types/schema';
+import { ADVICE_LEXICON, RESERVED_PHRASES } from '../../helpers/advice-lexicon';
 
 // The SETTLED fixture is kept in sync by hand with tests/lib/model-gaps.test.ts
 // (the plan's note): account + a previous-month USER_CONFIRMED snapshot + a
@@ -33,6 +34,7 @@ const input = (over: Partial<ModelGapsInput> = {}): ModelGapsInput => ({
   snapshots: [confirmedSnapshot],
   contributions: [recentContribution],
   roadmapHasUnanswered: false,
+  engineStartsAtZero: true,
   sides: [{ name: 'Baseline', payload: emptyLeverPayload() }],
   todayIso: TODAY,
   ...over,
@@ -62,7 +64,7 @@ describe('ModelGapsCard', () => {
     expect(items.map((li) => li.querySelector('span')?.textContent)).toEqual([
       'No account snapshots yet — the portfolio starts at $0 in these projections.',
       "Last month's balances aren't confirmed — lines start from the latest figures you've confirmed.",
-      'No contributions in the last 12 months — ongoing contributions enter these prefills as $0.',
+      "No contributions in the last 12 months — the projection assumes none beyond the scenario's contribution levers.",
     ]);
     expect(items.map((li) => li.querySelector('a')?.getAttribute('href'))).toEqual([
       '/investments?manage=accounts',
@@ -84,9 +86,9 @@ describe('ModelGapsCard', () => {
       household: makeHousehold({ monthlyExpenseBaseline: 0, withdrawalRate: 0, inflationAssumption: 0.03, growthScenarios: [] }),
     });
     const text = container.textContent ?? '';
-    expect(text).not.toMatch(/\b(should|recommend|consider|suggest|advise|winner)\b/i);
-    expect(text).not.toContain('Suggested next step');
-    expect(text).not.toContain('Note — not a warning.');
+    // Review MINOR 0: one shared lexicon, so the three W3 files stop drifting.
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    for (const phrase of RESERVED_PHRASES) expect(text).not.toContain(phrase);
     expect(text).not.toContain('!');
   });
 });

@@ -107,9 +107,14 @@ export function computeAssumptionParity(
   if ((ra?.compoundingFrequency ?? null) !== (rb?.compoundingFrequency ?? null)) {
     d.push(`compounding ${String(ra?.compoundingFrequency).toLowerCase()} vs ${String(rb?.compoundingFrequency).toLowerCase()}`);
   }
-  if ((a.inflation?.defaultRate ?? null) !== (b.inflation?.defaultRate ?? null)) {
-    d.push(`inflation ${rateOrDefault(a.inflation?.defaultRate)} vs ${rateOrDefault(b.inflation?.defaultRate)}`);
-  }
+  // CR-P5 compares ENGINE-effective baseline inflation, not the raw lever
+  // (review MINOR 7): the engine resolves payload → RealState defaults → 0.03
+  // (engine.ts:196-201), so `{defaultRate: 0.03}` vs `null` under a 3%
+  // Settings/app default is ONE number to the projection — claiming the plans
+  // "differ in assumptions" there would be a difference the lines don't have.
+  const infA = engineBaselineInflationOf(a, defaults);
+  const infB = engineBaselineInflationOf(b, defaults);
+  if (infA !== infB) d.push(`inflation ${pct(infA)} vs ${pct(infB)}`);
   if (canonicalJson(a.inflation?.overrides ?? {}) !== canonicalJson(b.inflation?.overrides ?? {})) {
     d.push('year-specific inflation overrides differ');
   }
