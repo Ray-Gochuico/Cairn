@@ -125,6 +125,18 @@ export async function seedSampleProfile(
   if ((kidRows[0]?.n ?? 0) === 0) {
     await seedCollegeSlice(db, today);
   }
+  // W4: spending + goal coverage — Spending, Budget, and Goals stop being
+  // empty rooms on the sample tour. Each behind its own empty-table sentinel
+  // (the equity-slice pattern): user-imported rows block the slice, so stale
+  // dev DBs converge without duplication.
+  const txnRows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
+  if ((txnRows[0]?.n ?? 0) === 0) {
+    await seedSpendingSlice(db, today);
+  }
+  const goalRows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM goals');
+  if ((goalRows[0]?.n ?? 0) === 0) {
+    await seedGoalSlice(db, today);
+  }
 }
 
 /** True when the household already carries this person under EITHER the
@@ -554,5 +566,125 @@ async function seedCollegeSlice(db: Database, today: string): Promise<void> {
     `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
      VALUES (?, ?, ?, 'MANUAL')`,
     [acct.lastInsertId!, today, 12000],
+  );
+}
+
+/** `day` of the month `monthsAgo` before (negative = after) the reference
+ * ISO day, in UTC. day ≤ 28 always, so bucketing is run-date-deterministic. */
+function monthDay(iso: string, monthsAgo: number, day: number): string {
+  const [y, m] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 - monthsAgo, day)).toISOString().slice(0, 10);
+}
+
+/** `daysBack` before the reference day, clamped to the 1st of its month —
+ * current-month rows must never leak into a prior (complete, pinned) month. */
+function recentWithinMonth(iso: string, daysBack: number): string {
+  const t = new Date(`${iso}T12:00:00Z`);
+  const first = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1, 12));
+  t.setUTCDate(t.getUTCDate() - daysBack);
+  return (t < first ? first : t).toISOString().slice(0, 10);
+}
+
+/**
+ * W4: ~3 months of categorized household spending through Joint Checking.
+ * 13 rows per complete month (m-3, m-2, m-1) + 1 reimbursed work dinner (m-1)
+ * + 4 current-month rows = 44. Monthly real-spending total $5,911.12 — calm
+ * and coherent with the $6,000 household baseline (the Roadmap EF rule
+ * prefers this 12-mo average once transactions exist; deliberate).
+ * Loan payments route through the system-managed P&I categories and sum to
+ * the seeded loan payments: Mortgage $1,190.17 + $2,810.83 = $4,001;
+ * Car $701.12 + $89.88 = $791.
+ *
+ * Every row is written with is_recurring = 0 and person_id NULL (household
+ * spending; per-person rows are a filed chip). The seed does NOT pre-flag
+ * recurrence: the Spending page's own detector (syncRecurring →
+ * detectRecurring) is what promotes the monthly merchants once the page
+ * mounts — exactly as it would on a real user's imported statements, and
+ * the promotion lands in the throwaway sample DB only.
+ */
+async function seedSpendingSlice(db: Database, today: string): Promise<void> {
+  const checking = await db.select<{ id: number }>(
+    `SELECT id FROM accounts WHERE name = 'Joint Checking'`,
+  );
+  const checkingId = checking[0]?.id ?? null;
+
+  async function addTxn(
+    date: string,
+    merchant: string,
+    amount: number,
+    categoryId: number,
+    opts?: { reimbursable?: boolean; reimbursedAt?: string; reimbursedAmount?: number },
+  ): Promise<void> {
+    await db.execute(
+      `INSERT INTO transactions
+         (household_id, date, merchant, amount, category_id, source_account_id,
+          reimbursable, reimbursed_at, reimbursed_amount, is_recurring)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        date,
+        merchant,
+        amount,
+        categoryId,
+        checkingId,
+        opts?.reimbursable ? 1 : 0,
+        opts?.reimbursedAt ?? null,
+        opts?.reimbursedAmount ?? null,
+      ],
+    );
+  }
+
+  // One template, three complete months — day-of-month ≤ 28 throughout.
+  const MONTHLY: ReadonlyArray<readonly [number, string, number, number]> = [
+    [1,  'Harbor Mortgage',        1190.17, 5],  // Mortgage Principal
+    [1,  'Harbor Mortgage',        2810.83, 6],  // Mortgage Interest
+    [5,  'Westline Auto Finance',   701.12, 14], // Auto Loan Principal
+    [5,  'Westline Auto Finance',    89.88, 15], // Auto Loan Interest
+    [7,  'Green Basket Market',     243.18, 33], // Groceries
+    [21, 'Green Basket Market',     187.62, 33], // Groceries
+    [10, 'City Power & Water',      176.55, 10], // Utilities
+    [12, 'Bayline Internet',         79.99, 35], // Bills & Utilities
+    [14, 'Corner Table Cafe',        64.80, 32], // Food & Drink
+    [16, 'Hillcrest Fuel',           58.30, 17], // Gas/Fuel
+    [18, 'Evergreen Streaming',      15.99, 39], // Subscriptions
+    [24, 'Cedar Pharmacy',           42.75, 38], // Health
+    [26, 'Northgate General',       249.94, 37], // Shopping
+  ]; // month total: $5,911.12
+  for (const monthsAgo of [3, 2, 1]) {
+    for (const [day, merchant, amount, cat] of MONTHLY) {
+      await addTxn(monthDay(today, monthsAgo, day), merchant, amount, cat);
+    }
+  }
+  // A reimbursed work dinner (m-1): visible on Spending, nets $0 in the
+  // real-spending pipeline — the reimbursement flow demos honestly.
+  await addTxn(monthDay(today, 1, 15), 'Skyline Bistro', 132.40, 32, {
+    reimbursable: true,
+    reimbursedAt: monthDay(today, 1, 25),
+    reimbursedAmount: 132.40,
+  });
+  // Current-month rows (clamped to the month start): the tour never lands on
+  // an empty "this month". Partial-month real spending: $179.01 (the pending
+  // cab is reimbursable and excluded from real spending until reimbursed).
+  await addTxn(recentWithinMonth(today, 1), 'Green Basket Market', 96.31, 33);
+  await addTxn(recentWithinMonth(today, 3), 'Corner Table Cafe', 28.60, 32);
+  await addTxn(recentWithinMonth(today, 5), 'Hillcrest Fuel', 54.10, 17);
+  await addTxn(recentWithinMonth(today, 6), 'Harbor Cab Co', 46.00, 34, {
+    reimbursable: true,
+  });
+}
+
+/**
+ * W4: one savings goal so /goals demos. EMERGENCY_FUND at $36,000
+ * (6 × the $6,000 household baseline), 12 months out, linked to the two cash
+ * accounts (Partner Savings $22,000 + Joint Checking $8,000 → 83% progress).
+ */
+async function seedGoalSlice(db: Database, today: string): Promise<void> {
+  const cash = await db.select<{ id: number }>(
+    `SELECT id FROM accounts WHERE name IN ('Partner Savings', 'Joint Checking') ORDER BY id`,
+  );
+  const linked = cash.map((r) => r.id);
+  await db.execute(
+    `INSERT INTO goals (household_id, for_person_id, name, type, target_amount, target_date, linked_account_ids)
+     VALUES (1, NULL, 'Emergency fund', 'EMERGENCY_FUND', 36000, ?, ?)`,
+    [monthDay(today, -12, 1), JSON.stringify(linked)],
   );
 }

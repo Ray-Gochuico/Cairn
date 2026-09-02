@@ -390,4 +390,117 @@ describe('seedSampleProfile', () => {
     expect(accts[0].n).toBe(SAMPLE_PROFILE.accountCount);
     expect(deps[0].n).toBe(1);
   });
+
+  it('W4: seeds the spending slice — 44 categorized transactions behind an empty-table sentinel', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    await seedSampleProfile(db, { todayISO: '2026-07-08' }); // sentinel short-circuits
+    const n = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
+    expect(n[0].n).toBe(44);
+    // Every row lands on a real category and the Joint Checking account.
+    const dangling = await db.select<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM transactions t
+       LEFT JOIN categories c ON c.id = t.category_id
+       WHERE c.id IS NULL`,
+    );
+    expect(dangling[0].n).toBe(0);
+    const src = await db.select<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM transactions t
+       JOIN accounts a ON a.id = t.source_account_id
+       WHERE a.name = 'Joint Checking'`,
+    );
+    expect(src[0].n).toBe(44);
+    // The SEED never writes a recurring flag (the Spending page's own
+    // detector may promote monthly merchants later — that is the app's
+    // behavior on any real data, not something the seed pre-bakes).
+    const rec = await db.select<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM transactions WHERE is_recurring = 1',
+    );
+    expect(rec[0].n).toBe(0);
+  });
+
+  it('W4: loan payments route through the system-managed P&I categories, 3 months each', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ category_id: number; n: number }>(
+      `SELECT category_id, COUNT(*) AS n FROM transactions
+       WHERE category_id IN (5, 6, 14, 15) GROUP BY category_id ORDER BY category_id`,
+    );
+    expect(rows).toEqual([
+      { category_id: 5, n: 3 },
+      { category_id: 6, n: 3 },
+      { category_id: 14, n: 3 },
+      { category_id: 15, n: 3 },
+    ]);
+    // The monthly P&I splits sum to the seeded loan payments ($4,001 / $791).
+    const sums = await db.select<{ s: number }>(
+      `SELECT SUM(amount) AS s FROM transactions
+       WHERE category_id IN (5, 6) AND date LIKE '2026-06%'`,
+    );
+    expect(sums[0].s).toBeCloseTo(4001, 2);
+  });
+
+  it('W4: one reimbursed work dinner nets to zero; one pending reimbursable stays pending', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const done = await db.select<{ amount: number; reimbursed_amount: number }>(
+      `SELECT amount, reimbursed_amount FROM transactions
+       WHERE merchant = 'Skyline Bistro' AND reimbursable = 1`,
+    );
+    expect(done).toHaveLength(1);
+    expect(done[0].reimbursed_amount).toBeCloseTo(done[0].amount, 2);
+    const pending = await db.select<{ reimbursed_at: string | null }>(
+      `SELECT reimbursed_at FROM transactions
+       WHERE merchant = 'Harbor Cab Co' AND reimbursable = 1`,
+    );
+    expect(pending).toEqual([{ reimbursed_at: null }]);
+  });
+
+  it('W4: real-spending months are deterministic — $5,911.12 per complete month, $179.01 partial', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    // Net real spending per month, Spending-page semantics expressed in SQL:
+    // exclude TRANSFER/INCOME categories; net reimbursements (a pending
+    // reimbursable counts $0 until reimbursed; a reimbursed row counts
+    // amount − reimbursed_amount). Mirrors isRealSpending/
+    // effectiveSpendingAmount (src/lib/spending-analysis.ts) — and even if
+    // those semantics drift, this pin still freezes the SEED's arithmetic.
+    const months = await db.select<{ m: string; total: number }>(
+      `SELECT substr(t.date, 1, 7) AS m,
+              ROUND(SUM(CASE
+                WHEN t.reimbursable = 1 AND t.reimbursed_at IS NULL THEN 0
+                ELSE t.amount - COALESCE(t.reimbursed_amount, 0)
+              END), 2) AS total
+       FROM transactions t
+       JOIN categories c ON c.id = t.category_id
+       WHERE c.type NOT IN ('TRANSFER', 'INCOME')
+       GROUP BY m ORDER BY m`,
+    );
+    expect(months).toEqual([
+      { m: '2026-04', total: 5911.12 },
+      { m: '2026-05', total: 5911.12 },
+      { m: '2026-06', total: 5911.12 }, // Skyline Bistro nets $0
+      { m: '2026-07', total: 179.01 },  // pending Harbor Cab counts $0
+    ]);
+    // Consequence (P-W4-6): with real spending present, the Roadmap EF rule's
+    // efContext prefers the 12-mo average over the household baseline — that
+    // preference is already unit-tested in the roadmap rules suite; the smoke
+    // checklist verifies the visible "from 12-mo avg" suffix on /roadmap.
+  });
+
+  it('W4: seeds one EMERGENCY_FUND goal linked to the cash accounts, behind its sentinel', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const goals = await db.select<{
+      name: string;
+      type: string;
+      target_amount: number;
+      linked_account_ids: string;
+    }>('SELECT name, type, target_amount, linked_account_ids FROM goals');
+    expect(goals).toHaveLength(1);
+    expect(goals[0].name).toBe('Emergency fund');
+    expect(goals[0].type).toBe('EMERGENCY_FUND');
+    expect(goals[0].target_amount).toBe(36000);
+    const linked = JSON.parse(goals[0].linked_account_ids) as number[];
+    const cash = await db.select<{ id: number }>(
+      `SELECT id FROM accounts WHERE name IN ('Partner Savings', 'Joint Checking') ORDER BY id`,
+    );
+    expect(linked.sort((a, b) => a - b)).toEqual(cash.map((r) => r.id));
+  });
 });

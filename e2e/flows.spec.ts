@@ -48,9 +48,20 @@ test('spending: CSV import round-trips — file in, preview commit, transactions
     .setInputFiles(path.resolve(HERE, 'fixtures', 'transactions.csv'));
   await page.getByRole('button', { name: /^Commit \(2 rows\)$/ }).click();
 
-  // Committed rows land in the Recent-transactions table (cell role scopes
-  // away the Top-merchants chart, which renders the same strings in SVG;
-  // exact:true scopes away the row's "Edit <merchant>" button cell).
+  // W4: the sample profile now seeds 44 household transactions, so the
+  // fixture's June rows no longer fit "Recent transactions — Latest 10".
+  // The round-trip is proven on the full list instead: the count is exact
+  // (44 seeded + 2 imported) and run-date-stable, and the rows themselves
+  // are still asserted by cell role (which scopes away the Top-merchants
+  // chart, rendering the same strings in SVG; exact:true scopes away the
+  // row's "Edit <merchant>" button cell).
+  await page.getByRole('link', { name: 'Open all transactions' }).click();
+  await expect(page.getByText('46 transactions')).toBeVisible({ timeout: 30_000 });
+  // The list is virtualized and date-descending; the imported June rows sit
+  // near the end, so scroll the container before asserting on them.
+  await page.getByTestId('transactions-scroll-parent').evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
   await expect(page.getByRole('cell', { name: 'Blue Bottle Coffee', exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('cell', { name: 'Trader Joes', exact: true })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -197,14 +208,29 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(page.getByText('About the Frameworks')).toBeVisible();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue' }).click();
-  // Three cards with the seed-derived split (hand-computed pins):
+  // Three cards with the seed-derived split (hand-computed pins).
+  //
+  // W4 re-pin: the sample profile now seeds real transactions, so the
+  // emergency-fund rule reads rolling12mBaseline instead of the $6,000
+  // household baseline. That average is (3 × $5,911.12 + $179.01) / 4
+  // observed months = $4,478.09 — rolling12m deliberately INCLUDES the
+  // in-progress month and divides by months observed
+  // (src/lib/expense-baseline.ts). $30,000 of cash / $4,478.09 = 6.7×, above
+  // the 6× target, so the EF leg is skipped and the whole lump goes to the
+  // mid-rate debt band. Every figure here is run-date-stable: the seed always
+  // writes the same amounts across the same 4 month buckets.
   const conservative = page.getByTestId('framework-conservative');
-  await expect(conservative).toContainText('Emergency fund — to 6× expenses');
-  await expect(conservative).toContainText('$6,000');
-  await expect(conservative).toContainText('$4,000'); // mid-rate remainder → Mortgage
-  await expect(conservative).toContainText('up from 5.0'); // 30,000/6,000 → 36,000/6,000
+  await expect(conservative).toContainText('Debt in the 5–8% band');
+  await expect(conservative).toContainText('$10,000'); // EF skipped → all to debt
+  await expect(conservative).toContainText(
+    'Pays Mortgage from $540,000 down to $530,000 — highest rate first (6.25%).',
+  );
+  await conservative.getByText('What this assumes').click();
+  await expect(conservative).toContainText(
+    'Emergency fund already at 6.7× monthly expenses — skipped.',
+  );
   const moderate = page.getByTestId('framework-moderate');
-  await expect(moderate).toContainText('$2,000'); // 50/50 of the $4,000 remainder
+  await expect(moderate).toContainText('$5,000'); // 50/50 of the full $10,000
   const aggressive = page.getByTestId('framework-aggressive');
   await expect(aggressive).toContainText('$10,000'); // 3× covered → all invest
   await aggressive.getByText('What this assumes').click();
