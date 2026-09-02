@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyTier, aggregate } from '@/lib/backtest/aggregate';
+import { classifyTier, aggregate, percentile, percentileSeries } from '@/lib/backtest/aggregate';
 import type { StartYearOutcome } from '@/lib/backtest/types';
 
 describe('classifyTier', () => {
@@ -89,5 +89,18 @@ describe('aggregate', () => {
     expect(r.percentilesByYear.p10[1]).toBe(30_000);
     // p75: rank=2.25 → interp between 300000 and 900000 → 450000
     expect(r.percentilesByYear.p75[1]).toBe(450_000);
+  });
+});
+
+/* ── W2 D-UB8: the percentile math is exported for the history-fan census ── */
+
+describe('percentile export (W2 D-UB8)', () => {
+  it('percentile is importable and linearly interpolates (rank p/100·(n−1))', () => {
+    // 4 values, p25 ⇒ rank 0.75 between idx 0 and 1: 1292.25 + 0.75·(1400−1292.25)
+    expect(percentile([1292.25, 1400, 1516, 1570], 25)).toBeCloseTo(1373.0625, 10);
+    expect(percentile([1292.25, 1400, 1516, 1570], 50)).toBeCloseTo(1458, 10);
+  });
+  it('percentileSeries is importable', () => {
+    expect(typeof percentileSeries).toBe('function');
   });
 });
