@@ -38,6 +38,7 @@ vi.mock('@/market/run-market-data-refresh', () => ({
 
 import { initDatabase } from '@/db/init';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+import { INTERVIEW_BAR_KEY } from '@/lib/interview/bar-store';
 
 /** The flag's VALUE is opaque to isExploreMode() — only presence matters —
  * so a fixed literal keeps this suite off the real clock (test-clock policy). */
@@ -47,6 +48,7 @@ describe('initDatabase — explore branch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem(EXPLORE_FLAG_KEY);
+    sessionStorage.clear();
     const fakeAdapter = {
       select: vi.fn().mockResolvedValue([{ n: 1 }]),
       execute: vi.fn(),
@@ -90,6 +92,25 @@ describe('initDatabase — explore branch', () => {
     expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
     expect(localStorage.getItem('explore.donut.assets.hidden')).toBeNull();
     expect(warn).toHaveBeenCalled(); // warn, never console.error (e2e console guard)
+    warn.mockRestore();
+  });
+
+  // Coordinator ruling (2026-09-02, W4 smoke follow-up): the boot-failure path
+  // leaves explore the same way the exit does, so it owes the same guarantee —
+  // including the sessionStorage wipe that covers raw keys the namespace
+  // ratchet cannot reach (frozen modules, e.g. the $X bar's session store).
+  it('a failing explore boot wipes sessionStorage too — raw keys from frozen modules do not survive', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    sessionStorage.setItem(INTERVIEW_BAR_KEY, '{"amountCents":25000,"cadence":"per-month"}');
+    sessionStorage.setItem('explore.calc-basis:calculators', 'future');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    load.mockRejectedValueOnce(new Error('sample-explore.db is locked'));
+
+    await expect(initDatabase()).rejects.toThrow('sample-explore.db is locked');
+
+    expect(sessionStorage.getItem(INTERVIEW_BAR_KEY)).toBeNull();
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
     warn.mockRestore();
   });
 

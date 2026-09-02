@@ -102,6 +102,14 @@ const NAMESPACED: ReadonlySet<string> = new Set([
  * (c) keys no UI interaction can write in explore (boot infra, legacy
  *     read-only values, prefs whose live home is the DB — which the separate
  *     sample DB already isolates).
+ *
+ * A fourth situation is NOT a ruling this table can make: a module we may not
+ * edit (a frozen surface) writing a raw key. The coordinator closed that hole
+ * structurally on 2026-09-02 — both exit paths call
+ * `clearExploreSessionStorage()`, blanking the whole session store after the
+ * prefix sweep — so a raw SESSION key cannot outlive the exit whatever this
+ * table says. localStorage has no such backstop: a raw key there is still a
+ * leak, and still needs a ruling below.
  */
 const RAW_WITH_REASON: Readonly<Record<string, string>> = {
   'src/App.tsx': 'chunk-reload guard — boot infra, not a UI pref; must be SHARED across the reload it guards',
@@ -113,7 +121,7 @@ const RAW_WITH_REASON: Readonly<Record<string, string>> = {
   // basis toggle replaces it, and its own key is NAMESPACED above. The
   // stale-entry half of the ratchet is what caught the removal.
   'src/lib/calculators/use-supplemental-method.ts': 'AGGREGATE|FLAT withholding-method enum over app constants — a view mode, not an arrangement (same family as the src/pages/calculators segment enums below)',
-  'src/lib/interview/bar-store.ts': 'the $X bar’s session-scoped hypothetical (amount + cadence), not an arrangement (protected surface: src/lib/interview) — raised to the coordinator in the W4 smoke-fix report for its own ruling',
+  'src/lib/interview/bar-store.ts': 'the $X bar’s session-scoped hypothetical (amount + cadence) under a RAW sessionStorage key. The interview kernel is frozen, so the coordinator (2026-09-02) closed it from the other side: clearExploreSessionStorage() blanks the whole session store on both exit paths, so this key cannot outlive the exit',
   'src/lib/onboarding-state.ts': 'D-S7 REAL tailor/tour keys — unreachable in explore by structural guards',
   'src/lib/setup-dismissal.ts': 'D-S7 REAL dismissal key — /setup redirects while exploring',
   'src/lib/setup-progress.ts': 'D-S7 REAL progress keys — /setup redirects while exploring',
