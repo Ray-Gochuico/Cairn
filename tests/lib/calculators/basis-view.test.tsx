@@ -9,6 +9,8 @@ import {
   basisSuffix,
   chartModeFor,
   useCompoundBasisView,
+  usePathToFiBasisView,
+  PATH_TO_FI_BRIDGE,
 } from '@/lib/calculators/basis-view';
 import {
   apyToApr,
@@ -17,6 +19,7 @@ import {
 } from '@/lib/compound-interest';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
+import { __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import {
   CALCULATORS_PAGE_ID,
   __resetDollarBasisForTests,
@@ -28,7 +31,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import type { AppSettings } from '@/types/schema';
+import { FilingStatus } from '@/types/enums';
+import type { AppSettings, Household } from '@/types/schema';
 
 describe('basis vocabulary (D-T4 copy contract)', () => {
   it('long-register pair', () => {
@@ -134,5 +138,82 @@ describe('useCompoundBasisView (the conversion boundary, D-T5)', () => {
   it('null-safe: no input/series (years=0) → null bundle', () => {
     const { result } = renderHook(() => useCompoundBasisView(null, null));
     expect(result.current).toBeNull();
+  });
+});
+
+describe('usePathToFiBasisView (the conversion boundary, D-T5)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    __resetDollarBasisForTests();
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+    useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 5000,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: [{ label: 'Moderate', rate: 0.06 }],
+      } as Household,
+      isLoading: false,
+      error: null,
+    });
+    sessionStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify({ portfolio: 200_000 }));
+  });
+
+  const FI = [{ label: 'Moderate', rate: 0.06, years: 28.5 }];
+  const ARGS = {
+    fiSeries: FI,
+    mode: 'KEEP' as const,
+    yearsUntilRetirement: 29,
+    horizon: 30,
+    targetFv: 1_500_000,
+  };
+
+  it('coast rows keep the H1 discipline: floored-real coast → the $452,380 gap, unfloored table rate', () => {
+    const { result } = renderHook(() => usePathToFiBasisView(ARGS));
+    const row = result.current!.coastRows[0];
+    expect(row.realRate).toBeCloseTo(1.06 / 1.03 - 1, 10); // unfloored Fisher division
+    expect(row.gapFmt).toBe('$452,380'); // NOT the $76,835 nominal solve
+    expect(result.current!.fmt.targetFv).toBe('$1,500,000');
+    expect(result.current!.fmt.monthlyExpenses).toBe('$5,000');
+  });
+
+  it('today: flat REAL target; future: target grows by 1.03^t — the wiring the render sweep cannot see', () => {
+    const { result } = renderHook(() => usePathToFiBasisView(ARGS));
+    const data = result.current!.chartData;
+    expect(data).toHaveLength(31);
+    expect(data[0].target).toBeCloseTo(1_500_000, 6);
+    expect(data[30].target).toBeCloseTo(1_500_000, 6); // REAL view: flat at targetFv
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    const grown = result.current!.chartData;
+    expect(grown[0].target).toBeCloseTo(1_500_000, 6);
+    expect(grown[30].target).toBeCloseTo(1_500_000 * Math.pow(1.03, 30), 4); // NOMINAL view: grown target
+  });
+
+  it('teaching bridge exists ONLY in Future mode; captions flip; coast rows are basis-invariant', () => {
+    const { result } = renderHook(() => usePathToFiBasisView(ARGS));
+    expect(result.current!.teachingBridge).toBeNull();
+    expect(result.current!.chartLabel).toBe("Path to FI (today's $)");
+    const todayGap = result.current!.coastRows[0].gapFmt;
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(result.current!.teachingBridge).toBe(PATH_TO_FI_BRIDGE);
+    expect(result.current!.chartLabel).toBe('Path to FI (future $)');
+    expect(result.current!.coastRows[0].gapFmt).toBe(todayGap); // year-0 figure: invariant
+  });
+
+  it('STOP at/past retirement (horizon 0) → empty chart, rows still computed; null fiSeries → null', () => {
+    const { result } = renderHook(() => usePathToFiBasisView({ ...ARGS, mode: 'STOP', horizon: 0 }));
+    expect(result.current!.chartData).toEqual([]);
+    expect(result.current!.coastRows).toHaveLength(1);
+    const { result: nul } = renderHook(() => usePathToFiBasisView({ ...ARGS, fiSeries: null }));
+    expect(nul.current).toBeNull();
   });
 });

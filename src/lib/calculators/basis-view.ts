@@ -4,12 +4,15 @@ import { CALCULATORS_PAGE_ID, useDollarBasis } from './dollar-basis';
 import { pctFromFraction } from './scenario-assumptions';
 import { useScenarioAssumptions } from './use-scenario-assumptions';
 import { toRealSeries } from './real-mode';
+import { realRateOf, realRateOfUnfloored } from './real-rate';
+import { buildProjectionChartData } from './projection-chart';
 import {
   toRealSummary,
   type CompoundInterestInput,
   type CompoundInterestSeries,
 } from '@/lib/compound-interest';
-import { formatCurrency } from '@/lib/format';
+import { coastFi } from '@/lib/coast-fi';
+import { formatCurrency, formatSignedCurrency } from '@/lib/format';
 // NOTE: until Task 8's D-T9 deletion, ChartDisplayMode still lives in the old
 // hook module; Task 8 hoists it to real-mode.ts and rewires this import.
 import type { ChartDisplayMode } from './use-chart-display-mode';
@@ -129,4 +132,114 @@ export function useCompoundBasisView(
       chartLabel: `Balance over time ${suffix}`,
     };
   }, [input, series, basis, inflation]);
+}
+
+/* ── PathToFi surface ───────────────────────────────────────────────────── */
+
+/** C13 — the pinned FI target's Future-mode bridge clause. */
+export const PATH_TO_FI_BRIDGE =
+  'The target line on the chart grows with inflation so it buys the same retirement in future dollars.';
+
+export interface PathToFiCoastRow {
+  label: string;
+  rate: number;
+  /** UNFLOORED Fisher real rate — the table's "≈ x% real" cell. */
+  realRate: number;
+  /** Year-0 figure (invariant by definition). */
+  coastNeededToday: number;
+  /** Signed gap vs the scoped portfolio — invariant, pre-formatted (P13). */
+  gapFmt: string;
+}
+
+export interface PathToFiBasisView extends BasisView {
+  fmt: { targetFv: string; monthlyExpenses: string };
+  scopeExclusionsFmt: { jointPortfolio: string; unattributedContribution: string } | null;
+  chartData: Record<string, number>[];
+  chartLabel: string;
+  /** Future mode only — the pinned teaching line's bridge clause (C13). */
+  teachingBridge: string | null;
+  coastRows: PathToFiCoastRow[];
+}
+
+/**
+ * THE PathToFi conversion boundary. Owns everything the card used to compute
+ * with restricted converters: the coast rows (floored-real coast, unfloored
+ * table rate — the H1 edge semantics, unchanged) and the projection chart
+ * data (displayMode mapped from the page basis, D-T10). The years-to-FI
+ * solves stay in the card (financialIndependenceSeries is engine, not
+ * converter) and are basis-independent — the goalpost law.
+ */
+export function usePathToFiBasisView(args: {
+  fiSeries: ReadonlyArray<{ label: string; rate: number; years: number }> | null;
+  mode: 'KEEP' | 'STOP';
+  yearsUntilRetirement: number;
+  /** Card-computed chart horizon; < 1 → no chart rows. */
+  horizon: number;
+  targetFv: number;
+}): PathToFiBasisView | null {
+  const { engine, scopeExclusions } = useScenarioAssumptions();
+  const inflation = engine.inflation;
+  const [basis] = useDollarBasis(CALCULATORS_PAGE_ID);
+  const { fiSeries, mode, yearsUntilRetirement, horizon, targetFv } = args;
+  return useMemo(() => {
+    if (!fiSeries) return null;
+    const coastRows: PathToFiCoastRow[] = fiSeries.map((s) => {
+      const coastNeededToday = coastFi({
+        requiredAtRetirement: targetFv,
+        annualRate: realRateOf(s.rate, inflation), // FLOORED (CoastFI edge semantics)
+        yearsUntilRetirement,
+      });
+      return {
+        label: s.label,
+        rate: s.rate,
+        realRate: realRateOfUnfloored(s.rate, inflation),
+        coastNeededToday,
+        gapFmt: formatSignedCurrency(coastNeededToday - engine.portfolio),
+      };
+    });
+    const chartData =
+      horizon >= 1
+        ? buildProjectionChartData({
+            pv: engine.portfolio,
+            annualContribution: mode === 'KEEP' ? engine.annualContribution : 0,
+            targetFv,
+            scenarios: fiSeries,
+            inflation,
+            displayMode: chartModeFor(basis),
+            horizon,
+          })
+        : [];
+    const suffix = basisSuffix(basis);
+    return {
+      basis,
+      phrase: basisPhrase(basis, inflation),
+      suffix,
+      fmt: {
+        targetFv: formatCurrency(targetFv),
+        monthlyExpenses: formatCurrency(engine.monthlyExpenses),
+      },
+      scopeExclusionsFmt: scopeExclusions
+        ? {
+            jointPortfolio: formatCurrency(scopeExclusions.jointPortfolio),
+            unattributedContribution: formatCurrency(scopeExclusions.unattributedContribution),
+          }
+        : null,
+      chartData,
+      chartLabel: `Path to FI ${suffix}`,
+      teachingBridge: basis === 'future' ? PATH_TO_FI_BRIDGE : null,
+      coastRows,
+    };
+  }, [
+    fiSeries,
+    mode,
+    yearsUntilRetirement,
+    horizon,
+    targetFv,
+    basis,
+    inflation,
+    engine.portfolio,
+    engine.annualContribution,
+    engine.monthlyExpenses,
+    scopeExclusions,
+  ]);
 }
