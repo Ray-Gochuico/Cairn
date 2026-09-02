@@ -27,6 +27,11 @@ import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import {
+  CALCULATORS_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 import { cleanup } from '@testing-library/react';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
@@ -173,6 +178,7 @@ describe('PathToFiCard — empty states + shell', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(PINNED_DATE);
@@ -272,6 +278,7 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(PINNED_DATE);
@@ -378,9 +385,9 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
   it('teaching block: target formula line + coast milestone sentence', () => {
     primeStores();
     renderCard();
-    expect(
-      screen.getByText(/Target .+ = 12 × .+\/mo ÷ .+% SWR — in today's dollars\./),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toMatch(
+      /Target .+ = 12 × .+\/mo ÷ .+% SWR — in today's dollars\./,
+    );
     expect(
       screen.getByText(/at 100% you could stop contributing now and still retire on time/i),
     ).toBeInTheDocument();
@@ -401,12 +408,44 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
     expect(chart.textContent).toContain('Path to FI');
   });
 
-  it('renders a Nominal/Real toggle that persists Real under calc-display-mode:path-to-fi', async () => {
-    const user = userEvent.setup();
-    primeStores();
+  it('W5 ANCHOR PAIR: solve + gap are basis-INVARIANT; caption + bridge flip; the target stays pinned-today (D-T6)', () => {
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
     renderCard();
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
-    expect(sessionStorage.getItem('calc-display-mode:path-to-fi')).toBe('REAL');
+
+    // ── Today's $ (default) ──
+    const teaching = screen.getByTestId('ptf-teaching-line');
+    expect(teaching.textContent).toContain('Target $1,500,000');
+    expect(teaching.textContent).toContain("in today's dollars.");
+    expect(screen.queryByTestId('ptf-teaching-bridge')).toBeNull();
+    expect(screen.getByTestId('path-to-fi-chart-caption').textContent).toBe(
+      "Path to FI (today's $)",
+    );
+    expect(screen.getByText('$452,380')).toBeInTheDocument(); // gap: real-rate discipline (H1)
+    expect(screen.queryByText('$76,835')).toBeNull(); // nominal-solve anti-pin
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/28\.5\s*years/);
+
+    // ── Future $ ──
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+
+    // Pinned figure (F10 ruling): keeps its TRUE today statement + gains the bridge.
+    expect(teaching.textContent).toContain("in today's dollars.");
+    expect(screen.getByTestId('ptf-teaching-bridge').textContent).toContain(
+      'The target line on the chart grows with inflation so it buys the same retirement in future dollars.',
+    );
+    expect(screen.getByTestId('path-to-fi-chart-caption').textContent).toBe('Path to FI (future $)');
+    // Invariance IS an anchor: gap + years untouched by the display basis (goalpost law).
+    expect(screen.getByText('$452,380')).toBeInTheDocument();
+    expect(screen.queryByText('$76,835')).toBeNull();
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/28\.5\s*years/);
+  });
+
+  it('W5: no per-card toggle remains on this card (D-T9)', () => {
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
+    renderCard();
+    expect(screen.queryByRole('button', { name: /^real$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^nominal$/i })).toBeNull();
+    // The mode segment (Keep contributing / Stop today) is NOT a basis control and stays:
+    expect(screen.getByRole('button', { name: /keep contributing/i })).toBeInTheDocument();
   });
 
   it('W16: recomputes when the bar Portfolio is edited, and bar Reset restores it', async () => {
@@ -471,6 +510,7 @@ describe('PathToFiCard — Stop today (Coast mode)', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(PINNED_DATE);
@@ -598,6 +638,7 @@ describe('PathToFiCard waymark meaning + dirty (Wave 17)', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(PINNED_DATE);
@@ -691,6 +732,7 @@ describe('PathToFiCard — person scope (Wave B)', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     vi.useFakeTimers({ toFake: ['Date'] });
