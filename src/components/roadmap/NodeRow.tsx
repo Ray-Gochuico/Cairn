@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Info } from 'lucide-react';
 import { StatusIcon } from './StatusIcon';
-import { DecisionPrompt } from './DecisionPrompt';
+import { DecisionPrompt, hasDecisionPrompt } from './DecisionPrompt';
 import { NodeDetailDrawer } from './NodeDetailDrawer';
 import type { NodeResult, RoadmapContext, RoadmapNode } from '@/types/roadmap';
 
@@ -53,7 +53,10 @@ export function NodeRow({ node, result, ctx }: Props) {
               {result.cta.label}
             </Link>
           )}
-          {result.question && <DecisionPrompt question={result.question} />}
+          {/* The same test /what-if's G9 row asks (smoke D2) — one place per
+              thing, so the two surfaces can never disagree about whether the
+              Roadmap has a question to answer. */}
+          {hasDecisionPrompt(result) && <DecisionPrompt question={result.question} />}
         </div>
         <button
           type="button"

@@ -176,8 +176,14 @@ function nwDelta(i: PlanReviewInput): NwDelta | null {
   // The fmtNetWorth30y display recipe (ManageScenariosModal.tsx:39-44) —
   // parity with the scoreboard column, D-W3-4 / D-W3-P7.
   const disp = (n: number): number => (i.dollarMode === 'real' ? n / Math.pow(1 + i.deflator.rate, 30) : n);
-  const da = disp(na);
-  const db = disp(nb);
+  // …and to WHOLE DOLLARS, the way that column prints them (formatCurrency =
+  // Intl with maximumFractionDigits: 0). The delta is the difference between
+  // the two figures the user can read off the modal, so each side is rounded
+  // FIRST and then subtracted. Subtracting the raw halves and rounding the
+  // result put the card $1 below the scoreboard (smoke M1, 2026-09-02:
+  // $3,822,730 on the card vs $3,822,729 across the columns).
+  const da = Math.round(disp(na));
+  const db = Math.round(disp(nb));
   return {
     floor: Math.max(NET_WORTH_FLOOR_ABS, NET_WORTH_FLOOR_PCT * Math.max(Math.abs(da), Math.abs(db))),
     absDelta: Math.abs(da - db),

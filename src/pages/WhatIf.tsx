@@ -36,6 +36,7 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { evaluate } from '@/domain/roadmap/evaluate';
+import { anyDecisionPrompt } from '@/components/roadmap/DecisionPrompt';
 import CompareScenariosCard from '@/components/whatif/CompareScenariosCard';
 import ModelGapsCard from '@/components/whatif/ModelGapsCard';
 import {
@@ -286,14 +287,24 @@ export default function WhatIf() {
   const onSelectA = useCallback((id: number) => setPairSel((p) => ({ ...p, aId: id })), []);
   const onSelectB = useCallback((id: number) => setPairSel((p) => ({ ...p, bId: id })), []);
 
-  // G9 (D-W3-P2): the Dashboard unanswered-scan, retargeted. useRoadmap
+  // G9 (D-W3-P2): the roadmap rule engine, evaluated here. useRoadmap
   // composes state only (no .load() — boot-loop constraint 8).
+  //
+  // ONE PLACE PER THING (smoke D2, 2026-09-02): the predicate is the ROADMAP's
+  // own — `hasDecisionPrompt`, the exact test NodeRow uses to render a
+  // DecisionPrompt. The Dashboard-style `status === 'unanswered'` scan this
+  // replaces was BROADER than what /roadmap offers to answer (s2_small_ef and
+  // s1_employer_match report 'unanswered' with a CTA to another page and no
+  // prompt), so the row claimed questions that weren't there and its
+  // "Open Roadmap →" CTA landed on a page with nothing to answer.
+  //
+  // Deliberately NARROWER than "every open question in the app": interview
+  // threads would drag useInterview()'s ~18-store hydration onto this page for
+  // one boolean (D-W3-P2, declined). A true-but-narrow row beats a false one.
   const roadmapCtx = useRoadmap();
   const roadmapHasUnanswered = useMemo(() => {
     if (!roadmapCtx) return false;
-    const results = evaluate(roadmapCtx);
-    for (const r of results.values()) if (r.status === 'unanswered') return true;
-    return false;
+    return anyDecisionPrompt(evaluate(roadmapCtx).values());
   }, [roadmapCtx]);
 
   // G2's consequence ("the portfolio starts at $0 in these projections") is

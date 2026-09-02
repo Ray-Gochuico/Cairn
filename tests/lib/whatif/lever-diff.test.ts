@@ -310,3 +310,87 @@ describe('buildLeverDiff (FULL LeverPayload coverage — D-W3-8)', () => {
       .toBe(JSON.stringify(buildLeverDiff(mk(), P(), { loanNames: LOANS })));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Smoke defect D1 (main 6ef73e41, 2026-09-02): "Annual raises: 0% vs 0% / 0%"
+// rendered as the ONLY main difference between a lever-identical twin and its
+// source, because the raises comparison keyed off the SHAPE of
+// income.perPerson (one entry vs two after the Income dialog normalizes it)
+// rather than the per-person VALUES.
+//
+// The engine resolves a missing perPerson entry as
+//   payload.income.perPerson[idx] ?? payload.income.perPerson[0]      (engine.ts:515)
+// so ONE entry models the same raises AND the same income events for every
+// person that the same entry repeated does. Both sides are aligned to that
+// rule before anything is compared; a shape-only difference is not a
+// difference the projected lines have, and must never render as one.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('buildLeverDiff — income shape is not a difference (smoke D1)', () => {
+  const plans = (...pp: { annualRaiseRate: number; events?: LeverPayload['income']['perPerson'][number]['events'] }[]): LeverPayload => ({
+    ...P(),
+    income: { perPerson: pp.map((p) => ({ annualRaiseRate: p.annualRaiseRate, events: p.events ?? [] })) },
+  });
+  const RAISE_EVT = { when: '2027-03-01', type: 'raise', deltaAmount: 5_000 } as const;
+
+  it('the smoke repro: single-entry raise 0 vs per-person [0, 0] renders NO raises line', () => {
+    const one = plans({ annualRaiseRate: 0 });
+    const two = plans({ annualRaiseRate: 0 }, { annualRaiseRate: 0 });
+    const d = buildLeverDiff(one, two, { loanNames: {} });
+    expect(d.changed).toEqual([]);
+    expect(d.isEmpty).toBe(true);
+    // ...and the two payloads are NOT canonical-JSON equal, so the BL-5
+    // "identical" rung stays out of reach (pinned in plan-review.test.ts).
+    expect(canonicalJson(one)).not.toBe(canonicalJson(two));
+  });
+
+  it('the missing entry is filled from perPerson[0] — never from an invented 0%', () => {
+    // A padding mutant that invents `{annualRaiseRate: 0}` renders
+    // 'Annual raises: 3% / 0% vs 3% / 3%'; the engine's own fallback renders
+    // nothing at all.
+    const one = plans({ annualRaiseRate: 0.03 });
+    const two = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.03 });
+    expect(buildLeverDiff(one, two, { loanNames: {} }).changed).toEqual([]);
+  });
+
+  it('a GENUINE per-person rate difference still renders, in the CR-MD2 format', () => {
+    const d = buildLeverDiff(
+      plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0 }),
+      plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.02 }),
+      { loanNames: {} },
+    );
+    expect(d.changed).toEqual(['Annual raises: 3% / 0% vs 3% / 2%']);
+    expect(d.isEmpty).toBe(false);
+  });
+
+  it('a genuine difference UNDER a shape difference renders both sides aligned', () => {
+    // One entry at 3% vs [5%, 3%]: the engine gives person 2 the 3% entry on
+    // the left, so the honest rendering is the aligned pair — not '3% vs 5% / 3%'.
+    const d = buildLeverDiff(
+      plans({ annualRaiseRate: 0.03 }),
+      plans({ annualRaiseRate: 0.05 }, { annualRaiseRate: 0.03 }),
+      { loanNames: {} },
+    );
+    expect(d.changed).toEqual(['Annual raises: 3% / 3% vs 5% / 3%']);
+  });
+
+  it('shape alone cannot make an income EVENT look like an extra move', () => {
+    const one = plans({ annualRaiseRate: 0, events: [RAISE_EVT] });
+    const two = plans({ annualRaiseRate: 0, events: [RAISE_EVT] }, { annualRaiseRate: 0, events: [RAISE_EVT] });
+    const d = buildLeverDiff(one, two, { loanNames: {} });
+    expect(d.onlyInA).toEqual([]);
+    expect(d.onlyInB).toEqual([]);
+    expect(d.isEmpty).toBe(true);
+  });
+
+  it('an event the engine really does drop for person 2 still surfaces', () => {
+    // Left: one entry carrying the event ⇒ BOTH people get it. Right: person 2
+    // has their own empty plan ⇒ only person 1 gets it. A real difference.
+    const d = buildLeverDiff(
+      plans({ annualRaiseRate: 0, events: [RAISE_EVT] }),
+      plans({ annualRaiseRate: 0, events: [RAISE_EVT] }, { annualRaiseRate: 0 }),
+      { loanNames: {} },
+    );
+    expect(d.onlyInA).toEqual(['Income event 2027-03: raise +$5,000 (person 2)']);
+    expect(d.onlyInB).toEqual([]);
+  });
+});

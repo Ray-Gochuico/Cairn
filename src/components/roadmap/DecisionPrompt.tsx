@@ -1,9 +1,35 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { NodeQuestion } from '@/types/roadmap';
+import type { NodeQuestion, NodeResult } from '@/types/roadmap';
 
 interface Props {
   question: NodeQuestion;
+}
+
+/**
+ * The Roadmap's ONE test for "there is something here to answer": NodeRow
+ * renders a DecisionPrompt exactly when the rule engine attached a question to
+ * the node's result. Extracted (behavior byte-identical to the inline
+ * `result.question &&` it replaces) so no other surface has to guess.
+ *
+ * A `status: 'unanswered'` result is BROADER than this — rules such as
+ * s2_small_ef and s1_employer_match report 'unanswered' with evidence and a
+ * CTA to some OTHER page and no inline prompt at all. /what-if's G9 row
+ * ("The roadmap has questions you haven't answered", linking to /roadmap) used
+ * the status scan and sent users to a page with nothing on it to answer —
+ * smoke defect D2, 2026-09-02.
+ */
+export function hasDecisionPrompt(
+  result: NodeResult,
+): result is NodeResult & { question: NodeQuestion } {
+  return result.question != null;
+}
+
+/** ≥1 result in the collection would render an answerable prompt on /roadmap.
+ *  Takes any iterable so `evaluate(ctx).values()` passes straight through. */
+export function anyDecisionPrompt(results: Iterable<NodeResult>): boolean {
+  for (const r of results) if (hasDecisionPrompt(r)) return true;
+  return false;
 }
 
 /**

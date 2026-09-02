@@ -6,6 +6,7 @@ import {
   type Milestones, type MonthlyState,
 } from '@/lib/scenarios';
 import { NET_WORTH_FLOOR_ABS } from '@/lib/briefing';
+import { formatCurrency } from '@/lib/format';
 import {
   buildPlanReview, lineText, COMPARE_FOOTER, SECOND_SCENARIO_PROMPT, SEND_POINTER,
   resolveDeflatorSourceLabel, resolveComparePair, DEFLATOR_LABELS, TEMPLATES,
@@ -142,6 +143,37 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
     expect(bl(i)).toBe('Aggressive payoff ends $3,000 higher at the end of your 250-month horizon.');
   });
 
+  // Smoke M1 (2026-09-02): the card read $3,822,730 while the Manage-scenarios
+  // columns differed by $3,822,729. D-W3-4's parity intent is that the user can
+  // hold the card against the modal, so the delta is the difference of the
+  // figures the SCOREBOARD shows — each side rounded to whole dollars first,
+  // then subtracted — not the rounded difference of the raw halves.
+  it('M1: the 30-year delta subtracts the SCOREBOARD-ROUNDED sides (halves straddling .5)', () => {
+    const i = input({
+      a: side('Baseline', { milestones: { netWorth30y: 1_000_000.5 } as Milestones }),
+      b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 500_000.4 } as Milestones }),
+      leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
+    });
+    // ManageScenariosModal renders each column as formatCurrency(n): Intl
+    // rounds to whole dollars, so the columns read $1,000,001 and $500,000 and
+    // their visible difference is $500,001. Subtracting the raw halves first
+    // gives 500,000.1 → $500,000, the $1 the smoke caught.
+    expect(formatCurrency(1_000_000.5)).toBe('$1,000,001');
+    expect(formatCurrency(500_000.4)).toBe('$500,000');
+    expect(bl(i)).toBe('Baseline ends $500,001 higher at the 30-year mark.');
+  });
+
+  it('M1: real mode rounds the DEFLATED sides, matching the modal column it mirrors', () => {
+    const f = Math.pow(1.03, 30);
+    const i = input({
+      dollarMode: 'real',
+      a: side('Baseline', { milestones: { netWorth30y: 1_000_000.5 * f } as Milestones }),
+      b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 500_000.4 * f } as Milestones }),
+      leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
+    });
+    expect(bl(i)).toBe("Baseline ends $500,001 higher at the 30-year mark (today's dollars).");
+  });
+
   it('BL-4: both debt-free, differ (FI silent, NW under floor)', () => {
     const i = input({
       a: side('Baseline', { milestones: { debtFreeISO: '2028-03', netWorth30y: 100_000 } as Milestones }),
@@ -153,6 +185,31 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
 
   it('BL-5: canonical-JSON-equal payloads → "lines overlap"', () => {
     expect(bl(input())).toBe('These two scenarios are identical — their lines overlap.');
+  });
+
+  // Smoke D1 (2026-09-02): the lever-diff now hides a SHAPE-only income
+  // difference, but BL-5 is NOT weakened to match. "Their lines overlap" rests
+  // on D-W3-P10 — canonical-JSON-equal payloads share a projection cache key
+  // (scenarios-store.ts:222-223), so the states are the same object. A
+  // shape-only twin has a DIFFERENT key and is merely expected to overlap, so
+  // the ladder must fall through to the rung the numbers actually support.
+  it('BL-5 still requires canonical equality: a shape-only income twin falls through to BL-6', () => {
+    const one = { ...emptyLeverPayload(), income: { perPerson: [{ annualRaiseRate: 0, events: [] }] } };
+    const two = {
+      ...emptyLeverPayload(),
+      income: { perPerson: [{ annualRaiseRate: 0, events: [] }, { annualRaiseRate: 0, events: [] }] },
+    };
+    expect(JSON.stringify(one)).not.toBe(JSON.stringify(two)); // not identical payloads
+    const i = input({
+      a: side('Baseline', { payload: one, milestones: { netWorth30y: 100_000 } as Milestones }),
+      b: side('Aggressive payoff', { payload: two, milestones: { netWorth30y: 100_000 } as Milestones }),
+    });
+    const model = buildPlanReview(i);
+    // floor = max(500, 0.005 × 100,000) = 500; Δ = 0 → BL-6, never BL-5.
+    expect(lineText(model.bottomLine)).toBe('These plans end within $500 of each other over this horizon.');
+    expect(lineText(model.bottomLine)).not.toContain('identical');
+    // The empty diff + equal parity still pairs with the honest MD-4 line.
+    expect(model.mainDifference.map(lineText)).toEqual(['No differences — see the bottom line.']);
   });
 
   it('BL-6 fallback floor is NET_WORTH_FLOOR_ABS when no 30y figures exist', () => {
