@@ -76,15 +76,15 @@ export async function initDatabase(): Promise<void> {
   // prod bundle (which sets none of these Vite env vars). Runs BEFORE the
   // first-launch persons check in main.tsx so a smoke lands on /investments
   // without the /setup redirect, and seeds an app_wide disclosure acceptance
-  // so AppDisclaimerGate doesn't block. See src/dev/seed-demo-data.ts and
-  // docs/runbooks/populated-donut-smoke.md.
+  // so AppDisclaimerGate doesn't block.
+  // See src/domain/sample-profile/sample-profile.ts and docs/runbooks/populated-donut-smoke.md.
   if (
     import.meta.env.DEV &&
     import.meta.env.VITE_BROWSER_SHIM === '1' &&
     import.meta.env.VITE_SEED_DEMO === '1'
   ) {
-    const { seedDemoData } = await import('@/dev/seed-demo-data');
-    await seedDemoData(adapter);
+    const { seedSampleProfile } = await import('@/domain/sample-profile/sample-profile');
+    await seedSampleProfile(adapter);
   }
 
   // Run the background market-data derivations only when the configured

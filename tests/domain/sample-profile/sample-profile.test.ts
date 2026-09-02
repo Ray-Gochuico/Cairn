@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
-import { seedDemoData, DEMO_SEED } from '@/dev/seed-demo-data';
+import { seedSampleProfile, SAMPLE_PROFILE } from '@/domain/sample-profile/sample-profile';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -12,30 +12,30 @@ async function freshDb(): Promise<SqliteAdapter> {
   return db;
 }
 
-describe('seedDemoData', () => {
+describe('seedSampleProfile', () => {
   let db: SqliteAdapter;
   beforeEach(async () => {
     db = await freshDb();
   });
 
   it('creates exactly one household, two persons, and the expected accounts', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const hh = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM household');
     expect(hh[0].n).toBe(1);
     const persons = await db.select<{ name: string }>('SELECT name FROM persons');
     expect(persons).toHaveLength(2);
     expect(persons.map((p) => p.name).sort()).toEqual(
-      [DEMO_SEED.personName, DEMO_SEED.partnerName].sort(),
+      [SAMPLE_PROFILE.personName, SAMPLE_PROFILE.partnerName].sort(),
     );
     const accts = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
-    expect(accts[0].n).toBe(DEMO_SEED.accountCount);
+    expect(accts[0].n).toBe(SAMPLE_PROFILE.accountCount);
   });
 
   it('backfills the migration-default $0 expense baseline (round-3 M2 fallout)', async () => {
     // The 0001 migration inserts the household singleton with baseline 0
     // BEFORE the seed's INSERT OR IGNORE — the demo household kept a $0
     // baseline, which What-If now honestly reports as a missing input.
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ b: number }>(
       'SELECT monthly_expense_baseline AS b FROM household WHERE id = 1',
     );
@@ -44,7 +44,7 @@ describe('seedDemoData', () => {
 
   it('never clobbers a user-set expense baseline', async () => {
     await db.execute('UPDATE household SET monthly_expense_baseline = 4321 WHERE id = 1');
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ b: number }>(
       'SELECT monthly_expense_baseline AS b FROM household WHERE id = 1',
     );
@@ -52,11 +52,11 @@ describe('seedDemoData', () => {
   });
 
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(
       'SELECT account_id, total_value, snapshot_date FROM account_snapshots',
     );
-    expect(rows.length).toBe(DEMO_SEED.accountCount * 2);
+    expect(rows.length).toBe(SAMPLE_PROFILE.accountCount * 2);
     for (const r of rows) expect(r.total_value).toBeGreaterThan(0);
     // All snapshots dated <= today so latestSnapshotForAccount picks them up.
     const today = new Date().toISOString().slice(0, 10);
@@ -64,14 +64,14 @@ describe('seedDemoData', () => {
   });
 
   it('writes loans with positive balances (drives LiabilitiesDonut)', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const loans = await db.select<{ current_balance: number }>('SELECT current_balance FROM loans');
     expect(loans.length).toBeGreaterThanOrEqual(1);
     for (const l of loans) expect(l.current_balance).toBeGreaterThan(0);
   });
 
   it('writes fund_holdings and fund_sectors so look-through populates Per-company/Sector donuts', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const fh = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM fund_holdings');
     const fs = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM fund_sectors');
     expect(fh[0].n).toBeGreaterThan(0);
@@ -85,31 +85,31 @@ describe('seedDemoData', () => {
   });
 
   it('inserts an app_wide disclosure acceptance at the current version', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ document_id: string; version: string }>(
       "SELECT document_id, version FROM disclosure_acceptances WHERE document_id = 'app_wide'",
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].version).toBe(DEMO_SEED.appWideVersion);
+    expect(rows[0].version).toBe(SAMPLE_PROFILE.appWideVersion);
   });
 
   it('is idempotent: a second seed does not duplicate rows', async () => {
-    await seedDemoData(db);
-    await seedDemoData(db);
+    await seedSampleProfile(db);
+    await seedSampleProfile(db);
     const persons = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM persons');
     const accts = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
     const snaps = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM account_snapshots');
     const loans = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM loans');
     expect(persons[0].n).toBe(2);
-    expect(accts[0].n).toBe(DEMO_SEED.accountCount);
-    expect(snaps[0].n).toBe(DEMO_SEED.accountCount * 2);
-    expect(loans[0].n).toBe(DEMO_SEED.loanCount);
+    expect(accts[0].n).toBe(SAMPLE_PROFILE.accountCount);
+    expect(snaps[0].n).toBe(SAMPLE_PROFILE.accountCount * 2);
+    expect(loans[0].n).toBe(SAMPLE_PROFILE.loanCount);
   });
 
   it('Wave A: seeds a two-person household with joint items (ownership map)', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const partner = await db.select<{ id: number }>(
-      'SELECT id FROM persons WHERE name = ?', [DEMO_SEED.partnerName],
+      'SELECT id FROM persons WHERE name = ?', [SAMPLE_PROFILE.partnerName],
     );
     expect(partner).toHaveLength(1);
     const partnerAccts = await db.select<{ n: number }>(
@@ -128,14 +128,14 @@ describe('seedDemoData', () => {
     const jointProps = await db.select<{ n: number }>(
       'SELECT COUNT(*) AS n FROM properties WHERE owner_person_id IS NULL',
     );
-    expect(jointProps[0].n).toBe(1); // Demo Home
-    // Review fix: Demo Home is linked to the (joint) Mortgage so the wave's
+    expect(jointProps[0].n).toBe(1); // Sample Home
+    // Review fix: Sample Home is linked to the (joint) Mortgage so the wave's
     // full-lien property surfaces are demonstrable in the shim.
     const mortgage = await db.select<{ id: number }>(
       "SELECT id FROM loans WHERE name = 'Mortgage'",
     );
     const home = await db.select<{ linked_loan_id: number | null }>(
-      "SELECT linked_loan_id FROM properties WHERE name = 'Demo Home'",
+      "SELECT linked_loan_id FROM properties WHERE name = 'Sample Home'",
     );
     expect(home[0].linked_loan_id).toBe(mortgage[0].id);
     const partnerVehicles = await db.select<{ n: number }>(
@@ -145,8 +145,8 @@ describe('seedDemoData', () => {
   });
 
   it('Wave A: the partner slice is independently idempotent (stale dev DBs converge)', async () => {
-    await seedDemoData(db); // full seed
-    await seedDemoData(db); // second run: both sentinels short-circuit
+    await seedSampleProfile(db); // full seed
+    await seedSampleProfile(db); // second run: both sentinels short-circuit
     const persons = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM persons');
     expect(persons[0].n).toBe(2);
   });
@@ -155,7 +155,7 @@ describe('seedDemoData', () => {
     // valueHoldings is the shared computation PerTicker/Sector/Assets donuts read.
     // Re-derive its inputs exactly as use-concentration.ts does, but straight from
     // the DB, to prove seeded rows yield real per-holding dollar value.
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const { valueHoldings } = await import('@/lib/holdings-value');
     const accounts = await db.select<{ id: number; name: string }>('SELECT id, name FROM accounts');
     const holdings = await db.select<{ account_id: number; ticker: string; share_count: number }>(
@@ -182,7 +182,7 @@ describe('seedDemoData', () => {
   });
 
   it('seeds an AUTO_DERIVED last-month-close snapshot per account (Monthly confirm has work)', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const { lastBusinessDayOfMonth } = await import('@/lib/business-days');
     const { lastMonthYyyymm } = await import('@/lib/input-pending');
     const close = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
@@ -192,11 +192,11 @@ describe('seedDemoData', () => {
     );
     // T3: the 529's close snapshot is MANUAL by design (the college slice
     // stays out of the Monthly confirm flow), so it is accountCount − 1.
-    expect(rows[0].n).toBe(DEMO_SEED.accountCount - 1);
+    expect(rows[0].n).toBe(SAMPLE_PROFILE.accountCount - 1);
   });
 
   it('backfills sector/industry for directly-held single names (Sector donut demo coverage)', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ ticker: string; sector: string | null; industry: string | null }>(
       "SELECT ticker, sector, industry FROM tickers WHERE ticker IN ('AAPL', 'MSFT', 'NVDA') ORDER BY ticker",
     );
@@ -232,7 +232,7 @@ describe('seedDemoData', () => {
       // Guard: the chosen instant must actually split the two
       // implementations, so this test self-fails if it stops discriminating.
       expect(localTodayISO(instant)).not.toBe(instant.toISOString().slice(0, 10));
-      await seedDemoData(db);
+      await seedSampleProfile(db);
       const expected = localTodayISO(instant);
       const rows = await db.select<{ d: string }>(
         'SELECT MAX(snapshot_date) AS d FROM account_snapshots',
@@ -246,7 +246,7 @@ describe('seedDemoData', () => {
   });
 
   it('derives loan first-payment dates from an injectable reference day (Wave 11 T20)', async () => {
-    await seedDemoData(db, { todayISO: '2026-07-08' });
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
     const loans = await db.select<{ name: string; first_payment_date: string }>(
       'SELECT name, first_payment_date FROM loans',
     );
@@ -257,22 +257,22 @@ describe('seedDemoData', () => {
     expect(byName.get('Car Loan')).toBe('2025-01-01');
   });
 
-  it("0051: Demo Partner gets a durable monthly_expense_baseline; Demo Investor stays NULL (both provenance paths smokable)", async () => {
-    await seedDemoData(db);
+  it("0051: Jordan Sample gets a durable monthly_expense_baseline; Avery Sample stays NULL (both provenance paths smokable)", async () => {
+    await seedSampleProfile(db);
     const rows = await db.select<{ name: string; b: number | null }>(
       'SELECT name, monthly_expense_baseline AS b FROM persons ORDER BY name',
     );
     const byName = new Map(rows.map((r) => [r.name, r.b]));
-    // Partner set → the scoped bar's \"from Demo Partner's Inputs\" path;
+    // Partner set → the scoped bar's \"from Jordan Sample's Inputs\" path;
     // Investor NULL → the labeled even-split path stays demonstrable too.
-    expect(byName.get(DEMO_SEED.partnerName)).toBe(2600);
-    expect(byName.get(DEMO_SEED.personName)).toBeNull();
+    expect(byName.get(SAMPLE_PROFILE.partnerName)).toBe(2600);
+    expect(byName.get(SAMPLE_PROFILE.personName)).toBeNull();
   });
 
   it('Wave B: seeds one RSU grant per person (the exact card is smokable) — idempotently', async () => {
     const todayISO = '2026-07-08';
-    await seedDemoData(db, { todayISO });
-    await seedDemoData(db, { todayISO });
+    await seedSampleProfile(db, { todayISO });
+    await seedSampleProfile(db, { todayISO });
     const grants = await db.select<{ owner_person_id: number; grant_type: string }>(
       'SELECT owner_person_id, grant_type FROM equity_grants ORDER BY id',
     );
@@ -282,7 +282,7 @@ describe('seedDemoData', () => {
   });
 
   it('seeds Positions price pairs: two recent dates per priced ticker, none for MSFT', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const counts = await db.select<{ ticker: string; n: number }>(
       'SELECT ticker, COUNT(*) AS n FROM price_cache GROUP BY ticker ORDER BY ticker',
     );
@@ -297,7 +297,7 @@ describe('seedDemoData', () => {
   });
 
   it('seeds 52-week fields on the fund trio only (AAPL/NVDA stay null → "—")', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ ticker: string; lo: number | null; hi: number | null }>(
       'SELECT ticker, fifty_two_week_low AS lo, fifty_two_week_high AS hi FROM tickers WHERE ticker IN (?,?,?,?,?) ORDER BY ticker',
       ['AAPL', 'BND', 'FXAIX', 'NVDA', 'VTI'],
@@ -312,7 +312,7 @@ describe('seedDemoData', () => {
   });
 
   it('seeds day-change facts on the fund trio only, coherent with the latest cached price (AAPL/NVDA stay null → "—")', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ ticker: string; chg: number | null; prev: number | null }>(
       'SELECT ticker, regular_market_change AS chg, regular_market_previous_close AS prev FROM tickers WHERE ticker IN (?,?,?,?,?) ORDER BY ticker',
       ['AAPL', 'BND', 'FXAIX', 'NVDA', 'VTI'],
@@ -340,15 +340,15 @@ describe('seedDemoData', () => {
     expect(237.6 + 1.2).toBeCloseTo(byTicker.get('VTI')!, 2);     // 238.80
   });
 
-  it('Wave T3: seeds Demo Kid + a MANUAL-source 529 (college thread smokable; Monthly confirm untouched) — idempotently', async () => {
-    await seedDemoData(db);
-    await seedDemoData(db); // college sentinel short-circuits: no duplicates
+  it('Wave T3: seeds Riley Sample + a MANUAL-source 529 (college thread smokable; Monthly confirm untouched) — idempotently', async () => {
+    await seedSampleProfile(db);
+    await seedSampleProfile(db); // college sentinel short-circuits: no duplicates
     const kids = await db.select<{ name: string; date_of_birth: string; type: string }>(
       'SELECT name, date_of_birth, type FROM dependents',
     );
     // dob is load-bearing: 2016-05 + 216 months = May 2034 — the e2e pins
     // the 'starting May 2034' label.
-    expect(kids).toEqual([{ name: 'Demo Kid', date_of_birth: '2016-05-12', type: 'CHILD' }]);
+    expect(kids).toEqual([{ name: 'Riley Sample', date_of_birth: '2016-05-12', type: 'CHILD' }]);
     const accts = await db.select<{ id: number; beneficiary_dependent_id: number | null; owner_person_id: number | null }>(
       "SELECT id, beneficiary_dependent_id, owner_person_id FROM accounts WHERE type = 'ACCOUNT_529'",
     );
@@ -369,11 +369,25 @@ describe('seedDemoData', () => {
   });
 
   it('seeds cost basis on all holdings except BND (its gain honestly renders "—")', async () => {
-    await seedDemoData(db);
+    await seedSampleProfile(db);
     const rows = await db.select<{ ticker: string; cost_basis: number | null }>(
       'SELECT ticker, cost_basis FROM holdings ORDER BY id',
     );
     expect(rows.filter((r) => r.cost_basis === null).map((r) => r.ticker)).toEqual(['BND']);
     expect(rows.find((r) => r.ticker === 'VTI')?.cost_basis).toBe(24_000);
+  });
+
+  it('W4: converges a profile seeded under the legacy names without double-seeding', async () => {
+    await seedSampleProfile(db);
+    await db.execute(`UPDATE persons SET name = 'Demo Investor' WHERE name = 'Avery Sample'`);
+    await db.execute(`UPDATE persons SET name = 'Demo Partner' WHERE name = 'Jordan Sample'`);
+    await db.execute(`UPDATE dependents SET name = 'Demo Kid' WHERE name = 'Riley Sample'`);
+    await seedSampleProfile(db); // legacy-name sentinels must short-circuit every slice
+    const persons = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM persons');
+    const accts = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
+    const deps = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM dependents');
+    expect(persons[0].n).toBe(2);
+    expect(accts[0].n).toBe(SAMPLE_PROFILE.accountCount);
+    expect(deps[0].n).toBe(1);
   });
 });

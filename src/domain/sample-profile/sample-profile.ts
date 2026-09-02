@@ -5,13 +5,22 @@ import { localTodayISO } from '@/lib/dates';
 import { lastMonthYyyymm } from '@/lib/input-pending';
 
 /**
- * DEV-ONLY demo-data seed for browser smoke tests of the Investments donuts.
+ * The SHIPPED sample profile (W4 D-S6) — the household the "Explore with
+ * sample data" tour walks through, and the same graph the dev browser smoke
+ * uses. ONE module, two consumers:
  *
- * GUARDED OUT OF PROD: only invoked from initDatabase() when
- * `import.meta.env.DEV && VITE_BROWSER_SHIM === '1' && VITE_SEED_DEMO === '1'`
- * (see src/db/init.ts). Those are statically-replaced Vite env reads, so the
- * Tauri prod build (which sets none of them) dead-code-eliminates the call —
- * this module is never reachable in a shipped binary.
+ *   1. The explore boot branch (`src/db/init.ts`, unguarded) — builds this
+ *      profile into the throwaway `sqlite:sample-explore.db` on every boot
+ *      while the explore flag is set. The real DB is never opened there.
+ *   2. The dev `VITE_SEED_DEMO` browser-smoke path (`src/db/init.ts`, still
+ *      triple-guarded on `import.meta.env.DEV && VITE_BROWSER_SHIM === '1' &&
+ *      VITE_SEED_DEMO === '1'`). Those are statically-replaced Vite env
+ *      reads, so that call site still dead-code-eliminates from the Tauri
+ *      prod build.
+ *
+ * Because consumer 1 ships, EVERY future change to the values, names and
+ * merchant strings below is PRODUCT COPY (D-S6) and is reviewed at the same
+ * bar as UI copy: plausible values, calm names, no jokes.
  *
  * Writes a small household graph via raw SQL (the same write surface as seed
  * migrations) so it does NOT depend on Yahoo/network (CORS-blocked in browser
@@ -22,25 +31,39 @@ import { lastMonthYyyymm } from '@/lib/input-pending';
  * render empty even with holdings present. `fund_holdings` + `fund_sectors`
  * are seeded so fund look-through is exercised (else funds show as "opaque").
  *
- * Idempotent: each slice early-returns if its sentinel person already exists
- * (Demo Investor for the primary slice, Demo Partner for the Wave-A partner
- * slice), and uses INSERT OR IGNORE / OR REPLACE / pre-DELETE everywhere, so
- * re-running against a persisted IndexedDB DB is a no-op.
+ * Idempotent: each slice early-returns if its sentinel row already exists
+ * (Avery Sample for the primary slice, Jordan Sample for the partner slice,
+ * empty-table sentinels for the equity/spending/goal slices), and uses
+ * INSERT OR IGNORE / OR REPLACE / pre-DELETE everywhere, so re-running
+ * against a persisted IndexedDB DB is a no-op. The explore boot rebuilds
+ * from scratch every time, so the sentinels matter only for the dev path.
  *
  * Tickers (VTI, FXAIX, AAPL, MSFT, NVDA, BND) are already seeded by migrations
  * 0006/0038; this module only UPDATEs their sector/industry columns (step 8)
  * — it never inserts ticker rows.
  */
 
-export const DEMO_SEED = {
-  personName: 'Demo Investor',
-  partnerName: 'Demo Partner',
+export const SAMPLE_PROFILE = {
+  personName: 'Avery Sample',
+  partnerName: 'Jordan Sample',
+  dependentName: 'Riley Sample',
   accountCount: 7, // 3 original + Partner Brokerage + Partner Savings + Joint Checking + 529 College Fund (T3)
   loanCount: 2,
   // Imported from the disclosure registry rather than hardcoded so a future
   // app_wide version bump can't leave the seeded acceptance stale (which would
   // re-gate the smoke behind AppDisclaimerGate).
   appWideVersion: DISCLOSURES.app_wide.version,
+} as const;
+
+/**
+ * Names the seed shipped under before W4's rename — sentinel-only, so
+ * already-seeded dev profiles converge instead of double-seeding (persons
+ * 2→4, accounts 7→13). Never rendered; never inserted. Wave-A D13 precedent.
+ */
+const LEGACY_SENTINEL_NAMES = {
+  person: 'Demo Investor',
+  partner: 'Demo Partner',
+  dependent: 'Demo Kid',
 } as const;
 
 // LOCAL calendar day, NOT toISOString (UTC): the app's as-of pipelines run on
@@ -58,21 +81,31 @@ const firstOfMonthMonthsAgo = (iso: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
-export async function seedDemoData(
+export async function seedSampleProfile(
   db: Database,
   opts?: { todayISO?: string },
 ): Promise<void> {
   const today = opts?.todayISO ?? TODAY();
   // Independent idempotency sentinels (Wave A D13): the primary slice keeps
-  // its Demo Investor sentinel for its own rows only, and the partner slice
-  // runs behind its own Demo Partner sentinel — so both fresh DBs and dev
+  // its Avery Sample sentinel for its own rows only, and the partner slice
+  // runs behind its own Jordan Sample sentinel — so both fresh DBs and dev
   // DBs seeded before Wave A converge to the same two-person household
-  // without re-running (or duplicating) the primary slice.
-  const primaryExists = await countPersons(db, DEMO_SEED.personName);
+  // without re-running (or duplicating) the primary slice. Each sentinel
+  // accepts the LEGACY name too (W4 P-W4-2), so a dev profile seeded before
+  // the rename converges instead of double-seeding.
+  const primaryExists = await personPresent(
+    db,
+    SAMPLE_PROFILE.personName,
+    LEGACY_SENTINEL_NAMES.person,
+  );
   if (!primaryExists) {
     await seedPrimarySlice(db, today);
   }
-  const partnerExists = await countPersons(db, DEMO_SEED.partnerName);
+  const partnerExists = await personPresent(
+    db,
+    SAMPLE_PROFILE.partnerName,
+    LEGACY_SENTINEL_NAMES.partner,
+  );
   if (!partnerExists) {
     await seedPartnerSlice(db, today);
   }
@@ -86,15 +119,21 @@ export async function seedDemoData(
   // Wave T3: dependent + 529 so the college_vs_retirement thread is smokable.
   // Guarded on its own row so pre-T3 dev DBs converge without duplicating.
   const kidRows = await db.select<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM dependents WHERE name = 'Demo Kid'",
+    'SELECT COUNT(*) AS n FROM dependents WHERE name IN (?, ?)',
+    [SAMPLE_PROFILE.dependentName, LEGACY_SENTINEL_NAMES.dependent],
   );
   if ((kidRows[0]?.n ?? 0) === 0) {
     await seedCollegeSlice(db, today);
   }
 }
 
-async function countPersons(db: Database, name: string): Promise<boolean> {
-  const r = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM persons WHERE name = ?', [name]);
+/** True when the household already carries this person under EITHER the
+ * current name or the pre-W4 legacy name (P-W4-2 convergence). */
+async function personPresent(db: Database, current: string, legacy: string): Promise<boolean> {
+  const r = await db.select<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM persons WHERE name IN (?, ?)',
+    [current, legacy],
+  );
   return (r[0]?.n ?? 0) > 0;
 }
 
@@ -103,7 +142,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    exist; we don't clobber it — the donuts only need accounts/snapshots.
   await db.execute(
     `INSERT OR IGNORE INTO household (id, name, filing_status, state, city, monthly_expense_baseline)
-     VALUES (1, 'Demo Household', 'MFJ', 'CA', 'San Francisco', 6000)`,
+     VALUES (1, 'Sample Household', 'MFJ', 'CA', 'San Francisco', 6000)`,
   );
   // Round-3 M2 fallout: the 0001 migration inserts the household singleton
   // (baseline 0) BEFORE this seed runs, so the OR IGNORE above never lands
@@ -121,7 +160,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   const personRes = await db.execute(
     `INSERT INTO persons (household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
      VALUES (1, ?, '1988-04-12', 60, 180000, 0.1)`,
-    [DEMO_SEED.personName],
+    [SAMPLE_PROFILE.personName],
   );
   const personId = personRes.lastInsertId!;
 
@@ -270,12 +309,12 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    fund-distributed wedges. BND stays sector-NULL on purpose:
   //    assetClassToPseudoSector maps US_BONDS → 'Fixed Income', which is
   //    already the wedge a bond fund should land in.
-  const DEMO_TICKER_PROFILES: ReadonlyArray<readonly [string, string, string]> = [
+  const SAMPLE_TICKER_PROFILES: ReadonlyArray<readonly [string, string, string]> = [
     ['AAPL', 'Technology', 'Consumer Electronics'],
     ['MSFT', 'Technology', 'Software—Infrastructure'],
     ['NVDA', 'Technology', 'Semiconductors'],
   ];
-  for (const [ticker, sector, industry] of DEMO_TICKER_PROFILES) {
+  for (const [ticker, sector, industry] of SAMPLE_TICKER_PROFILES) {
     await db.execute(`UPDATE tickers SET sector = ?, industry = ? WHERE ticker = ?`, [
       sector,
       industry,
@@ -341,7 +380,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   await db.execute(
     `INSERT OR IGNORE INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
      VALUES (1, 'app_wide', ?, ?)`,
-    [DEMO_SEED.appWideVersion, new Date().toISOString()],
+    [SAMPLE_PROFILE.appWideVersion, new Date().toISOString()],
   );
 }
 
@@ -351,26 +390,26 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
  * Independently sentineled on partnerName so dev DBs seeded before Wave A
  * converge without re-running (or duplicating) the primary slice.
  * Ownership map this creates:
- *   P1 (Demo Investor): Taxable Brokerage, Roth IRA, 401(k) [existing], Car Loan (obligor UPDATE)
- *   P2 (Demo Partner):  Partner Brokerage (derived-snapshot confirm card), Partner Savings (cash card), Partner Car
- *   Joint (owner NULL): Joint Checking, Mortgage (already NULL), Demo Home
+ *   P1 (Avery Sample): Taxable Brokerage, Roth IRA, 401(k) [existing], Car Loan (obligor UPDATE)
+ *   P2 (Jordan Sample):  Partner Brokerage (derived-snapshot confirm card), Partner Savings (cash card), Partner Car
+ *   Joint (owner NULL): Joint Checking, Mortgage (already NULL), Sample Home
  * Monthly Section-1 consequence: derived confirm cards go 3 → 4 (the e2e
  * Confirm-all pin moves in the same commit).
  */
 async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   const person = await db.select<{ id: number }>(
-    'SELECT id FROM persons WHERE name = ?', [DEMO_SEED.personName],
+    'SELECT id FROM persons WHERE name = ?', [SAMPLE_PROFILE.personName],
   );
   const primaryId = person[0]?.id;
 
   // 0051: the partner carries a durable per-person expense baseline so the
-  // scoped bar's "from Demo Partner's Inputs" provenance is smokable; the
+  // scoped bar's "from Jordan Sample's Inputs" provenance is smokable; the
   // primary person stays NULL so the labeled even-split path shows too.
   // 2600 ≠ 3000 (half the 6000 household baseline) so the upgrade is visible.
   const partnerRes = await db.execute(
     `INSERT INTO persons (household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct, monthly_expense_baseline)
      VALUES (1, ?, '1990-09-03', 62, 145000, 0.08, 2600)`,
-    [DEMO_SEED.partnerName],
+    [SAMPLE_PROFILE.partnerName],
   );
   const partnerId = partnerRes.lastInsertId!;
 
@@ -417,7 +456,7 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   }
 
   // One joint property + one P2 vehicle so Property/Vehicles/NetWorth person
-  // views have real rows to show and hide. Demo Home links to the (joint)
+  // views have real rows to show and hide. Sample Home links to the (joint)
   // Mortgage so the full-lien equity surfaces (Wave A C18) are demonstrable
   // in the shim; the Partner Car stays unlinked. Optional Monthly Section 4
   // grows by two nudge cards.
@@ -427,7 +466,7 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   const mortgageId = mortgage[0]?.id ?? null;
   await db.execute(
     `INSERT INTO properties (household_id, owner_person_id, name, type, current_estimated_value, linked_loan_id)
-     VALUES (1, NULL, 'Demo Home', 'PRIMARY_RESIDENCE', 850000, ?)`,
+     VALUES (1, NULL, 'Sample Home', 'PRIMARY_RESIDENCE', 850000, ?)`,
     [mortgageId],
   );
   await db.execute(
@@ -442,7 +481,7 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
  * is observable in the browser shim. Same company ('Acme') so the single-
  * company FMV what-if stays available household-wide. Guarded on an empty
  * equity_grants table (converges stale dev DBs; never duplicates).
- * Vested today at FMV $25: Demo Investor 2,000 sh = $50,000; Demo Partner
+ * Vested today at FMV $25: Avery Sample 2,000 sh = $50,000; Jordan Sample
  * 600 sh = $15,000 (household $65,000).
  */
 async function seedEquityGrantsSlice(db: Database, today: string): Promise<void> {
@@ -462,8 +501,8 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
     const r = await db.select<{ id: number }>('SELECT id FROM persons WHERE name = ?', [name]);
     return r[0]?.id ?? null;
   };
-  const investorId = await personId(DEMO_SEED.personName);
-  const partnerId = await personId(DEMO_SEED.partnerName);
+  const investorId = await personId(SAMPLE_PROFILE.personName);
+  const partnerId = await personId(SAMPLE_PROFILE.partnerName);
   if (investorId == null || partnerId == null) return;
   const grantDate = monthsFrom(today, -24); // exactly half vested today
   const insert = async (owner: number, name: string, shares: number) =>
@@ -480,7 +519,7 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
 }
 
 /**
- * Wave T3: one dependent + one 529 with snapshots. 'Demo Kid' turns 18 in
+ * Wave T3: one dependent + one 529 with snapshots. 'Riley Sample' turns 18 in
  * May 2034 (2016-05 + 216 months) — the e2e pins that month label, so the
  * date of birth is load-bearing. CA household + MFJ → the deduction hint
  * exercises the CI-C15 null contract ("No state deduction encoded for CA.").
@@ -494,10 +533,11 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
 async function seedCollegeSlice(db: Database, today: string): Promise<void> {
   const dep = await db.execute(
     `INSERT INTO dependents (household_id, name, date_of_birth, type)
-     VALUES (1, 'Demo Kid', '2016-05-12', 'CHILD')`,
+     VALUES (1, ?, '2016-05-12', 'CHILD')`,
+    [SAMPLE_PROFILE.dependentName],
   );
   const person = await db.select<{ id: number }>(
-    'SELECT id FROM persons WHERE name = ?', [DEMO_SEED.personName],
+    'SELECT id FROM persons WHERE name = ?', [SAMPLE_PROFILE.personName],
   );
   const acct = await db.execute(
     `INSERT INTO accounts (household_id, owner_person_id, name, institution, type, beneficiary_dependent_id)
