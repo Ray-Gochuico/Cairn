@@ -13,9 +13,7 @@ import {
 } from '@/lib/compound-interest';
 import { coastFi } from '@/lib/coast-fi';
 import { formatCurrency, formatSignedCurrency } from '@/lib/format';
-// NOTE: until Task 8's D-T9 deletion, ChartDisplayMode still lives in the old
-// hook module; Task 8 hoists it to real-mode.ts and rewires this import.
-import type { ChartDisplayMode } from './use-chart-display-mode';
+import type { ChartDisplayMode } from './real-mode';
 
 /* ── D-T4 vocabulary — the ONLY place basis phrases are authored ────────── */
 

@@ -7,8 +7,9 @@ const BTN_ACTIVE = 'bg-primary text-primary-foreground';
 
 /**
  * W5 (D-T1/D-T9): THE one page-level Today's $/Future $ control — replaces
- * the per-card RealNominalToggle. Renders in the ScenarioBar's identity row
- * beside the scope control (both are lenses: neither touches overrides or
+ * the per-card Nominal/Real switch deleted in D-T9. Renders in the ScenarioBar's
+ * identity row beside the scope control (both are lenses: neither touches
+ * overrides or
  * editedCount). The glossary tooltip is a sibling label (TermTooltip renders
  * its own <button>) — never wrap the toggle buttons.
  */

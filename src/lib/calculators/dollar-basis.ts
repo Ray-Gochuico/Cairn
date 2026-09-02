@@ -30,10 +30,12 @@ interface DollarBasisState {
 /**
  * W5 D-T2: THE single source of truth for the active display basis. Kept out
  * of useCalculatorState so flipping the view never sets isOverridden (the
- * property useChartDisplayMode deliberately had). sessionStorage per page
- * (D-T8): a cold boot always lands on Today's $. No other module may read the
+ * property the deleted per-card display-mode hook deliberately had).
+ * sessionStorage per page (D-T8): a cold boot always lands on Today's $.
+ * No other module may read the
  * storage key or hold basis state — tests/policy/dollar-basis-policy.test.ts
- * enforces it. The old calc-display-mode:* keys are simply never read again.
+ * enforces it. The old per-card display-mode session keys are simply never
+ * read again (D-T9/P15: sessionStorage dies with the session, no migration).
  */
 export const useDollarBasisStore = create<DollarBasisState>((set) => ({
   byPage: {},
