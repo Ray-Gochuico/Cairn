@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { GettingStartedSection } from '@/components/settings/GettingStartedSection';
 import { useTourStore } from '@/stores/tour-store';
+import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+
+/** Opaque to isExploreMode() — only presence matters (test-clock policy). */
+const FLAG_SET_AT = '2026-07-08T12:00:00.000Z';
 
 // Probe that reflects the current pathname so we can assert navigate('/').
 function LocationProbe() {
@@ -72,5 +76,26 @@ describe('GettingStartedSection', () => {
     expect(
       screen.getByText('Reopens guided setup with your saved answers filled in.'),
     ).toBeInTheDocument();
+  });
+
+  // W4 (P-W4-7, D-S7): both launchers write REAL device-local keys, so they
+  // are hidden — not merely disabled — while exploring.
+  it('explore mode: hides both Replay tour and Revisit setup', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    try {
+      renderSection();
+      expect(screen.queryByRole('button', { name: 'Replay tour' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Revisit setup' })).toBeNull();
+      // The pointer links to the two visibility editors stay.
+      expect(screen.getByRole('link', { name: 'Calculators' })).toBeInTheDocument();
+    } finally {
+      localStorage.removeItem(EXPLORE_FLAG_KEY);
+    }
+  });
+
+  it('without the flag: both launchers render (production path untouched)', () => {
+    renderSection();
+    expect(screen.getByRole('button', { name: 'Replay tour' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Revisit setup' })).toBeInTheDocument();
   });
 });

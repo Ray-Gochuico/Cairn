@@ -2,6 +2,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTourStore } from '@/stores/tour-store';
+import { isExploreMode } from '@/lib/explore-mode';
 
 /**
  * Settings → "Getting started". The re-entry surface for the one-time
@@ -18,6 +19,12 @@ import { useTourStore } from '@/stores/tour-store';
  */
 export function GettingStartedSection() {
   const navigate = useNavigate();
+  // W4 (P-W4-7, D-S7): both launchers are real-profile features whose
+  // handlers write real device-local keys (TourOverlay's finish →
+  // markTourDone; /setup → dismissal/progress/tailor). HIDDEN, not disabled:
+  // the Revisit control is <Button asChild><Link/></Button>, on which
+  // `disabled` is a no-op.
+  const exploring = isExploreMode();
 
   const handleReplayTour = () => {
     // start() is idempotent (StrictMode-safe); navigate to the Dashboard,
@@ -39,9 +46,11 @@ export function GettingStartedSection() {
           calculators are shown.
         </p>
         <div className="space-y-3">
-          <Button type="button" variant="outline" onClick={handleReplayTour}>
-            Replay tour
-          </Button>
+          {!exploring && (
+            <Button type="button" variant="outline" onClick={handleReplayTour}>
+              Replay tour
+            </Button>
+          )}
           <p className="text-sm text-muted-foreground">
             Show or hide tabs in the{' '}
             <a href="#sidebar-settings" className="text-primary hover:underline">
@@ -54,14 +63,16 @@ export function GettingStartedSection() {
             page.
           </p>
         </div>
-        <div className="mt-4">
-          <p className="text-sm text-muted-foreground mb-3">
-            Reopens guided setup with your saved answers filled in.
-          </p>
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/setup?origin=revisit">Revisit setup</Link>
-          </Button>
-        </div>
+        {!exploring && (
+          <div className="mt-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              Reopens guided setup with your saved answers filled in.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/setup?origin=revisit">Revisit setup</Link>
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

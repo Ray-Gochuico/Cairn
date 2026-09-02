@@ -3,6 +3,7 @@ import { AccountType } from '@/types/enums';
 import type { Account, AccountSnapshot } from '@/types/schema';
 import { rolling12mBaseline } from '@/lib/expense-baseline';
 import { includedAccountIds } from '@/lib/account-inclusion';
+import { localTodayISO } from '@/lib/dates';
 
 /**
  * Emergency-fund evaluators for the three EF nodes in Section 1.
@@ -73,7 +74,14 @@ export type BaselineSource = 'transactions' | 'household' | 'none';
 export function efContext(
   ctx: RoadmapContext,
 ): { baseline: number; cash: number; baselineSource: BaselineSource } {
-  const todayISO = ctx.today.toISOString().slice(0, 10);
+  // W4 review (MINOR 6): LOCAL day, not UTC. `ctx.today` is a local-midnight
+  // Date (context.ts: dateFromLocalISO(useLocalToday())), so east of UTC
+  // toISOString() reports the PREVIOUS day — and on the 1st of a month that
+  // rolled the as-of month back, dropping every current-month transaction out
+  // of the window below (`month > asOfMonth`) and inflating the baseline.
+  // localTodayISO is the exact inverse of dateFromLocalISO (the house rule
+  // since the T2 UTC lesson).
+  const todayISO = localTodayISO(ctx.today);
   // Wave 2 §8: real-spending baseline — same isRealSpending/
   // effectiveSpendingAmount pipeline as the Spending page and the What-If
   // expense basis, so transfers (CC payments) and pending reimbursables

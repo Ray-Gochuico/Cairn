@@ -5,6 +5,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { isWindows } from '@/lib/platform';
+import { isExploreMode, prefKey } from '@/lib/explore-mode';
 
 /**
  * Settings → Updates section. **Manual-only** updater check — the app
@@ -62,6 +63,12 @@ function formatLastChecked(iso: string | null): string {
 }
 
 export function UpdaterSection() {
+  // W4 review (MINOR 20): D-S7 — explore is offline. This was the one
+  // remaining network-capable control under the sample banner, and its
+  // last-checked stamp is a device-local key. Both are held to the real
+  // profile: the check is disabled with a line saying why, and the stamp is
+  // read/written through the explore namespace so nothing survives the exit.
+  const exploring = isExploreMode();
   const [currentVersion, setCurrentVersion] = useState<string | null>(null);
   const [lastChecked, setLastChecked] = useState<string | null>(null);
   const [state, setState] = useState<CheckState>({ phase: 'idle' });
@@ -80,15 +87,16 @@ export function UpdaterSection() {
         setCurrentVersion(null);
       }
     })();
-    setLastChecked(localStorage.getItem(LAST_CHECKED_KEY));
+    setLastChecked(localStorage.getItem(prefKey(LAST_CHECKED_KEY)));
   }, []);
 
   const handleCheck = async () => {
+    if (exploring) return; // belt-and-braces: the button is disabled too
     setState({ phase: 'checking' });
     try {
       const update = await check();
       const now = new Date().toISOString();
-      localStorage.setItem(LAST_CHECKED_KEY, now);
+      localStorage.setItem(prefKey(LAST_CHECKED_KEY), now);
       setLastChecked(now);
       if (update === null) {
         setState({ phase: 'up-to-date' });
@@ -200,7 +208,7 @@ export function UpdaterSection() {
             <Button
               type="button"
               variant="outline"
-              disabled={isBusy}
+              disabled={isBusy || exploring}
               onClick={() => void handleCheck()}
             >
               {state.phase === 'checking' ? 'Checking…' : 'Check for updates'}
@@ -214,6 +222,13 @@ export function UpdaterSection() {
               View all releases
             </Button>
           </div>
+
+          {exploring && (
+            <p className="text-sm text-muted-foreground" data-testid="sample-mode-updater-note">
+              Updates are checked from your own profile &mdash; not while exploring
+              sample data.
+            </p>
+          )}
 
           {state.phase === 'up-to-date' && (
             <div

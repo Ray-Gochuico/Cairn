@@ -892,3 +892,48 @@ describe('W13 Details region + fixed hero chart', () => {
     expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
   });
 });
+
+// W4 review (MINOR 13): the setup-resume nudge's `!isExploreMode()` predicate
+// (Dashboard.tsx:841) survived the entire suite — no Dashboard test exercised
+// explore. Inside the sample session the nudge points at /setup, which
+// mount-guards straight back to '/', so it is a dead control on top of a real
+// device-local read.
+describe('Dashboard setup-resume nudge — explore guard (D-S7)', () => {
+  beforeEach(() => {
+    resetStores();
+    localStorage.removeItem('explore.sampleMode.v1');
+    localStorage.removeItem('setupWizard.dismissed.v1');
+    // A leftover REAL first-run progress record — the state the nudge exists for.
+    localStorage.setItem(
+      'setupWizard.progress.v2',
+      JSON.stringify({ v: 2, view: 'worded', origin: 'first-run', statuses: {}, bindings: {} }),
+    );
+  });
+  afterEach(() => {
+    localStorage.removeItem('setupWizard.progress.v2');
+    localStorage.removeItem('explore.sampleMode.v1');
+  });
+
+  it('renders "Continue setup" on the real profile when a run is unfinished', () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /Suggested next step: finish setting up/ }),
+    ).toHaveAttribute('href', '/setup');
+  });
+
+  it('never renders it while exploring, even with the same leftover record', () => {
+    localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.queryByRole('link', { name: /Suggested next step: finish setting up/ }),
+    ).not.toBeInTheDocument();
+  });
+});

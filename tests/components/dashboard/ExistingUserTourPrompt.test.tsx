@@ -72,4 +72,19 @@ describe('ExistingUserTourPrompt', () => {
       screen.queryByText(/take a quick tour/i),
     ).not.toBeInTheDocument();
   });
+
+  // W4 review (MAJOR 0/3): defense in depth for D-S7. The row reads the REAL
+  // dismissal/tour keys, its "Take a quick tour" is dead in explore (PageShell
+  // unmounts TourOverlay), and its Dismiss calls markTourDone() — a write to
+  // one of the four real device-local keys D-S7 names, from inside the sample
+  // session. Mirrors the resume-nudge guard at Dashboard.tsx:833.
+  it('W4: never renders while exploring, so markTourDone() is unreachable there', async () => {
+    localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    markSetupDismissed(); // the real key survives entry — entry only sets the flag
+    expect(isTourDone()).toBe(false);
+    renderPrompt();
+    expect(screen.queryByText(/take a quick tour/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /dismiss/i })).not.toBeInTheDocument();
+    expect(isTourDone()).toBe(false); // the REAL tour key is untouched
+  });
 });

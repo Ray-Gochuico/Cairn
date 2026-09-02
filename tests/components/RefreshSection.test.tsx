@@ -10,6 +10,10 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { vi } from 'vitest';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { RefreshSection } from '@/components/settings/RefreshSection';
+import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+
+/** Opaque to isExploreMode() — only presence matters (test-clock policy). */
+const FLAG_SET_AT = '2026-07-08T12:00:00.000Z';
 
 // Round-3 E5: 'Last refreshed' stamps only AFTER an awaited successful
 // refresh — mock the refresh so tests can drive success/failure.
@@ -163,5 +167,25 @@ describe('RefreshSection', () => {
     const settings = await new SettingsRepo(db).get();
     expect(settings.lastRefreshAt).toBeNull();
     expect(screen.getByText(/last refreshed:/i)).toHaveTextContent(/never/i);
+  });
+
+  // W4 (D-S7): explore is offline.
+  it('explore mode: Refresh now is disabled and the reason is stated (SE-C10)', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    try {
+      render(<MemoryRouter><RefreshSection /></MemoryRouter>);
+      expect(await screen.findByRole('button', { name: /refresh now/i })).toBeDisabled();
+      expect(screen.getByTestId('sample-mode-refresh-note')).toHaveTextContent(
+        "Sample data doesn't refresh from the market.",
+      );
+    } finally {
+      localStorage.removeItem(EXPLORE_FLAG_KEY);
+    }
+  });
+
+  it('without the flag: Refresh now is live and the note is absent', async () => {
+    render(<MemoryRouter><RefreshSection /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: /refresh now/i })).toBeEnabled();
+    expect(screen.queryByTestId('sample-mode-refresh-note')).toBeNull();
   });
 });

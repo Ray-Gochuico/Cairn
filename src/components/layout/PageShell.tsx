@@ -6,6 +6,8 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { ViewFilter } from './ViewFilter';
 import { usePersonsStore } from '@/stores/persons-store';
 import { documentTitleFor } from '@/lib/route-titles';
+import { isExploreMode } from '@/lib/explore-mode';
+import { SampleDataBanner } from './SampleDataBanner';
 
 /*
  * Layout floor (Wave 11 T19): the desktop window enforces 1024×700
@@ -34,11 +36,17 @@ export default function PageShell() {
   // readers announce "<title>, main". We focus <main> (not the page h1):
   // routes are lazy chunks, so on pathname-change the new h1 may not exist
   // yet. Skipped on first render (initial focus belongs to the document).
+  // W4: a BOOT CONSTANT (src/lib/explore-mode.ts) — it only ever changes
+  // across a full navigation, so it is safe to read during render and safe to
+  // omit from effect dep arrays (the same convention the two localStorage
+  // reads in Dashboard's nextMove memo already follow).
+  const exploring = isExploreMode();
+
   const location = useLocation();
   const mainRef = useRef<HTMLElement | null>(null);
   const firstRenderRef = useRef(true);
   useEffect(() => {
-    document.title = documentTitleFor(location.pathname);
+    document.title = documentTitleFor(location.pathname) + (exploring ? ' — Sample' : '');
     if (firstRenderRef.current) {
       firstRenderRef.current = false;
       return;
@@ -47,7 +55,10 @@ export default function PageShell() {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+    // W4 (D-S5): a COLUMN — the sample banner is app-level chrome spanning the
+    // full window width ABOVE Sidebar + content, so the existing row nests one
+    // level down (min-h-0 keeps <main>'s overflow-y-auto scrolling).
+    <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       {/*
        * Skip-to-main-content link (Wave-5 frontend A+ #1). Visually hidden
        * until keyboard focus lands on it (Tab from the address bar at page
@@ -62,22 +73,28 @@ export default function PageShell() {
       >
         Skip to main content
       </a>
-      <Sidebar />
-      <div className="flex-1 min-w-0 flex flex-col">
-        <header className="flex justify-end items-center px-6 py-2 border-b border-border min-h-[44px]">
-          <ViewFilter />
-        </header>
-        {/* tabIndex={-1}: programmatically focusable for the route-change
-            effect above AND makes the #main skip-link actually move focus
-            in WebKit. outline-none — this focus is programmatic context,
-            not a visible tab stop. */}
-        <main id="main" ref={mainRef} tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto outline-none">
-          <ErrorBoundary>
-            <Outlet />
-          </ErrorBoundary>
-        </main>
+      {exploring && <SampleDataBanner />}
+      <div className="flex flex-1 min-h-0">
+        <Sidebar />
+        <div className="flex-1 min-w-0 flex flex-col">
+          <header className="flex justify-end items-center px-6 py-2 border-b border-border min-h-[44px]">
+            <ViewFilter />
+          </header>
+          {/* tabIndex={-1}: programmatically focusable for the route-change
+              effect above AND makes the #main skip-link actually move focus
+              in WebKit. outline-none — this focus is programmatic context,
+              not a visible tab stop. */}
+          <main id="main" ref={mainRef} tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto outline-none">
+            <ErrorBoundary>
+              <Outlet />
+            </ErrorBoundary>
+          </main>
+        </div>
       </div>
-      <TourOverlay />
+      {/* P-W4-7: the tour is a real-profile feature — its finish handler
+          writes the REAL device-local tour-done key, so it must not mount
+          while exploring (D-S7). Settings hides both of its launchers too. */}
+      {!exploring && <TourOverlay />}
     </div>
   );
 }

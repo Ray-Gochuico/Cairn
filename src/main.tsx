@@ -9,6 +9,7 @@ import { shouldNotify } from './lib/notification-due';
 import { maybeRedirectToMonthly } from './lib/monthly-prompt';
 import { isSetupDismissed, shouldRedirectToSetup } from './lib/setup-dismissal';
 import { renderBootError } from './db/boot-error-screen';
+import { isExploreMode } from './lib/explore-mode';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 async function bootstrap() {
@@ -47,11 +48,16 @@ async function bootstrap() {
     // not a first-launch user and the monthly route is appropriate. Stamp
     // fires at decide-time (even when grace suppresses the route) so the
     // prompt is consumed exactly once per calendar month. Fail-quiet.
-    try {
-      await maybeRedirectToMonthly(getDatabase(), new Date()); // win defaults to window
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn('[bootstrap] monthly-prompt trigger failed:', e);
+    // W4 D-S7: explore is side-effect-free — no monthly redirect, no
+    // notification. Both write real device-local/app state and both would
+    // fire against the throwaway sample profile's numbers.
+    if (!isExploreMode()) {
+      try {
+        await maybeRedirectToMonthly(getDatabase(), new Date()); // win defaults to window
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[bootstrap] monthly-prompt trigger failed:', e);
+      }
     }
 
     // Fire an optional native notification on the user's chosen day of the
@@ -61,6 +67,7 @@ async function bootstrap() {
     // first-launch PersonsRepo.list() call above. In-app banner remains the
     // primary surface; this is bonus, and the user can disable it.
     void (async () => {
+      if (isExploreMode()) return; // W4 D-S7: no native notification from explore.
       try {
         const settings = await new SettingsRepo(getDatabase()).get();
         if (!shouldNotify(settings, new Date())) return;

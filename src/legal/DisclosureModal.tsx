@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import type { DisclosureDocument } from './disclosures';
 import type { DisclosureId } from './disclosures';
 
+interface SecondaryAction {
+  label: string;
+  helper: string;
+  busyLabel: string;
+  onSelect: () => void | Promise<void>;
+}
+
 interface Props {
   document: DisclosureDocument & { id: DisclosureId };
   onAccept: (version: string) => void | Promise<void>;
@@ -30,6 +37,14 @@ interface Props {
    * does NOT dismiss; Cancel returns without computing").
    */
   dismissOnEscape?: boolean;
+  /**
+   * W4: optional quiet secondary action (Step 0's "Explore with sample data
+   * first"). Gated on the SAME attestation checkbox — exploring is inside the
+   * acceptance, never around it. Only Step0Disclaimer passes it; the
+   * AppDisclaimerGate re-prompt never does, so the legal re-accept surface is
+   * untouched.
+   */
+  secondaryAction?: SecondaryAction;
 }
 
 /**
@@ -77,9 +92,11 @@ export function DisclosureModal({
   continueLabel = 'Continue',
   heroHeader,
   dismissOnEscape = true,
+  secondaryAction,
 }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [secondaryBusy, setSecondaryBusy] = useState(false);
 
   // Total over DisclosureId — every disclosure carries its own title, so a new
   // id (e.g. backtest) needs zero edits here (W3). Fallback keeps tsc + render
@@ -87,6 +104,32 @@ export function DisclosureModal({
   const title = document.title ?? 'Disclaimer';
 
   const [error, setError] = useState<string | null>(null);
+  /**
+   * W4: the secondary action runs behind the SAME attestation gate as
+   * Continue, and cross-locks with it while in flight. On success the caller
+   * navigates away (a full page load), so there is deliberately no state
+   * reset — the busy label stays until the navigation lands.
+   */
+  const handleSecondary = async () => {
+    if (!checked || submitting || secondaryBusy || !secondaryAction) return;
+    setSecondaryBusy(true);
+    setError(null);
+    try {
+      await secondaryAction.onSelect();
+    } catch (e) {
+      // W4 review (MINOR 5): SE-C8 is THE failure line for this action, for
+      // every rejection shape. Most explore-entry failures are Error
+      // instances (sql.js, the household store, the repo wrappers), so an
+      // `e.message` branch put a raw technical string in the inline slot and
+      // left the contract copy all but unreachable. The cause is warned to
+      // the console for support instead — never console.error (e2e guard).
+      // eslint-disable-next-line no-console
+      console.warn('[explore] entry failed:', e);
+      setError('Failed to open sample data. Please try again.');
+      setSecondaryBusy(false);
+    }
+  };
+
   const handleAccept = async () => {
     if (!checked || submitting) return;
     setSubmitting(true);
@@ -189,14 +232,29 @@ export function DisclosureModal({
 
         <div className="px-6 py-3 border-t flex justify-end gap-2">
           {onCancel && (
-            <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+            <Button variant="ghost" onClick={onCancel} disabled={submitting || secondaryBusy}>
               Cancel
             </Button>
           )}
-          <Button disabled={!checked || submitting} onClick={handleAccept}>
+          <Button disabled={!checked || submitting || secondaryBusy} onClick={handleAccept}>
             {continueLabel}
           </Button>
         </div>
+
+        {secondaryAction && (
+          <div className="px-6 pb-4 flex flex-col items-end gap-1 text-right">
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-sm text-muted-foreground underline-offset-4"
+              disabled={!checked || submitting || secondaryBusy}
+              onClick={() => void handleSecondary()}
+            >
+              {secondaryBusy ? secondaryAction.busyLabel : secondaryAction.label}
+            </Button>
+            <p className="text-xs text-muted-foreground">{secondaryAction.helper}</p>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

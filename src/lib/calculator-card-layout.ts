@@ -2,6 +2,7 @@ import type { CardLayoutEntry } from '@/types/schema';
 import { SettingsRepo } from '@/domain/app-settings';
 import { getDatabase } from '@/db/db';
 import { getHiddenCards } from '@/lib/calculator-visibility';
+import { isExploreMode } from '@/lib/explore-mode';
 
 export type CalculatorCardGroup = 'paycheck-tax' | 'path-to-fi' | 'next-dollar';
 
@@ -144,6 +145,11 @@ export function importCalcVisibilityIfNeeded(): Promise<void> {
   if (importInflight) return importInflight;
   importInflight = (async () => {
     try {
+      // W4 review (MAJOR 1): this import writes app_settings and then DELETES
+      // the real `calculator-hidden-cards` key. Run from explore it would
+      // consume the user's legacy choice into the throwaway sample DB and drop
+      // the key, so the real profile could never import it.
+      if (isExploreMode()) return;
       const repo = new SettingsRepo(getDatabase());
       const current = await repo.get();
       // Single source of truth: once the DB field is set, never re-import.
