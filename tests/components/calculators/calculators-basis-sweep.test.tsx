@@ -5,6 +5,7 @@ import {
   CompoundInterestCard,
   COMPOUND_BASIS_FIGURES,
   COMPOUND_BASIS_CHARTS,
+  COMPOUND_HISTORY_BASIS_CHARTS,
 } from '@/pages/calculators/CompoundInterestCard';
 import {
   PathToFiCard,
@@ -206,6 +207,20 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
       error: null,
     });
   };
+
+  it('CompoundInterestCard History view: the fan is a PINNED figure in both bases', () => {
+    useSettingsStore.setState({
+      settings: { defaultInflation: 0.025 } as AppSettings,
+      isLoading: false,
+      error: null,
+    });
+    seedDemoScenario();
+    seedHistory('compound-interest');
+    expectBasisDiscipline(<CompoundInterestCard cardId="compound-interest" />, {
+      figures: COMPOUND_BASIS_FIGURES,
+      charts: COMPOUND_HISTORY_BASIS_CHARTS,
+    });
+  });
 
   it('PathToFiCard History view: the fan is a PINNED figure in both bases', () => {
     primeScoped();
