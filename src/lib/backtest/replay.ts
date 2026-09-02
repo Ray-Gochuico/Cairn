@@ -65,7 +65,11 @@ export interface ReplayWindowResult {
   troughBalance: number;
   /** Year-end balance at span.endYear. */
   windowEndBalance: number;
-  /** First year-end ≥ startBalance from span start through dataset end; null = never. */
+  /**
+   * First year-end ≥ startBalance AFTER the trough year, through dataset end;
+   * null = never. When the trough never falls below the start (the DP-15
+   * outpaced state) the plain first-≥-start scan stands.
+   */
   recoveredYear: number | null;
 }
 
@@ -106,7 +110,18 @@ export function replayWindow(input: ReplayWindowInput): ReplayWindowResult {
   }
 
   const windowEndBalance = yearEnds.find((y) => y.year === span.endYear)!.balance;
-  const recovered = yearEnds.find((y) => y.balance >= startBalance); // ≥, not > (pinned)
+  // Review MAJOR 0/2: a recovery is a return to the starting value AFTER the
+  // loss. Searching from the span start let a KEEP-mode year 1 whose
+  // contributions outpaced a moderate first-year loss report "recovered" two
+  // years BEFORE the trough it is rendered beside (the card's default state
+  // did exactly that). Search past the trough whenever the portfolio actually
+  // fell below its start; the DP-15 outpaced case (trough ≥ start — no
+  // drawdown to recover from, and the card replaces that row with CP-15)
+  // keeps the plain scan.
+  const recovered =
+    troughBalance < startBalance
+      ? yearEnds.find((y) => y.year > troughYear && y.balance >= startBalance) // ≥, not > (pinned)
+      : yearEnds.find((y) => y.balance >= startBalance);
   return {
     yearEnds,
     troughYear,

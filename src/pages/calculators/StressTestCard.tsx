@@ -128,7 +128,18 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
   const baselineEnd = result ? flatPathEnd(engine.portfolio, realRate, contribution, nYears) : 0;
   const depth = result ? result.troughBalance / engine.portfolio - 1 : 0;
   const endDelta = result ? result.windowEndBalance / engine.portfolio - 1 : 0;
-  const outpaced = mode === 'KEEP' && result != null && result.troughBalance >= engine.portfolio;
+  // CP-15 is a claim about CONTRIBUTIONS outpacing losses, so it needs both
+  // the mode AND a non-zero contribution: a $0/yr KEEP replay whose year-ends
+  // never dipped (2008 at a 0% stock mix — the bond leg returned +14.7% real)
+  // would otherwise credit contributions that do not exist (review MINOR 9).
+  // The mode clause is kept for readability even though `contribution > 0`
+  // already implies it (PORTFOLIO pins `contribution` to 0 above) — it states
+  // DP-15's rule where it is read.
+  const outpaced =
+    mode === 'KEEP' &&
+    contribution > 0 &&
+    result != null &&
+    result.troughBalance >= engine.portfolio;
 
   // ── Gated state (Task 3's v1.3; in-card, never page-blocking — DP-7) ──
   if (gate.state === 'needs-acceptance') {
@@ -277,7 +288,16 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
                   onChange={() => setWindowId(w.id)}
                 />
                 {w.label}{' '}
-                <span className={selected ? 'text-primary-foreground/80' : 'text-muted-foreground'}>
+                {/* The year is differentiated by figure style, never by
+                    opacity: text-primary-foreground/80 on bg-primary is
+                    4.21 (light) / 4.34 (dark), under the 4.5 AA floor for
+                    12px text — the solid pair is 5.63 / 5.90 (review MAJOR 5). */}
+                <span
+                  className={cn(
+                    'font-normal tabular-nums',
+                    selected ? 'text-primary-foreground' : 'text-muted-foreground',
+                  )}
+                >
                   {years}
                 </span>
                 {!ok && <span className="sr-only"> — {unavailableMsg}</span>}
@@ -286,10 +306,12 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
           })}
         </div>
       </fieldset>
-      <p className="text-xs text-muted-foreground">{win.blurb}</p>
+      {/* CP-20 is contractually the FIRST body line after the picker (the
+          meaning-adjacent register line); the window blurb follows it. */}
       <p className="text-sm text-muted-foreground">
         History that happened once — not a forecast, not a probability.
       </p>
+      <p className="text-xs text-muted-foreground">{win.blurb}</p>
       {result == null ? (
         <p className="text-sm text-muted-foreground">{unavailableMsg}</p>
       ) : (

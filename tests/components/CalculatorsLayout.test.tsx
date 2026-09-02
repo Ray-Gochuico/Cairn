@@ -387,6 +387,44 @@ describe('CalculatorsLayout', () => {
     expect(ids).toEqual([...CALCULATOR_CARD_IDS]);
   });
 
+  it('UPGRADE PATH: a stored v1.5.0 10-id layout still renders all 12 cards, both new ones included', async () => {
+    // An upgrading user's settings.calculatorCardLayout predates W1, so it
+    // names neither new id. applyCalculatorCardLayout treats ids absent from a
+    // non-null layout as VISIBLE and the grid/Customize enumerate the REGISTRY
+    // — pinned here at the page level so a refactor that iterated the STORED
+    // layout instead could not hide both cards from every upgrader silently.
+    primeBaseline();
+    primeSettings(
+      [
+        'paycheck',
+        'supplemental-pay',
+        'overtime',
+        'retirement-401k-withdrawal',
+        'path-to-fi',
+        'compound-interest',
+        'backtest',
+        'debt-payoff',
+        'equity',
+        'contribution-allocator',
+      ].map((id) => ({ id, hidden: false })),
+    );
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'HOURLY', hourlyRate: 25 }],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    await screen.findByTestId('calc-card-paycheck');
+    const ids = screen.getAllByTestId(/^calc-card-/).map((el) =>
+      el.getAttribute('data-testid')!.replace('calc-card-', ''));
+    expect(ids).toEqual([...CALCULATOR_CARD_IDS]); // 12, in registry order
+    expect(screen.getByTestId('calc-card-retirement-age')).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-stress-test')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /customize path to fi/i }));
+    expect(screen.getByRole('switch', { name: 'Earliest Retirement' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Stress Test' })).toBeChecked();
+  });
+
   it('exactly one card open at a time; opening B closes A', async () => {
     primeBaseline();
     primeSettings();

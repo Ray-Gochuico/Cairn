@@ -21,8 +21,25 @@ import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@
 import { StressTestCard } from '@/pages/calculators/StressTestCard';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
-import { replayWindow, datasetReplayRows } from '@/lib/backtest/replay';
+import { DISCLOSURES } from '@/legal/disclosures';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
+
+// DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
+// the chart's marker CONTRACT is pinned at the prop boundary. No other test in
+// this file reads the chart's internals.
+vi.mock('@/components/charts/InlineChart', () => ({
+  InlineChart: ({
+    testId,
+    markers,
+  }: {
+    testId?: string;
+    markers?: Array<{ x: number | string; y: number; color: string }>;
+  }) => <div data-testid={testId} data-markers={JSON.stringify(markers ?? [])} />,
+}));
+
+function chartMarkers(): Array<{ x: number; y: number; color: string }> {
+  return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-markers')!);
+}
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
 
@@ -265,6 +282,32 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     );
     expect(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' })).toBeInTheDocument();
     expect(screen.queryByTestId('stress-window-picker')).not.toBeInTheDocument();
+    // CP-26 body byte-exact — the only rendered string that says WHY a
+    // Backtest-titled disclosure gates a stress card (consent scope).
+    expect(
+      screen.getByText(
+        'Stress tests replay named historical windows from the same dataset and return basis as the Historical Backtest. One disclosure covers both.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('accepting in-card records EXACTLY 1.3 and flips the gate; a stale 1.2 keeps it closed', async () => {
+    seedAcceptance('backtest', '1.2');
+    const accept = vi.fn(async (id: string, version: string) => {
+      useAcceptancesStore.setState((s) => ({
+        acceptedVersions: { ...s.acceptedVersions, [id]: version },
+      }));
+    });
+    useHouseholdStore.setState({ acceptDisclaimer: accept } as never);
+    renderCard();
+    expect(screen.queryByTestId('stress-window-picker')).not.toBeInTheDocument(); // stale 1.2 gates
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: DISCLOSURES.backtest.acceptanceCheckboxLabel }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(await screen.findByTestId('stress-window-picker')).toBeInTheDocument();
+    expect(accept).toHaveBeenCalledWith('backtest', '1.3');
   });
 
   it('the button mounts DisclosureModal (v1.3 + diff box); Escape cancels without accepting', () => {
@@ -310,29 +353,34 @@ describe('replay rendering — deterministic pins (portfolio 100k)', () => {
     expect(screen.getByText('$60,858 · −39.1% vs start')).toBeInTheDocument();
   });
 
-  it('recovery row: KEEP counts contributions (CP-12); Portfolio only does not (CP-13) — year agrees with the module', () => {
+  it('recovery row: KEEP counts contributions (CP-12); Portfolio only does not (CP-13) — LITERAL years', () => {
+    // Hand-derived from the literal Shiller rows at 100% stocks, $100k start:
+    //   KEEP $12k/yr year-ends 2000 $102,893.85 · 2001 $99,208.01 ·
+    //   2002 $87,962.59 (the trough) · 2003 $124,346.60 → recovery 2003.
+    //   Portfolio-only trough 2002 $60,858.41 → recovery 2013.
+    // Review MAJOR 0/2: these were derived FROM replayWindow, so the old
+    // pre-trough answer (2000) passed as "expected"; literals can fail.
     renderCard();
     setStockPct(100);
     clickChip('The dot-com crash'); // KEEP default
-    const keepYear = replayWindow({
-      startBalance: 100_000, annualContribution: 12_000,
-      span: { startYear: 2000, endYear: 2002 }, rows: datasetReplayRows(1),
-    }).recoveredYear!;
     expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
-      `Back at its starting value: ${keepYear} — with your $12,000/yr contributions counted.`,
+      'Back at its starting value: 2003 — with your $12,000/yr contributions counted.',
     );
     clickMode('Portfolio only');
-    const soloYear = replayWindow({
-      startBalance: 100_000, annualContribution: 0,
-      span: { startYear: 2000, endYear: 2002 }, rows: datasetReplayRows(1),
-    }).recoveredYear;
-    if (soloYear == null) {
-      expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
-        'Not back to its starting value by 2022, where the bundled data ends.',
-      );
-    } else {
-      expect(screen.getByTestId('stress-recovery')).toHaveTextContent(`Back at its starting value: ${soloYear}.`);
-    }
+    expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
+      'Back at its starting value: 2013.',
+    );
+  });
+
+  it('the DEFAULT state (1929, KEEP, 75/25) puts the recovery AFTER the trough (review MAJOR 0/2)', () => {
+    // Year-ends 1929 $106,181.39 · 1930 $107,006.19 · 1931 $90,195.78 (trough)
+    // · 1932 $109,478.57. Year 1 is ABOVE the $100k start, so the pre-review
+    // scan rendered "Back at its starting value: 1929" beside a 1931 trough.
+    renderCard(); // depression-1929 · KEEP · 75/25 · $100k · $12k/yr
+    expect(screen.getByText('$90,196 in 1931 · −9.8% vs start')).toBeInTheDocument();
+    expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
+      'Back at its starting value: 1932 — with your $12,000/yr contributions counted.',
+    );
   });
 
   it('the 2022 window renders the data-ends line verbatim (CP-14 — zero tail, nothing extrapolated)', () => {
@@ -369,6 +417,88 @@ describe('replay rendering — deterministic pins (portfolio 100k)', () => {
     expect(screen.getByText('Vs your assumed path (3 years)')).toBeInTheDocument();
     expect(screen.getByText('$108,995 assumed · $60,858 replayed · gap −$48,136')).toBeInTheDocument();
   });
+
+  it('CP-16 in the DEFAULT KEEP mode carries the mode contribution basis (same window as the Portfolio-only pin)', () => {
+    // D-W1-9 "compounded with the MODE's contribution basis": KEEP adds the
+    // bar's $12,000/yr to BOTH legs. flatPathEnd(100000, 3/103, 12000, 3) =
+    // $146,545.71 → $146,546 assumed (Portfolio-only reads $108,995 on this
+    // same window, one line above); replay at 100% stocks ends 2002 at
+    // $87,962.59 → $87,963; gap −$58,583.12 → −$58,583.
+    renderCard();
+    setStockPct(100);
+    clickChip('The dot-com crash'); // KEEP is the default mode
+    expect(screen.getByText('Vs your assumed path (3 years)')).toBeInTheDocument();
+    expect(screen.getByText('$146,546 assumed · $87,963 replayed · gap −$58,583')).toBeInTheDocument();
+  });
+
+  it('CP-16 says "(1 year)" on a single-year window', () => {
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 2008 crash');
+    expect(screen.getByText('Vs your assumed path (1 year)')).toBeInTheDocument();
+  });
+
+  it('trough ≠ end (1970s, Portfolio only, 75/25): headline, CP-10 and CP-11 are three DIFFERENT figures', () => {
+    // Re-derived from the literal Shiller rows (75/25 real blends, zero
+    // contributions ⇒ exact annual factors): 1973 $80,949.27 · 1974
+    // $61,692.11 (the trough) · … · 1981 $67,355.49 (the window end) ·
+    // 1984 $102,431.29 (the recovery). depth −38.3079% · endDelta −32.6445%.
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 1970s inflation run');
+    expect(screen.getByTestId('stress-test-headline')).toHaveTextContent('−38% real');
+    expect(screen.getByText('$61,692 in 1974 · −38.3% vs start')).toBeInTheDocument();
+    expect(screen.getByText('End of window (1981)')).toBeInTheDocument();
+    expect(screen.getByText('$67,355 · −32.6% vs start')).toBeInTheDocument();
+    expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
+      'Back at its starting value: 1984.',
+    );
+  });
+
+  it('DP-13 chart markers: destructive at the trough year, blaze at the recovery year (recovery is later)', () => {
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 1970s inflation run');
+    const [trough, recovery] = chartMarkers();
+    expect(trough.x).toBe(1974);
+    expect(trough.y).toBeCloseTo(61_692.11, 2);
+    expect(trough.color).toBe('hsl(var(--destructive))');
+    expect(recovery.x).toBe(1984);
+    expect(recovery.y).toBeCloseTo(102_431.29, 2);
+    expect(recovery.color).toBe('hsl(var(--blaze))');
+    expect(recovery.x).toBeGreaterThan(trough.x);
+  });
+
+  it('outpaced (CP-15) is a KEEP-mode claim about CONTRIBUTIONS, not any window that stayed above start', () => {
+    // 2008 at 0% stocks is the edge: the bond leg returned +14.7369% real, so
+    // every year-end clears the $100k start with NO contributions at all.
+    // Portfolio-only must show the dollar row (the mode has no contribution
+    // claim to make) …
+    renderCard();
+    setStockPct(0);
+    clickMode('Portfolio only');
+    clickChip('The 2008 crash');
+    expect(screen.getByText('$114,737 in 2008 · +14.7% vs start')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Never below its starting value at a year-end — contributions outpaced this window's losses.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('stress-recovery')).toBeInTheDocument();
+  });
+
+  it('CP-15 requires contributions: KEEP with $0/yr on that same window states the dollars instead', () => {
+    primePortfolio(100_000, 0); // no contributions recorded
+    renderCard();
+    setStockPct(0);
+    clickChip('The 2008 crash'); // KEEP default
+    expect(screen.getByText('$114,737 in 2008 · +14.7% vs start')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Never below its starting value at a year-end — contributions outpaced this window's losses.",
+      ),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe('honesty lines + cross-link', () => {
@@ -403,6 +533,27 @@ describe('chips + persistence + provenance', () => {
     expect(
       screen.getByText('Three straight down years at the start of the Great Depression — the deepest stock declines in the dataset.'),
     ).toBeInTheDocument();
+  });
+
+  it('CP-20 is the FIRST body line after the picker; the window blurb follows it', () => {
+    renderCard();
+    const picker = screen.getByTestId('stress-window-picker');
+    const register = screen.getByText('History that happened once — not a forecast, not a probability.');
+    const blurb = screen.getByText(
+      'Three straight down years at the start of the Great Depression — the deepest stock declines in the dataset.',
+    );
+    expect(picker.nextElementSibling).toBe(register);
+    // eslint-disable-next-line no-bitwise
+    expect(register.compareDocumentPosition(blurb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('the selected chip year is differentiated WITHOUT an opacity-modified text token (AA)', () => {
+    // Review MAJOR 5: text-primary-foreground/80 on bg-primary is 4.21 (light)
+    // / 4.34 (dark) — under 4.5 for 12px text. The solid pair is 5.63 / 5.90.
+    renderCard();
+    const yearSpan = screen.getByText('1929–1931');
+    expect(yearSpan.className).toContain('text-primary-foreground');
+    expect(yearSpan.className).not.toMatch(/-foreground\//);
   });
 
   it('window + mode persist as VIEW-STATE (sessionStorage; dirty tick untouched)', () => {

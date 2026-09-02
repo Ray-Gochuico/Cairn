@@ -102,11 +102,51 @@ describe('edge verdicts (D-R2/D-R3 + the spec edge table)', () => {
     expect(r.probes[0].holds).toBe(false);
   });
 
-  it('never-real: realRate ≤ 0 and target unreached → the lock verdict, exact not a search failure', () => {
-    // Decreasing FV branch: pv > pmt/|r| (500k > 120k), FV(0) < target.
-    const r = solveEarliestRetirement({ ageNow: 40, pv: 500_000, pmt: 12_000, realRate: -0.1, targetFv: 600_000, maxAge: 90 });
+  it('never-real: UNREACHABLE in real terms → the lock verdict, exact not a search failure', () => {
+    // Decreasing FV branch: pv > pmt/|r| (500k > 120k), FV(0) < target — the
+    // asymptote sits below the target, so no t reaches it.
+    const input = { ageNow: 40, pv: 500_000, pmt: 12_000, realRate: -0.1, targetFv: 600_000, maxAge: 90 };
+    const r = solveEarliestRetirement(input);
     expect(r.verdict).toBe('never-real');
     expect(r.probes).toHaveLength(1); // the honest tMax probe
+    // The verdict's criterion IS the closed-form oracle (D-R4 parity).
+    expect(
+      yearsToFi({ pv: input.pv, pmt: input.pmt, annualRate: input.realRate, targetFv: input.targetFv }),
+    ).toBe(Infinity);
+  });
+
+  it('never-real: no contributions under a negative real rate (FV decays toward 0)', () => {
+    const r = solveEarliestRetirement({ ageNow: 36, pv: 200_000, pmt: 0, realRate: -0.01, targetFv: 1_500_000, maxAge: 90 });
+    expect(r.verdict).toBe('never-real');
+    expect(r.probes).toHaveLength(1);
+  });
+
+  it('NOT never-real: a negative real rate whose asymptote clears the target is merely not-by-max', () => {
+    // Review MAJOR 1: the verdict is classified by REACHABILITY, not by the
+    // sign of r. 2% return / 3% inflation ⇒ real −0.9709%; pmt/|r| = $2.472M
+    // is above the $1.5M target, so FV is INCREASING and crosses it — just
+    // after age 90 (t* ≈ 87.03). Saying "never reached in real terms" there
+    // is false, and it disagrees with PathToFi on the same household.
+    const realRate = 1.02 / 1.03 - 1;
+    const input = { ageNow: 36, pv: 200_000, pmt: 24_000, realRate, targetFv: 1_500_000, maxAge: 90 };
+    const r = solveEarliestRetirement(input);
+    expect(r.verdict).toBe('not-by-max');
+    expect(r.answerT).toBeNull();
+    expect(r.probes).toHaveLength(1);
+    expect(r.probes[0].t).toBe(54);
+    expect(r.probes[0].fv).toBeCloseTo(1_130_448.13, 2);
+    // Parity with the card the solver must agree with (D-R4/D-R6).
+    const years = yearsToFi({ pv: 200_000, pmt: 24_000, annualRate: realRate, targetFv: 1_500_000 });
+    expect(Number.isFinite(years)).toBe(true);
+    expect(years).toBeCloseTo(87.0280, 4);
+  });
+
+  it('realRate EXACTLY 0 (CP-39 boundary): pmt > 0 is reachable (not-by-max), pmt = 0 is never-real', () => {
+    // realRateOfUnfloored(0.03, 0.03) === 0 exactly — a reachable user state.
+    const reachable = solveEarliestRetirement({ ageNow: 40, pv: 100_000, pmt: 1_000, realRate: 0, targetFv: 2_400_000, maxAge: 90 });
+    expect(reachable.verdict).toBe('not-by-max'); // linear: t* = 2,300 years
+    const unreachable = solveEarliestRetirement({ ageNow: 40, pv: 100_000, pmt: 0, realRate: 0, targetFv: 2_400_000, maxAge: 90 });
+    expect(unreachable.verdict).toBe('never-real'); // FV is flat at pv forever
   });
 
   it('negative real rate CAN still hold (asymptote pmt/|r| above target) — bisection stays valid (D-R2 monotonicity)', () => {

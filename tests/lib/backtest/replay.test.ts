@@ -47,6 +47,38 @@ describe('replayWindow metrics (D-W1-9)', () => {
     expect(r.recoveredYear).toBe(2003); // first year-end ≥ start, searched past the span
   });
 
+  it('recovery is the first year-end ≥ start AFTER the trough — never a pre-drawdown year', () => {
+    // Review MAJOR 0/2: KEEP-mode contributions lift year 1 ABOVE the start
+    // before the crash bites. A year the portfolio never left is not a
+    // recovery; the honest answer is the first year-end ≥ start past the
+    // trough. 100k: +10% → 110k (above start), −30% → 77k (the trough),
+    // +50% → 115.5k (the real recovery).
+    const r = replayWindow({
+      startBalance: 100_000,
+      annualContribution: 0,
+      span: { startYear: 2000, endYear: 2001 },
+      rows: mkRows(2000, [0.1, -0.3, 0.5]),
+    });
+    expect(r.troughYear).toBe(2001);
+    expect(r.troughBalance).toBeCloseTo(77_000, 2);
+    expect(r.recoveredYear).toBe(2002);
+    expect(r.recoveredYear!).toBeGreaterThan(r.troughYear);
+  });
+
+  it('the DP-15 outpaced path is unchanged: trough ≥ start keeps the first-year-end answer', () => {
+    // Every year-end sits at or above the start, so there is no drawdown to
+    // recover from — the search stays the plain first-≥-start scan (the card
+    // suppresses the row in KEEP mode, CP-15).
+    const r = replayWindow({
+      startBalance: 100_000,
+      annualContribution: 0,
+      span: { startYear: 2000, endYear: 2001 },
+      rows: mkRows(2000, [0.05, 0.05]),
+    });
+    expect(r.troughBalance).toBeGreaterThanOrEqual(100_000);
+    expect(r.recoveredYear).toBe(2000);
+  });
+
   it('recovery is ≥ not > (recovered exactly at the starting value counts)', () => {
     // −50% then +100%: 50k → 100k exactly (zero-contribution path is exact factors).
     const r = replayWindow({
@@ -139,6 +171,29 @@ describe('HISTORICAL ANCHORS — real dataset through datasetReplayRows (re-deri
     expect(r.windowEndBalance).toBeCloseTo(66_517.39, 2);
     // The leak the anchor exists to catch: assert we are FAR from the wrong-basis figure.
     expect(Math.abs(r.windowEndBalance - 73_158.09)).toBeGreaterThan(6_000);
+  });
+
+  it('THE default-card anchor — 1929–31 KEEP, 75/25, $100k + $12k/yr: trough 1931, recovery 1932', () => {
+    // Re-derived from the literal src/data/shiller.ts rows (blend =
+    // 0.75·sp500RealReturn + 0.25·((1+treasury)/(1+implied)−1), implied =
+    // (1+nominal)/(1+real)−1; cadence B(1+r) + (C/12)(r/m)):
+    //   1929 $106,181.39 · 1930 $107,006.19 · 1931 $90,195.78 · 1932 $109,478.57
+    // Year 1 sits ABOVE the $100k start (contributions outpace a −5.9% blend),
+    // so the pre-review first-≥-start scan answered 1929 — two years BEFORE
+    // the trough it is rendered beside. The honest answer is 1932.
+    const r = replayWindow({
+      startBalance: 100_000,
+      annualContribution: 12_000,
+      span: { startYear: 1929, endYear: 1931 },
+      rows: datasetReplayRows(DEFAULT_STOCK_PCT),
+    });
+    expect(r.yearEnds[0].balance).toBeCloseTo(106_181.39, 2);
+    expect(r.yearEnds[1].balance).toBeCloseTo(107_006.19, 2);
+    expect(r.troughYear).toBe(1931);
+    expect(r.troughBalance).toBeCloseTo(90_195.78, 2);
+    expect(r.windowEndBalance).toBeCloseTo(90_195.78, 2);
+    expect(r.recoveredYear).toBe(1932);
+    expect(r.yearEnds.find((y) => y.year === 1932)!.balance).toBeCloseTo(109_478.57, 2);
   });
 
   it('datasetReplayRows covers the full 1871–2022 dataset in ascending order', () => {

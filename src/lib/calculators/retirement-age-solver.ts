@@ -4,7 +4,8 @@
  * component injects `ageNow` from `currentAge(dob)` and the UNFLOORED Fisher
  * real rate (T17 discipline: identical solve basis to PathToFi's KEEP mode).
  * No change to financial-independence.ts — `yearsToFi`'s closed form is this
- * module's test oracle (`answerT === ceil(yearsToFi)`), so the two cards can
+ * module's test oracle (`answerT === ceil(yearsToFi)`) AND, for the miss-at-
+ * tMax classification, its runtime reachability test, so the two cards can
  * never disagree (D-R4).
  *
  * Monotonicity (D-R2): d/dt FV = ln(1+r)·(pv + pmt/r)·(1+r)^t has a constant
@@ -13,6 +14,7 @@
  * never-holds answer, not a search failure; a hold at tMax makes integer
  * bisection valid.
  */
+import { yearsToFi } from '@/lib/financial-independence';
 
 /** The persons schema caps retirement age at 90 (src/types/schema.ts `.max(90)`). */
 export const MAX_SOLVE_AGE = 90;
@@ -20,8 +22,8 @@ export const MAX_SOLVE_AGE = 90;
 export type RetirementVerdict =
   | 'already-holds' // FV(0) ≥ target — nothing to solve (no probes)
   | 'age-found'     // bisection answer: answerT = first integer t that holds
-  | 'not-by-max'    // tMax probe missed at a positive real rate (that one probe shown)
-  | 'never-real'    // tMax probe missed at realRate ≤ 0 — the Wave-17 lock framing
+  | 'not-by-max'    // tMax probe missed but the target IS reachable later (that one probe shown)
+  | 'never-real'    // tMax probe missed and the target is unreachable in real terms — the Wave-17 lock framing
   | 'past-max';     // ageNow ≥ maxAge — no search range exists
 
 export interface RetirementSolveInput {
@@ -72,7 +74,16 @@ export function solveEarliestRetirement(input: RetirementSolveInput): Retirement
 
   // (2) Probe the far end first — a miss here is the exact verdict (D-R2).
   if (!probe(tMax)) {
-    return { verdict: realRate <= 0 ? 'never-real' : 'not-by-max', answerT: null, probes };
+    // Review MAJOR 1: classify by REACHABILITY, not by the sign of r. FV is
+    // increasing whenever pv + pmt/r > 0 — under r < 0 that is the case where
+    // the asymptote pmt/|r| clears the target, and at r = 0 it is pmt > 0
+    // (the linear branch) — so a miss at tMax there is honestly "not by 90",
+    // never "never". The test IS the closed-form oracle (`yearsToFi` →
+    // Infinity ⇔ unreachable in real terms), which is also PathToFi's own
+    // lock condition, so the two cards cannot disagree on one household
+    // (D-R4/D-R6).
+    const unreachable = !Number.isFinite(yearsToFi({ pv, pmt, annualRate: realRate, targetFv }));
+    return { verdict: unreachable ? 'never-real' : 'not-by-max', answerT: null, probes };
   }
 
   // (3) Integer bisection: lo always fails (t = 0 checked above), hi always holds.

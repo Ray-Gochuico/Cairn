@@ -22,6 +22,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
 import { EarliestRetirementCard } from '@/pages/calculators/EarliestRetirementCard';
+import { PathToFiCard } from '@/pages/calculators/PathToFiCard';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import { projectedFv } from '@/lib/calculators/retirement-age-solver';
@@ -323,6 +324,41 @@ describe('the solve + the visible search (single person, age 36, target $1.5M)',
     renderCard(); // single Moderate
     expect(screen.queryByText(/across scenarios/)).not.toBeInTheDocument();
   });
+
+  it('DP-12: a scenario that only lands PAST age 90 is dropped from the range', () => {
+    // Conservative 3% against 3% inflation is a real rate of exactly 0, so the
+    // solve is linear: ($1,500,000 − $200,000)/$24,000 = 54.17 → t 55 → age
+    // 91, past the schema cap the search itself stops at. Moderate 29 → 65;
+    // Aggressive 25 → 61. Unfiltered the sub-line would read '61–91'.
+    primeScenarios([
+      { label: 'Conservative', ratePct: 3 },
+      { label: 'Moderate', ratePct: 6 },
+      { label: 'Aggressive', ratePct: 7 },
+    ]);
+    renderCard();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('61–65 across scenarios');
+    expect(screen.queryByText(/–91 across scenarios/)).not.toBeInTheDocument();
+  });
+
+  it('DP-12 knife edge: at an exact-integer solution the range endpoint MATCHES the headline', () => {
+    // The headline comes from integer bisection (FV(t) ≥ target); the range
+    // from the closed form. When t* is exactly an integer, log(ratio)/log(base)
+    // returns t + ~1e-14, so a bare ceil answered t+1 and the headline fell
+    // OUTSIDE its own range ('Age 42' under '43–43 across scenarios').
+    const R = realRateOfUnfloored(0.06, 0.03);
+    const exactTarget = projectedFv(200_000, 24_000, R, 6); // $392,499.12 at t = 6
+    primeStores({
+      scenarios: [
+        { label: 'Conservative', rate: 0.05 },
+        { label: 'Moderate', rate: 0.06 },
+      ],
+      monthlyExpenseBaseline: (exactTarget * 0.04) / 12,
+    });
+    renderCard();
+    const headline = screen.getByTestId('retirement-age-headline');
+    expect(headline).toHaveTextContent('Age 42'); // 36 + 6
+    expect(headline).toHaveTextContent('42–43 across scenarios'); // Conservative t 7 → 43
+  });
 });
 
 describe('edge verdicts (the spec edge table)', () => {
@@ -334,6 +370,8 @@ describe('edge verdicts (the spec edge table)', () => {
       'the target is already met at age 36 — nothing left to solve.',
     );
     expect(screen.queryByTestId('retirement-age-probes')).not.toBeInTheDocument();
+    // DP-14: the verdict row belongs to age-found alone.
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
   });
 
   it('not by 90 (CP-38): headline —, meaning verbatim, the single age-90 probe row still shown (DP-14)', () => {
@@ -347,14 +385,61 @@ describe('edge verdicts (the spec edge table)', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toHaveTextContent(/Age 90 · /);
     expect(items[0].querySelector('[aria-hidden]')).toHaveTextContent('✕');
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
   });
 
   it('never-real (CP-39): the Wave-17 lock string byte-exact in a warning span; tMax probe shown', () => {
-    primeBar({ returnPct: 2, inflationPct: 3 }); // real rate < 0, target unreached
+    // GENUINELY unreachable: 2% return / 3% inflation ⇒ real −0.9709% with NO
+    // contributions, so FV decays from $200k and no t ever reaches $1.5M.
+    primeBar({ returnPct: 2, inflationPct: 3, annualContribution: 0 });
     renderCard();
     const lock = screen.getByText('Returns at or below inflation — the target is never reached in real terms.');
     expect(lock.className).toContain('text-warning-foreground');
     expect(within(screen.getByTestId('retirement-age-probes')).getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
+  });
+
+  it('a negative real rate the contributions still overcome is CP-38, never the CP-39 lock (D-R4 parity)', () => {
+    // Review MAJOR 1: at 2%/3% the real rate is −0.9709%, but $24,000/yr
+    // against it has an asymptote of pmt/|r| = $2.472M — above the $1.5M
+    // target — so FV RISES and crosses it at t* ≈ 87.03, just past the age-90
+    // cap. "Never reached in real terms" would be false, and Path to FI on
+    // the very same bar shows a finite 87.0 years with no lock.
+    primeBar({ returnPct: 2, inflationPct: 3 }); // default pv $200k, pmt $24k/yr
+    render(
+      <MemoryRouter>
+        <EarliestRetirementCard cardId="retirement-age" />
+        <PathToFiCard cardId="path-to-fi" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      "the plan doesn't hold by age 90 under these assumptions.",
+    );
+    expect(
+      screen.queryAllByText(
+        'Returns at or below inflation — the target is never reached in real terms.',
+      ),
+    ).toHaveLength(0); // neither card locks
+    expect(screen.getByText('87.0 years')).toBeInTheDocument(); // the Path to FI headline
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
+  });
+
+  it('the CP-39 boundary is REACHABILITY, not the sign of r: a real rate of exactly 0 goes both ways', () => {
+    const LOCK = 'Returns at or below inflation — the target is never reached in real terms.';
+    // realRateOfUnfloored(0.03, 0.03) === 0 exactly. With contributions the
+    // target is reached linearly (t* = 63) — just not by 90.
+    primeBar({ returnPct: 3, inflationPct: 3, portfolio: 1_000 });
+    const withPmt = renderCard();
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      "the plan doesn't hold by age 90 under these assumptions.",
+    );
+    expect(screen.queryByText(LOCK)).not.toBeInTheDocument();
+    withPmt.unmount();
+    // With NO contributions at 0% real the balance never moves — unreachable.
+    __resetScenarioAssumptionsForTests();
+    primeBar({ returnPct: 3, inflationPct: 3, portfolio: 1_000, annualContribution: 0 });
+    renderCard();
+    expect(screen.getByText(LOCK)).toBeInTheDocument();
   });
 
   it('past the cap (CP-40)', () => {
@@ -363,6 +448,7 @@ describe('edge verdicts (the spec edge table)', () => {
     expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
       "Past age 90 — the solver's search range ends there.",
     );
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
   });
 
   it('noTarget (CP-41): the PathToFi register with the adapted tail', () => {
@@ -405,6 +491,22 @@ describe('two-person household framing (D-R5/DP-11, ⚑ F6)', () => {
       'Earliest: in 29 years — the first year that holds.',
     );
     expect(screen.getByText(/^Contributions of \$24,000\/yr continue until then — /)).toBeInTheDocument();
+  });
+
+  it('DP-11: the cap binds on the OLDER person even when the YOUNGER one is listed first', () => {
+    // The fixture above lists Alice (36) first, where Math.max and ages[0]
+    // agree. Reversed, only the max reads tMax 54 (90 − 36); ages[0] would
+    // read 57 and probe from the wrong end of the household.
+    primePersons([
+      { name: 'Bob', dateOfBirth: '1993-01-01' }, // 33 — listed FIRST
+      { name: 'Alice', dateOfBirth: '1990-01-01' }, // 36 — the older; the cap binds here
+    ]);
+    renderCard();
+    const items = within(screen.getByTestId('retirement-age-probes')).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent(/In 54 years · /);
+    expect(screen.getByTestId('retirement-age-verdict')).toHaveTextContent(
+      'Earliest: in 29 years — the first year that holds.',
+    );
   });
 });
 

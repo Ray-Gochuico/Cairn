@@ -15,6 +15,17 @@ import { formatCurrency, formatPercent } from '@/lib/format';
 const TITLE = 'Earliest Retirement';
 
 /**
+ * Whole years from the closed form, snapped first. `log(ratio)/log(base)`
+ * returns t + ~1e-14 at an EXACT integer solution, so a bare `ceil` answered
+ * t + 1 while the bisection (FV(t) ≥ target) answered t — the headline could
+ * then sit outside its own across-scenarios range ('Age 42' under '43–43').
+ * The tolerance is the solver suite's own knife-edge epsilon (review MINOR 4).
+ */
+const CEIL_EPS = 1e-9;
+const wholeYears = (years: number): number =>
+  Math.ceil(Math.abs(years - Math.round(years)) < CEIL_EPS ? Math.round(years) : years);
+
+/**
  * W1 — the Earliest Retirement card (D-R1..R6): inverts the PathToFi
  * criterion over whole years and keeps the search VISIBLE — every probe of
  * the integer bisection renders in tested order, the verdict last. Railless
@@ -71,7 +82,7 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
             }),
           )
           .filter((y) => Number.isFinite(y))
-          .map((y) => Math.ceil(y))
+          .map(wholeYears)
           .filter((t) => ageNow + t <= MAX_SOLVE_AGE);
 
   const dirty = editedCount > 0; // DP-8: no card-local overrides exist
