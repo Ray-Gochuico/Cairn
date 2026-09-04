@@ -5,6 +5,72 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-04
+
+Five additions drawn from a look at what a well-known planner does,
+rebuilt the Cairn way: everything deterministic, everything stated in
+your own dollars, nothing leaves your machine. No database change.
+
+### Added
+
+- **Stress Test.** A new calculator card replays five named historical
+  windows — the 1929 crash, the 1970s inflation run, the dot-com crash,
+  2008, and the 2022 inflation shock — against the portfolio and
+  contributions you hold today, on the Historical Backtest's real-return
+  basis. It reports the deepest year-end, the end of the window, the
+  year the balance was back at its start, and the gap against your own
+  assumed path. History that happened once — not a forecast. The
+  Backtest disclosure now covers both surfaces (version 1.3), so you'll
+  be asked to re-read and re-accept it once.
+- **Earliest Retirement.** The first whole-year age at which your plan
+  holds, found by a visible search — every age it tested is listed with
+  its result — and always in agreement with Path to FI on the same
+  household.
+- **Compare scenarios.** On What-If, pick any two scenarios and read a
+  same-yardstick block (same data, same dollars, one deflator, and
+  whether the assumptions match) followed by a Bottom line, Tradeoffs,
+  and Main difference assembled mechanically from the engines' own
+  outputs. It never ranks and never advises.
+- **What the model doesn't know yet.** A calm list of the inputs the
+  projection is missing or assuming — no baseline, no snapshots, an
+  unconfirmed month, default rates, an unanswered Roadmap question —
+  each linked to the page where it lives. The card disappears when
+  there is nothing left to say.
+- **Explore with sample data.** From the first-run screen you can open a
+  fully filled-in sample household in a separate, throwaway database.
+  A banner on every page says so, and "Start my real setup" wipes the
+  sample and lands you on a clean setup. Nothing from the sample
+  session outlives the exit.
+- **Today's $ / Future $.** A single switch in the calculators' scenario
+  bar flips every figure and phrase on Path to FI and Compound Interest
+  between today's purchasing power and raw future dollars, at your
+  household's inflation assumption. Today's $ is the default.
+- **History view.** On the same two cards, replay your contribution
+  plan against every full-length stretch of the bundled 1871–2022
+  dataset. The chart shows the middle half and the median of where
+  those stretches stood at each year, and — where you have a target —
+  how many of them reached it within the horizon. A count of past
+  stretches, not a probability. The Backtest disclosure gains this
+  coverage (version 1.4); one re-acceptance covers the Backtest, the
+  Stress Test, and the History view.
+
+### Changed
+
+- The glossary's Nominal and Real entries are reworded so they read
+  true from both the calculators' Today's/Future control and What-If's
+  Nominal/Real control.
+- The sample household is now Avery, Jordan, and Riley Sample.
+
+### Fixed
+
+- The Roadmap's emergency-fund reading used the UTC calendar day; east
+  of UTC on the first of a month it could drop the whole current month
+  and overstate the spending baseline. It now uses your local day.
+- What-If's "Main difference" no longer reports a raise difference
+  between scenarios whose per-person entries differ only in shape.
+- The What-If gaps row about unanswered Roadmap questions now agrees
+  exactly with what the Roadmap page itself offers to answer.
+
 ## [1.5.0] - 2026-08-25
 
 Two new questions the Roadmap can ask — buying a home, and college
