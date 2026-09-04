@@ -11,7 +11,10 @@ import {
   useCompoundBasisView,
   usePathToFiBasisView,
   PATH_TO_FI_BRIDGE,
+  buildHistoryFanView,
+  HISTORY_FAN_KEYS,
 } from '@/lib/calculators/basis-view';
+import type { HistoryFanResult } from '@/lib/history-fan';
 import {
   apyToApr,
   compoundInterestSeries,
@@ -260,5 +263,86 @@ describe('usePathToFiBasisView (the conversion boundary, D-T5)', () => {
     expect(result.current!.coastRows).toHaveLength(1);
     const { result: nul } = renderHook(() => usePathToFiBasisView({ ...ARGS, fiSeries: null }));
     expect(nul.current).toBeNull();
+  });
+});
+
+/* ── W2 D-UB13: the additive PINNED arm (History fan view bundle) ────────── */
+
+describe('buildHistoryFanView (W2 pinned arm)', () => {
+  const RESULT: HistoryFanResult = {
+    horizonYears: 3,
+    m: 4,
+    startYears: { first: 2001, last: 2004 },
+    byYear: { p25: [1000, 1075, 1236, 1373], p50: [1000, 1150, 1278, 1458], p75: [1000, 1225, 1325, 1530] },
+    holds: { count: 3, target: 1400 },
+  };
+
+  it('encodes the delta stack: fan2575 === p75 − p25 per row; year-0 floor === round(pv)', () => {
+    const v = buildHistoryFanView(RESULT, { xLabel: 'numeric' });
+    expect(v.chartData).toHaveLength(4);
+    v.chartData.forEach((row, k) => {
+      expect(row.fanFloor).toBe(RESULT.byYear.p25[k]);
+      expect(row.fan2575).toBe(RESULT.byYear.p75[k] - RESULT.byYear.p25[k]);
+      expect(row.p50).toBe(RESULT.byYear.p50[k]);
+      expect(row.target).toBe(1400);
+    });
+    expect(v.chartData[0].fanFloor).toBe(1000); // the pv anchor
+  });
+
+  it('numeric vs year-word x labels (the m2 axis rule)', () => {
+    expect(buildHistoryFanView(RESULT, { xLabel: 'numeric' }).chartData.map((r) => r.year)).toEqual([
+      0, 1, 2, 3,
+    ]);
+    expect(
+      buildHistoryFanView(RESULT, { xLabel: 'year-word' }).chartData.map((r) => r.year),
+    ).toEqual(['Year 0', 'Year 1', 'Year 2', 'Year 3']);
+  });
+
+  it('crossing is the FIRST year p50 ≥ target (year 0 counts)', () => {
+    expect(buildHistoryFanView(RESULT, { xLabel: 'numeric' }).crossing).toEqual({
+      year: 3,
+      value: 1400,
+    });
+    const pvAlreadyThere: HistoryFanResult = {
+      ...RESULT,
+      holds: { count: 4, target: 500 },
+    };
+    expect(buildHistoryFanView(pvAlreadyThere, { xLabel: 'numeric' }).crossing).toEqual({
+      year: 0,
+      value: 500,
+    });
+    const never: HistoryFanResult = { ...RESULT, holds: { count: 0, target: 9_999 } };
+    expect(buildHistoryFanView(never, { xLabel: 'numeric' }).crossing).toBeNull();
+  });
+
+  it('no target ⇒ no crossing and no target key on any row', () => {
+    const v = buildHistoryFanView({ ...RESULT, holds: null }, { xLabel: 'year-word' });
+    expect(v.crossing).toBeNull();
+    expect(v.holds).toBeNull();
+    for (const row of v.chartData) expect('target' in row).toBe(false);
+  });
+
+  it('PINNED: today register, referentially W5’s constants — never a retyped literal', () => {
+    const v = buildHistoryFanView(RESULT, { xLabel: 'numeric' });
+    expect(v.pinnedBasis).toBe('today');
+    expect(v.phrase).toBe(TODAY_PHRASE);
+    expect(v.suffix).toBe(TODAY_SUFFIX);
+    expect(v.m).toBe(4);
+    expect(v.horizonYears).toBe(3);
+  });
+
+  it('the fan keys are a stable module constant (recharts re-render discipline)', () => {
+    expect(HISTORY_FAN_KEYS).toEqual({ floorKey: 'fanFloor', deltaKey: 'fan2575' });
+    expect(HISTORY_FAN_KEYS).toBe(HISTORY_FAN_KEYS);
+  });
+
+  it('the empty engine shape encodes to an empty chart (the degradation branches own it)', () => {
+    const v = buildHistoryFanView(
+      { horizonYears: 160, m: 0, startYears: null, byYear: { p25: [], p50: [], p75: [] }, holds: null },
+      { xLabel: 'numeric' },
+    );
+    expect(v.chartData).toEqual([]);
+    expect(v.crossing).toBeNull();
+    expect(v.m).toBe(0);
   });
 });

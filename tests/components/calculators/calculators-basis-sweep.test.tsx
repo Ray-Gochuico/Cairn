@@ -5,12 +5,16 @@ import {
   CompoundInterestCard,
   COMPOUND_BASIS_FIGURES,
   COMPOUND_BASIS_CHARTS,
+  COMPOUND_HISTORY_BASIS_CHARTS,
 } from '@/pages/calculators/CompoundInterestCard';
 import {
   PathToFiCard,
   PATH_TO_FI_BASIS_FIGURES,
   PATH_TO_FI_BASIS_CHARTS,
+  PATH_TO_FI_HISTORY_BASIS_CHARTS,
 } from '@/pages/calculators/PathToFiCard';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DISCLOSURES } from '@/legal/disclosures';
 import { __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
@@ -185,6 +189,48 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
         <PathToFiCard cardId="path-to-fi" />
       </MemoryRouter>,
       { figures: PATH_TO_FI_BASIS_FIGURES, charts: PATH_TO_FI_BASIS_CHARTS },
+    );
+  });
+
+  /* ── W2 (D-UB13): the SAME sweep over the History view. The fan swaps the
+        Assumed chart out, so the History pass registers its own chart list —
+        PINNED today's dollars, byte-identical in both page bases — while every
+        neighbouring figure keeps its landed class. Seeding the source key +
+        the acceptance is what makes the gated view render. ───────────────── */
+
+  const seedHistory = (cardId: string) => {
+    sessionStorage.setItem(`calc-chart-source:${cardId}`, 'HISTORY');
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: DISCLOSURES.backtest.version },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+  };
+
+  it('CompoundInterestCard History view: the fan is a PINNED figure in both bases', () => {
+    useSettingsStore.setState({
+      settings: { defaultInflation: 0.025 } as AppSettings,
+      isLoading: false,
+      error: null,
+    });
+    seedDemoScenario();
+    seedHistory('compound-interest');
+    expectBasisDiscipline(<CompoundInterestCard cardId="compound-interest" />, {
+      figures: COMPOUND_BASIS_FIGURES,
+      charts: COMPOUND_HISTORY_BASIS_CHARTS,
+    });
+  });
+
+  it('PathToFiCard History view: the fan is a PINNED figure in both bases', () => {
+    primeScoped();
+    syncCalcScope(2);
+    seedHistory('path-to-fi');
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <PathToFiCard cardId="path-to-fi" />
+      </MemoryRouter>,
+      { figures: PATH_TO_FI_BASIS_FIGURES, charts: PATH_TO_FI_HISTORY_BASIS_CHARTS },
     );
   });
 });

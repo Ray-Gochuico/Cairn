@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { pickModerateEntry } from '@/lib/growth-scenario';
-import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency, formatPercent } from '@/lib/format';
@@ -14,10 +14,28 @@ import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import {
+  buildHistoryFanView,
   usePathToFiBasisView,
+  HISTORY_FAN_KEYS,
+  TODAY_SUFFIX,
   type RegisteredChart,
   type RegisteredFigure,
 } from '@/lib/calculators/basis-view';
+import { HISTORY_FAN_MIN_SEQUENCES, historyFan } from '@/lib/history-fan';
+import { useGatedReturnSource } from '@/lib/calculators/use-chart-source';
+import { ReturnSourceControl } from '@/components/calculators/ReturnSourceControl';
+import { HistoryFanLegend } from '@/components/calculators/HistoryFanLegend';
+import {
+  FAN_LEGEND_MEDIAN,
+  HISTORY_CHART_LABEL_PATH_TO_FI,
+  fanCaption,
+  holdsLineKeep,
+  holdsLineStop,
+  noStretchLine,
+  tooFewStretchesLine,
+} from '@/lib/calculators/history-fan-copy';
+import { DisclosureModal } from '@/legal/DisclosureModal';
+import { CHART_NEUTRAL } from '@/components/charts/palette';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { cn } from '@/lib/utils';
 
@@ -54,11 +72,37 @@ function usePathMode(): [PathMode, (m: PathMode) => void] {
 const SEG_BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
 const SEG_BTN_ACTIVE = 'bg-primary text-primary-foreground';
 
+// W2: the History median is an ORDER STATISTIC, not the plan's headline
+// trajectory — deliberately foreground-stroked, never `hero` (no blaze, no
+// cairn terminal). The target line reuses the Assumed idiom verbatim: neutral,
+// dotted, never emphasized; STOP keeps its descriptive label.
+const MEDIAN_STROKE = 'hsl(var(--foreground))';
+const HISTORY_SERIES = {
+  KEEP: [
+    { dataKey: 'target', label: 'Target', color: CHART_NEUTRAL, strokeDasharray: '2 2', strokeWidth: 1.5 },
+    { dataKey: 'p50', label: FAN_LEGEND_MEDIAN, color: MEDIAN_STROKE, strokeWidth: 2.5 },
+  ],
+  STOP: [
+    { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2', strokeWidth: 1.5 },
+    { dataKey: 'p50', label: FAN_LEGEND_MEDIAN, color: MEDIAN_STROKE, strokeWidth: 2.5 },
+  ],
+} as const;
+
 const COLUMNS: CalcColumn[] = [
   { key: 'scenario', header: 'Scenario' },
   { key: 'rate', header: 'Rate', numeric: true },
   { key: 'years', header: 'Years', numeric: true },
-  { key: 'gap', header: 'Gap to coast', numeric: true },
+  {
+    key: 'gap',
+    // W2 review fix (W5 smoke fold): the gap is a today's-dollar figure in BOTH
+    // page bases (the goalpost law) and rendered with no basis mark at all
+    // under Future $. The header says so, in W5's short register — IMPORTED,
+    // never retyped — and the header is the node the registry pins: the sweep
+    // reads a figure node or its PARENT for the mark, and a table cell's parent
+    // is its own <td>, so the alternative is repeating the phrase per row.
+    header: <span data-testid="ptf-gap">Gap to coast {TODAY_SUFFIX}</span>,
+    numeric: true,
+  },
 ];
 
 interface PathToFiCardProps {
@@ -146,6 +190,11 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
     return h < 1 ? 0 : h;
   }, [hasData, noTarget, fiSeries, mode, yearsUntilRetirement]);
 
+  // W2 (D-UB3/D-UB10): the per-card return source, demoted to Assumed while the
+  // shared `backtest` disclosure is un-accepted (restart-safe).
+  const { source, gateDocument, selectAssumed, requestHistory, acceptAndSwitch, cancelGate } =
+    useGatedReturnSource(cardId ?? 'path-to-fi');
+
   // W5: the ONE conversion boundary — coast rows (restricted converters) and
   // the chart's basis both live behind it (D-T5). The years solves above are
   // engine calls and basis-independent (the goalpost law).
@@ -157,6 +206,20 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
     targetFv,
   });
   const coastRows = view?.coastRows ?? null;
+
+  // W2: the History census — the SAME plan (same pv, same contribution, same
+  // target, the SAME `horizon` the Assumed chart uses, D-P6), replayed against
+  // every full-length historical stretch. All real dollars by construction.
+  const historyView = useMemo(() => {
+    if (source !== 'HISTORY' || horizon < 1) return null;
+    const result = historyFan({
+      pv: engine.portfolio,
+      annualContribution: mode === 'KEEP' ? engine.annualContribution : 0,
+      horizonYears: horizon,
+      target: targetFv,
+    });
+    return { result, view: buildHistoryFanView(result, { xLabel: 'numeric' }) };
+  }, [source, horizon, engine.portfolio, engine.annualContribution, mode, targetFv]);
 
   const moderateKeepFi = keepFiSeries ? pickModerateEntry(keepFiSeries) : undefined;
   const moderateFi = fiSeries ? pickModerateEntry(fiSeries) : undefined;
@@ -225,6 +288,20 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
           Stop today
         </button>
       </div>
+      <RailViewGroup>
+        <ReturnSourceControl
+          source={source}
+          onAssumed={selectAssumed}
+          onHistory={requestHistory}
+        />
+      </RailViewGroup>
+      {gateDocument != null && (
+        <DisclosureModal
+          document={gateDocument}
+          onAccept={acceptAndSwitch}
+          onCancel={cancelGate}
+        />
+      )}
     </>
   );
 
@@ -348,7 +425,13 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
             <span data-testid="ptf-target-fv">Target {view?.fmt.targetFv}</span> = 12 ×{' '}
             <span data-testid="ptf-monthly-expenses">{view?.fmt.monthlyExpenses}</span>/mo ÷{' '}
             {formatPercent(engine.swr)} SWR — in today&#39;s dollars.
-            {view?.teachingBridge && (
+            {/* W2 review fix: the bridge clause describes a target line that
+                GROWS with inflation — true of the Assumed chart it was written
+                for, false of the History chart, whose target line is pinned
+                flat in both bases. It renders only while Assumed is on screen.
+                W5's boundary is untouched: basis-view.ts still emits the field
+                for the future basis; this render site chooses when to say it. */}
+            {source === 'ASSUMED' && view?.teachingBridge && (
               <span data-testid="ptf-teaching-bridge"> {view.teachingBridge}</span>
             )}
           </p>
@@ -390,7 +473,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
                     </>,
                     Number.isFinite(s.years) ? s.years.toFixed(1) : '—',
                     coast && !atOrPastRetirement ? (
-                      <span data-testid="ptf-gap">{coast.gapFmt}</span>
+                      <span data-testid="ptf-gap-value">{coast.gapFmt}</span>
                     ) : (
                       '—'
                     ),
@@ -411,17 +494,85 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               0, so its coast target equals the full FI number.
             </p>
           )}
-          {view && view.chartData.length > 1 && (
-            <InlineChart
-              label={view.chartLabel}
-              labelTestId="path-to-fi-chart-caption"
-              testId="path-to-fi-chart"
-              data={view.chartData as Array<Record<string, number | string>>}
-              xKey="year"
-              series={chartSeries}
-              markers={chartMarkers}
-              yFormatter={formatCurrency}
-            />
+          {source === 'HISTORY' && historyView != null ? (
+            historyView.result.m === 0 ? (
+              <p
+                role="note"
+                className="text-xs text-muted-foreground"
+                data-testid="path-to-fi-history-degraded"
+              >
+                {noStretchLine({ H: historyView.result.horizonYears })}
+              </p>
+            ) : historyView.result.m < HISTORY_FAN_MIN_SEQUENCES ? (
+              <p
+                role="note"
+                className="text-xs text-muted-foreground"
+                data-testid="path-to-fi-history-degraded"
+              >
+                {tooFewStretchesLine({
+                  M: historyView.result.m,
+                  H: historyView.result.horizonYears,
+                })}
+              </p>
+            ) : (
+              <>
+                <InlineChart
+                  label={HISTORY_CHART_LABEL_PATH_TO_FI}
+                  labelTestId="path-to-fi-history-chart-caption"
+                  testId="path-to-fi-history-chart"
+                  data={historyView.view.chartData}
+                  xKey="year"
+                  series={[...HISTORY_SERIES[mode]]}
+                  markers={
+                    historyView.view.crossing
+                      ? [
+                          {
+                            x: historyView.view.crossing.year,
+                            y: historyView.view.crossing.value,
+                            color: MEDIAN_STROKE,
+                          },
+                        ]
+                      : []
+                  }
+                  fan={HISTORY_FAN_KEYS}
+                  yFormatter={formatCurrency}
+                />
+                <HistoryFanLegend series={HISTORY_SERIES[mode]} />
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="path-to-fi-history-caption"
+                >
+                  {fanCaption({ M: historyView.result.m, H: historyView.result.horizonYears })}
+                </p>
+                {historyView.view.holds && (
+                  <p
+                    role="note"
+                    className="text-xs text-muted-foreground"
+                    data-testid="path-to-fi-holds"
+                  >
+                    {(mode === 'KEEP' ? holdsLineKeep : holdsLineStop)({
+                      H: historyView.result.horizonYears,
+                      J: historyView.view.holds.count,
+                      M: historyView.result.m,
+                    })}
+                  </p>
+                )}
+              </>
+            )
+          ) : (
+            view &&
+            view.chartData.length > 1 && (
+              <InlineChart
+                label={view.chartLabel}
+                labelTestId="path-to-fi-chart-caption"
+                testId="path-to-fi-chart"
+                data={view.chartData as Array<Record<string, number | string>>}
+                xKey="year"
+                series={chartSeries}
+                markers={chartMarkers}
+                yFormatter={formatCurrency}
+              />
+            )
           )}
         </>
       )}
@@ -429,15 +580,32 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   );
 }
 
-/** W5 test-only registration (frozen contract for W2). `ptf-gap` repeats
- *  per table row — the sweep applies the invariant rule to every node. */
+/** W5 test-only registration (frozen contract for W2). `ptf-gap-value` repeats
+ *  per table row — the sweep applies the invariant rule to every node; the
+ *  Gap column's basis mark lives on its header, which is `ptf-gap` (the pinned
+ *  node), because the sweep reads a figure node or its parent and a cell's
+ *  parent is its own <td>. */
 export const PATH_TO_FI_BASIS_FIGURES: RegisteredFigure[] = [
   { testId: 'ptf-target-fv', cls: 'pinned', pinnedBasis: 'today' }, // inventory #7
   { testId: 'ptf-monthly-expenses', cls: 'invariant' },             // #8
   { testId: 'ptf-joint-portfolio', cls: 'invariant' },              // #9
   { testId: 'ptf-unattributed-contribution', cls: 'invariant' },    // #10
-  { testId: 'ptf-gap', cls: 'invariant' },                          // #11
+  { testId: 'ptf-gap', cls: 'pinned', pinnedBasis: 'today' },       // #11 header mark
+  { testId: 'ptf-gap-value', cls: 'invariant' },                    // #11 figures
 ];
 export const PATH_TO_FI_BASIS_CHARTS: RegisteredChart[] = [
   { chartTestId: 'path-to-fi-chart', captionTestId: 'path-to-fi-chart-caption', cls: 'convertible' }, // #12
+];
+
+/** W2 test-only registration (D-UB13): the History view swaps the Assumed
+ *  chart out, so it registers its OWN chart list — a PINNED today's-dollars
+ *  figure whose values and caption are byte-identical in both page bases.
+ *  The figures list is unchanged: every neighbour keeps its landed class. */
+export const PATH_TO_FI_HISTORY_BASIS_CHARTS: RegisteredChart[] = [
+  {
+    chartTestId: 'path-to-fi-history-chart',
+    captionTestId: 'path-to-fi-history-chart-caption',
+    cls: 'pinned',
+    pinnedBasis: 'today',
+  },
 ];

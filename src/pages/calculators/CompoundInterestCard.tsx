@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -24,10 +24,25 @@ import { StatTile } from '@/components/calculators/StatTile';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import {
+  buildHistoryFanView,
   useCompoundBasisView,
+  HISTORY_FAN_KEYS,
   type RegisteredChart,
   type RegisteredFigure,
 } from '@/lib/calculators/basis-view';
+import { HISTORY_FAN_MIN_SEQUENCES, historyFan } from '@/lib/history-fan';
+import { useGatedReturnSource } from '@/lib/calculators/use-chart-source';
+import { ReturnSourceControl } from '@/components/calculators/ReturnSourceControl';
+import { HistoryFanLegend } from '@/components/calculators/HistoryFanLegend';
+import {
+  COMPOUND_CADENCE_CAPTION,
+  FAN_LEGEND_MEDIAN,
+  HISTORY_CHART_LABEL_COMPOUND,
+  fanCaption,
+  noStretchLine,
+  tooFewStretchesLine,
+} from '@/lib/calculators/history-fan-copy';
+import { DisclosureModal } from '@/legal/DisclosureModal';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -45,6 +60,13 @@ const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [
 // (calc-state:compound-interest). pv / monthly contribution / rate now ride
 // the shared scenario (their legacy silo keys migrate one-shot in
 // scenario-assumptions.ts).
+// W2: the History median is an ORDER STATISTIC, not the plan's headline
+// trajectory — foreground-stroked, deliberately never `hero`.
+const MEDIAN_STROKE = 'hsl(var(--foreground))';
+const HISTORY_SERIES_COMPOUND = [
+  { dataKey: 'p50', label: FAN_LEGEND_MEDIAN, color: MEDIAN_STROKE, strokeWidth: 2.5 },
+] as const;
+
 const LOCAL_DEFAULTS = {
   years: 10,
   variancePercent: null as number | null,
@@ -114,6 +136,27 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   // + the matching basis phrase, in one bundle (D-T5). This card never sees a
   // raw projected number beside a basis flag it could ignore.
   const view = useCompoundBasisView(engineInput, series);
+
+  // W2 (D-UB3/D-UB10): the per-card return source, demoted to Assumed while the
+  // shared `backtest` disclosure is un-accepted (restart-safe).
+  const { source, gateDocument, selectAssumed, requestHistory, acceptAndSwitch, cancelGate } =
+    useGatedReturnSource(cardId ?? 'compound-interest');
+
+  // W2: the History census. Compound has no target ⇒ no holds line (D-UB9),
+  // and the recurrence compounds ANNUALLY at real historical returns — CH-4
+  // says so, because the return-rate, frequency and variance knobs all govern
+  // the assumed view only.
+  const historyView = useMemo(() => {
+    if (source !== 'HISTORY') return null;
+    const H = Math.max(0, Math.floor(values.years ?? 0)); // the landed years rule
+    if (H === 0) return null; // the landed years-0 empty case owns this state
+    const result = historyFan({
+      pv: engine.portfolio,
+      annualContribution: 12 * engine.monthlyContribution,
+      horizonYears: H,
+    });
+    return { result, view: buildHistoryFanView(result, { xLabel: 'year-word' }) };
+  }, [source, values.years, engine.portfolio, engine.monthlyContribution]);
 
   const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
   // Expected (mid) leads and is emphasized (2.5px, solid, blue); Low/High are
@@ -190,6 +233,20 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
               </SelectContent>
             </Select>
           </div>
+          <RailViewGroup>
+            <ReturnSourceControl
+              source={source}
+              onAssumed={selectAssumed}
+              onHistory={requestHistory}
+            />
+          </RailViewGroup>
+          {gateDocument != null && (
+            <DisclosureModal
+              document={gateDocument}
+              onAccept={acceptAndSwitch}
+              onCancel={cancelGate}
+            />
+          )}
         </>
       }
       headline={
@@ -222,15 +279,64 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
               testId="compound-final-balance"
             />
           </div>
-          <InlineChart
-            label={view.chartLabel}
-            labelTestId="compound-chart-caption"
-            testId="compound-chart"
-            data={view.chartData}
-            xKey="year"
-            series={chartSeries}
-            yFormatter={(v) => formatCurrency(v)}
-          />
+          {source === 'HISTORY' && historyView != null ? (
+            historyView.result.m === 0 ? (
+              <p
+                role="note"
+                className="text-xs text-muted-foreground"
+                data-testid="compound-history-degraded"
+              >
+                {noStretchLine({ H: historyView.result.horizonYears })}
+              </p>
+            ) : historyView.result.m < HISTORY_FAN_MIN_SEQUENCES ? (
+              <p
+                role="note"
+                className="text-xs text-muted-foreground"
+                data-testid="compound-history-degraded"
+              >
+                {tooFewStretchesLine({
+                  M: historyView.result.m,
+                  H: historyView.result.horizonYears,
+                })}
+              </p>
+            ) : (
+              <>
+                <InlineChart
+                  label={HISTORY_CHART_LABEL_COMPOUND}
+                  labelTestId="compound-history-chart-caption"
+                  testId="compound-history-chart"
+                  data={historyView.view.chartData}
+                  xKey="year"
+                  series={[...HISTORY_SERIES_COMPOUND]}
+                  fan={HISTORY_FAN_KEYS}
+                  yFormatter={(v) => formatCurrency(v)}
+                />
+                <HistoryFanLegend series={HISTORY_SERIES_COMPOUND} />
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="compound-history-caption"
+                >
+                  {fanCaption({ M: historyView.result.m, H: historyView.result.horizonYears })}
+                </p>
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="compound-history-cadence"
+                >
+                  {COMPOUND_CADENCE_CAPTION}
+                </p>
+              </>
+            )
+          ) : (
+            <InlineChart
+              label={view.chartLabel}
+              labelTestId="compound-chart-caption"
+              testId="compound-chart"
+              data={view.chartData}
+              xKey="year"
+              series={chartSeries}
+              yFormatter={(v) => formatCurrency(v)}
+            />
+          )}
         </>
       )}
     </CalculatorCard>
@@ -248,4 +354,16 @@ export const COMPOUND_BASIS_FIGURES: RegisteredFigure[] = [
 ];
 export const COMPOUND_BASIS_CHARTS: RegisteredChart[] = [
   { chartTestId: 'compound-chart', captionTestId: 'compound-chart-caption', cls: 'convertible' }, // #5
+];
+
+/** W2 test-only registration (D-UB13): the History view swaps the Assumed
+ *  chart out, so it registers its OWN chart list — a PINNED today's-dollars
+ *  figure, byte-identical in both page bases. Figures are unchanged. */
+export const COMPOUND_HISTORY_BASIS_CHARTS: RegisteredChart[] = [
+  {
+    chartTestId: 'compound-history-chart',
+    captionTestId: 'compound-history-chart-caption',
+    cls: 'pinned',
+    pinnedBasis: 'today',
+  },
 ];

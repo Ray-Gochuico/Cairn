@@ -6,8 +6,9 @@ export function classifyTier(endingBalance: number, goalAmount: number): Outcome
   return 'below';
 }
 
-/** Linear-interpolated percentile of a numeric array (p in 0..100). */
-function percentile(sorted: number[], p: number): number {
+/** Linear-interpolated percentile of a numeric array (p in 0..100).
+ *  Exported for the W2 history-fan census (D-UB8) — ONE percentile implementation. */
+export function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const rank = (p / 100) * (sorted.length - 1);
   const lo = Math.floor(rank);
@@ -16,7 +17,7 @@ function percentile(sorted: number[], p: number): number {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (rank - lo);
 }
 
-function percentileSeries(outcomes: StartYearOutcome[], p: number): number[] {
+export function percentileSeries(outcomes: StartYearOutcome[], p: number): number[] {
   const len = outcomes[0]?.annualBalances.length ?? 0;
   const out: number[] = [];
   for (let y = 0; y < len; y++) {

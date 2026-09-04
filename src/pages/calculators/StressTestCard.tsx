@@ -87,7 +87,7 @@ const signedPct = (fraction: number, digits: number): string =>
  * replayed against today's portfolio on the Backtest's exact real return
  * basis. Accumulation shock, not drawdown (D-W1-2 — the Backtest tool owns
  * retire-into-a-bad-year, cross-linked below). Gates in-card on the SAME
- * `backtest` disclosure id as the Backtest page (v1.3 covers both surfaces);
+ * `backtest` disclosure id as the Backtest page (v1.4 covers all three surfaces);
  * the page and the card grid are never blocked (DP-7).
  */
 export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) {
@@ -161,7 +161,7 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
     result != null &&
     result.troughBalance >= engine.portfolio;
 
-  // ── Gated state (Task 3's v1.3; in-card, never page-blocking — DP-7) ──
+  // ── Gated state (the in-card backtest gate, never page-blocking — DP-7) ──
   if (gate.state === 'needs-acceptance') {
     return (
       <>

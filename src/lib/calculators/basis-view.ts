@@ -14,6 +14,7 @@ import {
 import { coastFi } from '@/lib/coast-fi';
 import { formatCurrency, formatSignedCurrency } from '@/lib/format';
 import type { ChartDisplayMode } from './real-mode';
+import type { HistoryFanResult } from '@/lib/history-fan';
 
 /* ── D-T4 vocabulary — the ONLY place basis phrases are authored ────────── */
 
@@ -240,4 +241,67 @@ export function usePathToFiBasisView(args: {
     engine.monthlyExpenses,
     scopeExclusions,
   ]);
+}
+
+/* ── W2 additive pinned arm (D-UB13) — the History fan's view bundle ──────
+      PINNED today's dollars: identical values in BOTH page bases; never reads
+      the active basis; historical data is NEVER re-inflated (no code path
+      exists that could combine the fan with the future-mode inflator). The
+      today-register constants are the ones authored ABOVE in this file, so
+      the pinned phrase/suffix are referentially W5's (CH-10). ───────────── */
+
+/** Stable-identity fan keys for InlineChart (recharts re-render discipline). */
+export const HISTORY_FAN_KEYS = { floorKey: 'fanFloor', deltaKey: 'fan2575' } as const;
+
+export interface HistoryFanView {
+  /** Pinned-basis marker — matches the registry's `pinnedBasis` contract. */
+  pinnedBasis: 'today';
+  /** CH-10: this file's today-register phrase, verbatim. */
+  phrase: string;
+  /** CH-10: this file's today-register suffix, verbatim. */
+  suffix: string;
+  m: number;
+  horizonYears: number;
+  /** Rows k = 0…H: { year, fanFloor: p25, fan2575: p75−p25, p50, target? }. */
+  chartData: Array<Record<string, number | string>>;
+  holds: { count: number; target: number } | null;
+  /** First year with p50 ≥ target (year 0 counts); null without a target. */
+  crossing: { year: number; value: number } | null;
+}
+
+/**
+ * Pure encoder from the engine result to the delta-stack chart rows — the one
+ * place History values become renderable (no card-local transform may
+ * re-derive dollars downstream of this bundle).
+ * `xLabel`: 'numeric' (PathToFi, numeric year axis) or 'year-word' (Compound,
+ * "Year 0"… labels — the m2 axis rule).
+ */
+export function buildHistoryFanView(
+  result: HistoryFanResult,
+  opts: { xLabel: 'numeric' | 'year-word' },
+): HistoryFanView {
+  const { p25, p50, p75 } = result.byYear;
+  const target = result.holds?.target ?? null;
+  const chartData = p25.map((floor, k) => ({
+    year: opts.xLabel === 'numeric' ? k : `Year ${k}`,
+    fanFloor: floor,
+    fan2575: p75[k] - floor,
+    p50: p50[k],
+    ...(target != null ? { target: Math.round(target) } : {}),
+  }));
+  let crossing: HistoryFanView['crossing'] = null;
+  if (target != null) {
+    const k = p50.findIndex((v) => v >= target);
+    if (k !== -1) crossing = { year: k, value: Math.round(target) };
+  }
+  return {
+    pinnedBasis: 'today',
+    phrase: TODAY_PHRASE,
+    suffix: TODAY_SUFFIX,
+    m: result.m,
+    horizonYears: result.horizonYears,
+    chartData,
+    holds: result.holds,
+    crossing,
+  };
 }

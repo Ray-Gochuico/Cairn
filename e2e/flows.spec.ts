@@ -346,7 +346,7 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
 
-test('calculators: stress card gates in-card on the v1.3 backtest disclosure; solver shows an honest bisection', async ({ page }) => {
+test('calculators: stress card gates in-card on the backtest disclosure; solver shows an honest bisection', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/calculators');
   // The page itself is NOT blocked by the card's gate — the scope control renders.
@@ -356,9 +356,9 @@ test('calculators: stress card gates in-card on the v1.3 backtest disclosure; so
   await page.getByTestId('stress-test-trigger').click();
   await expect(page.getByTestId('stress-test-meaning')).toContainText('Accept the Historical Backtest disclosure');
   await page.getByRole('button', { name: 'Read and accept the Backtest disclosure' }).click();
-  // exact:true — the v1.3 diff box's first sentence ('Version 1.3 adds the
-  // Stress Test card…') would otherwise substring-match too (strict mode).
-  await expect(page.getByText('Version 1.3', { exact: true })).toBeVisible();
+  // exact:true — the diff box's first sentence ('Version 1.4 adds the
+  // History view…') would otherwise substring-match too (strict mode).
+  await expect(page.getByText('Version 1.4', { exact: true })).toBeVisible();
   await expect(page.getByText('What changed since you last accepted:')).toBeVisible();
   await page.getByRole('checkbox', { name: /historical outcomes only/ }).check();
   // DisclosureModal's continueLabel default is 'Continue' (verified at execution).

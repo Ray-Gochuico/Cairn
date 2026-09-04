@@ -36,6 +36,20 @@ function bondRealReturn(row: { sp500NominalReturn: number; sp500RealReturn: numb
 export function blendedRealReturn(year: number, stockPct: number): number {
   const row = loadShillerAnnual().find((r) => r.year === year);
   if (!row) throw new Error(`No Shiller data for year ${year}`);
+  return blendedRealReturnForRow(row, stockPct);
+}
+
+/**
+ * The same blend, reachable from a single dataset ROW — the ONE blend
+ * implementation (W2 D-P9). `blendedRealReturn` (year-keyed) and the
+ * history-fan census (which walks rows directly, and whose test seam can pass
+ * a synthetic series) both delegate here, so the deflation identity can never
+ * fork into a second, drifting copy.
+ */
+export function blendedRealReturnForRow(
+  row: { sp500NominalReturn: number; sp500RealReturn: number; tenYearTreasuryReturn: number },
+  stockPct: number,
+): number {
   return stockPct * row.sp500RealReturn + (1 - stockPct) * bondRealReturn(row);
 }
 

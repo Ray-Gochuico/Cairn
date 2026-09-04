@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { blendedRealReturn, availableStartYears } from '@/lib/backtest/data';
+import {
+  blendedRealReturn,
+  blendedRealReturnForRow,
+  availableStartYears,
+} from '@/lib/backtest/data';
 import { loadShillerAnnual } from '@/data/shiller-schema';
 
 // The bond column is NOMINAL; blendedRealReturn deflates it to real with the
@@ -43,5 +47,18 @@ describe('availableStartYears', () => {
     // The latest start must leave 30 years of data (inclusive accounting):
     expect(starts[starts.length - 1]).toBeLessThanOrEqual(last - 30 + 1);
     expect(starts[0]).toBe(1871);
+  });
+});
+
+/* ── W2 D-P9: the ONE blend implementation, reachable row-wise ───────────── */
+
+describe('blendedRealReturnForRow (W2 additive export)', () => {
+  it('delegation is exact for canonical years and both common mixes', () => {
+    const rows = loadShillerAnnual();
+    for (const y of [1871, 1929, 1966, 2022]) {
+      const row = rows.find((r) => r.year === y)!;
+      expect(blendedRealReturnForRow(row, 0.75)).toBe(blendedRealReturn(y, 0.75));
+      expect(blendedRealReturnForRow(row, 0.6)).toBe(blendedRealReturn(y, 0.6));
+    }
   });
 });
