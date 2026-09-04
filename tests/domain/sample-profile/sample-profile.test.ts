@@ -51,6 +51,28 @@ describe('seedSampleProfile', () => {
     expect(rows[0].b).toBe(4321);
   });
 
+  it('names the household `Sample Household` (SE-N4) over the migration default', async () => {
+    // W4 smoke D2 — the SAME fallout as the $0 baseline above: 0001 inserts
+    // the household singleton (name column omitted ⇒ NULL) BEFORE this seed's
+    // INSERT OR IGNORE, so the contract name never landed and the sample tour
+    // showed an EMPTY "Household name (optional)" field on Inputs → Household.
+    // SE-N4 is a contract string: pinned byte-exact, not just "non-null".
+    await seedSampleProfile(db);
+    const rows = await db.select<{ name: string | null }>(
+      'SELECT name FROM household WHERE id = 1',
+    );
+    expect(rows[0].name).toBe('Sample Household');
+  });
+
+  it('never clobbers a user-set household name', async () => {
+    await db.execute("UPDATE household SET name = 'The Riveras' WHERE id = 1");
+    await seedSampleProfile(db);
+    const rows = await db.select<{ name: string | null }>(
+      'SELECT name FROM household WHERE id = 1',
+    );
+    expect(rows[0].name).toBe('The Riveras');
+  });
+
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
     await seedSampleProfile(db);
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(

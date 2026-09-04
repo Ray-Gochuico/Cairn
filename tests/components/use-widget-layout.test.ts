@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { migrateUncustomizedLayout, useWidgetLayout } from '@/components/dashboard/use-widget-layout';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 const STORAGE_KEY = 'dashboardWidgetLayout.v1';
 
@@ -209,5 +210,65 @@ describe('migrateUncustomizedLayout — any pristine generation', () => {
       'spending', 'pills-section', 'concentration', 'goals', 'trivia',
     ]);
     expect(result.current.hidden('concentration')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 smoke D1 — the widget layout is NAMESPACED while exploring, same class
+// as the pill layout the smoke caught leaking (`dashboardWidgetLayout.v1`
+// likewise appeared in the REAL profile after "Start my real setup"). The
+// widget key has a second write path — `migrateUncustomizedLayout`, which
+// REWRITES storage on mount — so both paths are pinned below.
+// ---------------------------------------------------------------------------
+describe('useWidgetLayout under explore mode (W4 pref ratchet)', () => {
+  const EXPLORE_KEY = 'explore.dashboardWidgetLayout.v1';
+  const NEW_DEFAULTS = ['pills-section', 'spending', 'concentration', 'goals', 'trivia'];
+
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    clearExploreFlag();
+    localStorage.clear();
+  });
+
+  it('writes the namespaced key while exploring, and the sweep reaps it', () => {
+    setExploreFlag();
+    const { result } = renderHook(() => useWidgetLayout(['w1', 'w2']));
+    act(() => result.current.hide('w1'));
+
+    expect(JSON.parse(localStorage.getItem(EXPLORE_KEY)!)).toEqual([
+      { id: 'w1', hidden: true },
+      { id: 'w2', hidden: false },
+    ]);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(localStorage.getItem(EXPLORE_KEY)).toBeNull();
+  });
+
+  it('writes the bare key with the flag unset (the real profile is unprefixed)', () => {
+    const { result } = renderHook(() => useWidgetLayout(['w1', 'w2']));
+    act(() => result.current.hide('w1'));
+
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)[0]).toEqual({ id: 'w1', hidden: true });
+    expect(localStorage.getItem(EXPLORE_KEY)).toBeNull();
+  });
+
+  it('the pristine-generation migration rewrites the explore key ONLY — never the real one', () => {
+    // The nastiest half of this leak: migrateUncustomizedLayout WRITES on
+    // mount. Reading the raw key from an explore boot would rewrite the real
+    // profile's stored layout before the user ever touched Customize.
+    const pristine = ['pills-section', 'spending', 'concentration', 'goals']
+      .map((id) => ({ id, hidden: false }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(pristine));
+    localStorage.setItem(EXPLORE_KEY, JSON.stringify(pristine));
+
+    setExploreFlag();
+    migrateUncustomizedLayout(NEW_DEFAULTS);
+
+    expect(JSON.parse(localStorage.getItem(EXPLORE_KEY)!)).toEqual(
+      NEW_DEFAULTS.map((id) => ({ id, hidden: false })),
+    );
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual(pristine);
   });
 });

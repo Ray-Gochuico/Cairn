@@ -1,6 +1,11 @@
 import { getDatabase } from '@/db/db';
 import { resetSampleDb } from '@/db/sample-reset';
-import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
+import {
+  clearExploreFlag,
+  clearExplorePrefs,
+  clearExploreSessionStorage,
+  setExploreFlag,
+} from '@/lib/explore-mode';
 
 /**
  * The two explore transitions (W4 D-S4). Both are FULL navigations to '/' —
@@ -74,6 +79,11 @@ export async function exitExploreMode(
   // and the backtest cache holds a sample verdict; the real DB reissues those
   // ids from 1, so anything surviving here mis-targets the user's own rows.
   clearExplorePrefs();
+  // …and then the whole session store: sessionStorage survives the navigation
+  // below, and the ratchet cannot reach raw keys written by frozen modules
+  // (the $X bar's session store). The profile booting next is first-run, so
+  // there is nothing of the user's in there to lose.
+  clearExploreSessionStorage();
   clearExploreFlag();
   deps.navigate('/');
 }

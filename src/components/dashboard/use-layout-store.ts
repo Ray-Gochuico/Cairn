@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { prefKey } from '@/lib/explore-mode';
 
 export interface LayoutEntry {
   id: string;
@@ -16,15 +17,23 @@ export interface LayoutHook {
 
 /**
  * Shared persistent layout store for dashboard pills and widgets. Order +
- * visibility are stored against `storageKey`; the stored list is reconciled
+ * visibility are stored against `baseKey`; the stored list is reconciled
  * with `defaultIds` on mount so new ids land at the end and removed ids drop
  * out. Storage is plain localStorage rather than the AppSettings schema to
  * avoid a schema migration for a per-device preference.
+ *
+ * W4 smoke D1: the key is NAMESPACED while exploring (`prefKey`). The widget
+ * and pill ids are app constants, but the ORDER and the hidden flags are the
+ * arrangement the user made — and a "Customize layout" reorder inside the
+ * sample tour was landing in the REAL profile, where it survived the exit.
+ * `isExploreMode()` is a boot constant, so the composed key is stable for the
+ * lifetime of the page and safe in the effect dep arrays below.
  */
 export function useLayoutStore(
-  storageKey: string,
+  baseKey: string,
   defaultIds: readonly string[],
 ): LayoutHook {
+  const storageKey = prefKey(baseKey);
   const [layout, setLayout] = useState<LayoutEntry[]>(() =>
     buildInitial(storageKey, defaultIds),
   );

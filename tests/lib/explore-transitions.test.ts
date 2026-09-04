@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import { enterExploreMode, exitExploreMode } from '@/lib/explore-transitions';
 import { EXPLORE_FLAG_KEY, prefKey } from '@/lib/explore-mode';
+import { usePillLayout } from '@/components/dashboard/use-pill-layout';
+import { INTERVIEW_BAR_KEY } from '@/lib/interview/bar-store';
 
 /** The flag's VALUE is opaque to isExploreMode() — only presence matters —
  * so a fixed literal keeps this suite off the real clock (test-clock policy). */
@@ -85,6 +88,73 @@ describe('explore transitions', () => {
     expect(sessionStorage.getItem('explore.calculator.overrides.fi')).toBeNull();
     expect(localStorage.getItem('donut.assets.hidden')).toBe('["account:9"]');
     expect(localStorage.getItem('theme')).toBe('dark'); // D-S7's device-pref exemption
+  });
+
+  // W4 smoke D1, the whole leak in one test: the smoke drove
+  // Explore → Customize layout → Move a pill → Start my real setup and found
+  // `dashboardPillLayout.v1` sitting in the REAL profile, ordered by the
+  // SAMPLE session. Nothing below is stubbed except the DB/navigation deps —
+  // the layout write is the production hook.
+  it('enter → reorder the dashboard → exit leaves NO dashboard layout key behind', async () => {
+    const deps = { closeDb: async () => {}, reset: async () => {}, navigate: () => {} };
+    await enterExploreMode(deps);
+
+    const { result, unmount } = renderHook(() =>
+      usePillLayout(['net-worth', 'total-debt', 'savings-rate']),
+    );
+    act(() => result.current.move('total-debt', -1));
+    expect(JSON.parse(localStorage.getItem('explore.dashboardPillLayout.v1')!)[0].id)
+      .toBe('total-debt');
+    unmount();
+
+    await exitExploreMode(deps);
+
+    // The real profile boots with no layout key at all — exactly the state a
+    // control run (never entering explore) leaves behind.
+    expect(localStorage.getItem('dashboardPillLayout.v1')).toBeNull();
+    expect(localStorage.getItem('explore.dashboardPillLayout.v1')).toBeNull();
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
+  });
+
+  // Coordinator ruling (2026-09-02, W4 smoke follow-up): the namespace ratchet
+  // cannot reach every writer. A FROZEN module — the $X bar's session store in
+  // the interview kernel — keeps a RAW sessionStorage key, and sessionStorage
+  // survives location.assign, so a hypothetical typed against the sample was
+  // still answered on the real profile. Exit therefore wipes the whole store
+  // after the prefix sweep: at that moment the real profile is first-run, so
+  // there is nothing of the user's in there to lose.
+  it('exit: sessionStorage is wiped after the sweep — raw keys frozen modules wrote never survive', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    sessionStorage.setItem(
+      INTERVIEW_BAR_KEY,
+      JSON.stringify({ amountCents: 25_000, cadence: 'per-month' }),
+    );
+    sessionStorage.setItem(prefKey('calc-basis:calculators'), 'future');
+    localStorage.setItem('theme', 'dark');
+
+    await exitExploreMode({
+      closeDb: async () => {},
+      reset: async () => {},
+      navigate: () => {},
+    });
+
+    expect(sessionStorage.getItem(INTERVIEW_BAR_KEY)).toBeNull();
+    expect(sessionStorage.length).toBe(0);
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
+    // localStorage is NOT blanket-wiped — real device prefs still belong to
+    // the user (the sweep there is prefix-scoped, by design).
+    expect(localStorage.getItem('theme')).toBe('dark');
+  });
+
+  it('exit: a sessionStorage wipe failure still clears the flag and navigates (best-effort)', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    vi.spyOn(window.sessionStorage, 'clear').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    const navigate = vi.fn();
+    await exitExploreMode({ closeDb: async () => {}, reset: async () => {}, navigate });
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 
   it('exit: the flag clears and navigation fires EVEN when the wipe throws (stale file is inert; next entry re-wipes)', async () => {

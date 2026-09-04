@@ -69,6 +69,7 @@ import { FundHoldingsRepo } from '@/domain/fund-holdings';
 import { FundSectorsRepo } from '@/domain/fund-sectors';
 import { HoldingsRepo } from '@/domain/holdings';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
+import { prefKey } from '@/lib/explore-mode';
 
 /**
  * Investments page — Phase 2 visualization surface.
@@ -85,6 +86,12 @@ import { syncStaleFunds } from '@/market/fund-holdings-sync';
 // localStorage key for the Portfolio-by-account "Investable only" toggle.
 // Module scope so the useCallback below can close over it with an empty
 // dep array (round-2 C1).
+//
+// W4 smoke D1: composed through prefKey() at every touch — the toggle hides
+// cash-like accounts from the card, its bar AND its % denominator, so a
+// sample-session choice would go on filtering the user's real portfolio after
+// they leave. isExploreMode() is a boot constant, so the composed key is as
+// stable as the literal (the empty dep array stays honest).
 const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
 
 /**
@@ -515,7 +522,7 @@ export default function Investments() {
   // the lazy initializer reads it once and guards against unavailable storage.
   const [investableOnly, setInvestableOnly] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(INVESTABLE_ONLY_KEY) === '1';
+      return localStorage.getItem(prefKey(INVESTABLE_ONLY_KEY)) === '1';
     } catch {
       return false;
     }
@@ -528,8 +535,8 @@ export default function Investments() {
   const handleToggleInvestableOnly = useCallback((next: boolean) => {
     setInvestableOnly(next);
     try {
-      if (next) localStorage.setItem(INVESTABLE_ONLY_KEY, '1');
-      else localStorage.removeItem(INVESTABLE_ONLY_KEY);
+      if (next) localStorage.setItem(prefKey(INVESTABLE_ONLY_KEY), '1');
+      else localStorage.removeItem(prefKey(INVESTABLE_ONLY_KEY));
     } catch {
       // Private-mode / disabled storage: keep the in-memory toggle working.
     }

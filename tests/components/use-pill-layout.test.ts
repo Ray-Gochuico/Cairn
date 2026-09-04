@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 const STORAGE_KEY = 'dashboardPillLayout.v1';
+const EXPLORE_KEY = 'explore.dashboardPillLayout.v1';
 
 describe('usePillLayout', () => {
   beforeEach(() => {
@@ -99,5 +101,63 @@ describe('usePillLayout', () => {
       { id: 'a', hidden: false },
       { id: 'b', hidden: false },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 smoke D1 — the pill layout is NAMESPACED while exploring.
+//
+// The fresh-profile smoke ran: Explore → Dashboard → "Customize layout" →
+// "Move Total Debt earlier" → Done → "Start my real setup", and found
+// `dashboardPillLayout.v1` in the REAL profile, beginning `{"id":"total-debt"}`
+// — a key that did not exist before entry (a control run never writes it).
+// P-W4-10 had classified it raw because the ids are app CONSTANTS; the
+// reasoning missed that the ORDER is not a constant — a layout change is
+// something the sample session DID, and nothing it does may outlive the exit.
+// ---------------------------------------------------------------------------
+describe('usePillLayout under explore mode (W4 pref ratchet)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    clearExploreFlag();
+    localStorage.clear();
+  });
+
+  it('writes the namespaced key while exploring, and the sweep reaps it', () => {
+    setExploreFlag();
+    const { result } = renderHook(() => usePillLayout(['a', 'b', 'c']));
+    act(() => result.current.move('c', -1));
+
+    expect(JSON.parse(localStorage.getItem(EXPLORE_KEY)!).map((e: { id: string }) => e.id))
+      .toEqual(['a', 'c', 'b']);
+    // The real profile's own key was never touched — the smoke's exact miss.
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(localStorage.getItem(EXPLORE_KEY)).toBeNull();
+  });
+
+  it('writes the bare key with the flag unset (the real profile is unprefixed)', () => {
+    const { result } = renderHook(() => usePillLayout(['a', 'b', 'c']));
+    act(() => result.current.move('c', -1));
+
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).map((e: { id: string }) => e.id))
+      .toEqual(['a', 'c', 'b']);
+    expect(localStorage.getItem(EXPLORE_KEY)).toBeNull();
+  });
+
+  it('an explore-era reorder never seeds the real read (the leak this prevents)', () => {
+    setExploreFlag();
+    const explore = renderHook(() => usePillLayout(['a', 'b', 'c']));
+    act(() => explore.result.current.move('c', -1));
+    explore.unmount();
+
+    // Exit WITHOUT the sweep: even a stranded explore key is invisible to the
+    // real profile, because the real read composes an unprefixed key.
+    clearExploreFlag();
+    const real = renderHook(() => usePillLayout(['a', 'b', 'c']));
+    expect(real.result.current.layout.map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
 });

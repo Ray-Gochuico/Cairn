@@ -7,6 +7,7 @@ import { SaveCurrentDialog } from './SaveCurrentDialog';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
 import type { Milestones } from '@/lib/scenarios';
 import { formatMonth } from '@/lib/format';
+import { prefKey } from '@/lib/explore-mode';
 
 interface ScenariosPanelProps {
   milestones: Map<number, Milestones>;
@@ -17,6 +18,9 @@ interface ScenariosPanelProps {
   highlightId?: number | null;
 }
 
+// W4 smoke D1: composed through prefKey() at both touches — collapsing the
+// panel is a visibility choice the user made, and nothing an explore session
+// does may outlive "Start my real setup".
 const COLLAPSED_KEY = 'scenariosPanel.collapsed';
 
 function formatMilestone(iso?: string): string {
@@ -39,7 +43,7 @@ export function ScenariosPanel({
   // user's preference survives page refreshes without a server round-trip.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(COLLAPSED_KEY) === 'true';
+      return localStorage.getItem(prefKey(COLLAPSED_KEY)) === 'true';
     } catch {
       return false;
     }
@@ -49,7 +53,7 @@ export function ScenariosPanel({
     setCollapsed((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem(COLLAPSED_KEY, String(next));
+        localStorage.setItem(prefKey(COLLAPSED_KEY), String(next));
       } catch {
         // ignore storage errors in test environments
       }

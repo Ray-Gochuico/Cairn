@@ -84,7 +84,7 @@ import {
 import { BriefingCard } from '@/components/dashboard/BriefingCard';
 import { useTourStore } from '@/stores/tour-store';
 import { isSetupDismissed, hasSetupInProgress } from '@/lib/setup-dismissal';
-import { isExploreMode } from '@/lib/explore-mode';
+import { isExploreMode, prefKey } from '@/lib/explore-mode';
 import { isTourDone, markTourDone } from '@/lib/onboarding-state';
 import type {
   Account,
@@ -134,7 +134,9 @@ const MANUAL_BALANCE_TYPES = new Set<AccountType>([
 
 /**
  * W13 Details disclosure persistence (per-device UI pref, the same
- * localStorage class as the pill/widget layout keys).
+ * localStorage class as the pill/widget layout keys) — and so, since the W4
+ * smoke, namespaced under `explore.` the same way: a disclosure the user
+ * opened inside the sample tour must not reach the real profile.
  */
 const DETAILS_KEY = 'dashboardDetailsOpen.v1';
 
@@ -1051,7 +1053,7 @@ export default function Dashboard() {
   // hooks. Customize forces it open — the things being customized live inside.
   const [detailsOpen, setDetailsOpen] = useState<boolean>(() => {
     try {
-      return window.localStorage.getItem(DETAILS_KEY) === 'true';
+      return window.localStorage.getItem(prefKey(DETAILS_KEY)) === 'true';
     } catch {
       return false;
     }
@@ -1060,7 +1062,7 @@ export default function Dashboard() {
     setDetailsOpen((v) => {
       const next = !v;
       try {
-        window.localStorage.setItem(DETAILS_KEY, String(next));
+        window.localStorage.setItem(prefKey(DETAILS_KEY), String(next));
       } catch {
         /* localStorage unavailable — session-only toggle */
       }
