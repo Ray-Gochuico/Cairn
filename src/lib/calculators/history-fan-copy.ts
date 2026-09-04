@@ -25,7 +25,7 @@ export function fanCaption(a: { M: number; H: number }): string {
 }
 // CH-4
 export const COMPOUND_CADENCE_CAPTION =
-  'History compounds annually at real (CPI-adjusted) historical returns — the frequency and variance knobs apply to the assumed view.';
+  'History compounds annually at real (CPI-adjusted) historical returns — the return rate, frequency and variance knobs apply to the assumed view.';
 // CH-5 (spec ⚑F5 degradation)
 export function tooFewStretchesLine(a: { M: number; H: number }): string {
   const verb = a.M === 1 ? 'stretch exists' : 'stretches exist';

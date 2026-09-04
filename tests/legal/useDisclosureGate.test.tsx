@@ -40,6 +40,17 @@ describe('useDisclosureGate (table-driven, MF-1)', () => {
     expect(result.current.state).toBe('needs-acceptance');
   });
 
+  /* W2 review fix (MINOR 4): the compare was pinned only from BELOW — a stale
+     acceptance re-gates under `===` AND under an ordering mutant. Only an
+     acceptance ABOVE the current version tells them apart: a document that
+     rolls BACK (a withdrawn edit) must re-gate every household that accepted
+     the withdrawn text. */
+  it('an acceptance ABOVE the current version re-gates too (exact compare, not ordering)', () => {
+    seedAccepted({ app_wide: '9.9' });
+    const { result } = renderHook(() => useDisclosureGate('app_wide'));
+    expect(result.current.state).toBe('needs-acceptance');
+  });
+
   it('reads the per-id version (roadmap) independently of app_wide', () => {
     seedAccepted({ app_wide: DISCLOSURES.app_wide.version });
     const { result } = renderHook(() => useDisclosureGate('roadmap'));

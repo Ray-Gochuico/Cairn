@@ -161,7 +161,7 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
     result != null &&
     result.troughBalance >= engine.portfolio;
 
-  // ── Gated state (Task 3's v1.3; in-card, never page-blocking — DP-7) ──
+  // ── Gated state (the in-card backtest gate, never page-blocking — DP-7) ──
   if (gate.state === 'needs-acceptance') {
     return (
       <>

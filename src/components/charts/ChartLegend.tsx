@@ -6,12 +6,18 @@
 export function ChartLegend({
   payload,
 }: {
-  payload?: ReadonlyArray<{ value?: unknown; color?: string }>;
+  payload?: ReadonlyArray<{ value?: unknown; color?: string; type?: string }>;
 }) {
-  if (!payload?.length) return null;
+  // recharts applies the `type: 'none'` opt-out ONLY inside its own
+  // DefaultLegendContent — a custom `content` element is handed the raw
+  // payload — so a drop-in replacement has to mirror the skip, or a
+  // `legendType="none"` series (the W2 fan's floor/delta) leaks its dataKey
+  // into the legend as copy.
+  const items = (payload ?? []).filter((entry) => entry.type !== 'none');
+  if (items.length === 0) return null;
   return (
     <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 pt-2 text-xs text-muted-foreground">
-      {payload.map((entry, i) => (
+      {items.map((entry, i) => (
         <li key={i} className="flex items-center gap-1.5">
           <span
             aria-hidden

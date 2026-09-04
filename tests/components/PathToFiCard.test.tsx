@@ -22,7 +22,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
-import { PathToFiCard } from '@/pages/calculators/PathToFiCard';
+import { PathToFiCard, PATH_TO_FI_BASIS_FIGURES } from '@/pages/calculators/PathToFiCard';
+import { TODAY_SUFFIX } from '@/lib/calculators/basis-view';
 import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
@@ -372,6 +373,32 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
     expect(screen.queryByText('$76,835')).toBeNull();
   });
 
+  /* W2 review fix (W5 smoke fold): the gap is a today's-dollar figure in BOTH
+     page bases and used to render with no basis mark at all under Future $.
+     The COLUMN HEADER now carries the mark in W5's short register (imported,
+     never retyped), and the header is the node the registry pins: the sweep
+     reads a figure node or its PARENT for the mark, and a table cell's parent
+     is its own <td> — a per-cell repetition is the only alternative. */
+  it('Gap column header declares its basis; the header is the registry’s pinned node', () => {
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
+    renderCard();
+    const expected = `Gap to coast ${TODAY_SUFFIX}`;
+    expect(expected).toBe("Gap to coast (today's $)");
+    expect(screen.getByTestId('ptf-gap').textContent).toBe(expected);
+    expect(screen.getByRole('columnheader', { name: expected })).toBeInTheDocument();
+
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(screen.getByTestId('ptf-gap').textContent).toBe(expected); // pinned: never flips
+    expect(screen.getByTestId('ptf-gap-value').textContent).toBe('$452,380');
+
+    expect(PATH_TO_FI_BASIS_FIGURES).toContainEqual({
+      testId: 'ptf-gap',
+      cls: 'pinned',
+      pinnedBasis: 'today',
+    });
+    expect(PATH_TO_FI_BASIS_FIGURES).toContainEqual({ testId: 'ptf-gap-value', cls: 'invariant' });
+  });
+
   it('over-coasted portfolio renders a NEGATIVE gap with the true-minus sign', () => {
     primeStores({
       scenarios: [{ label: 'Moderate', rate: 0.06 }],
@@ -584,7 +611,7 @@ describe('PathToFiCard — Stop today (Coast mode)', () => {
     // target IS the full $1,500,000 FI number, so the gap is $1,300,000 and
     // the headline is 13% of CoastFI. An unfloored coast solve would render
     // $1,790,517 / "10% of CoastFI" next to a sentence contradicting it.
-    expect(screen.getByTestId('ptf-gap').textContent).toBe('$1,300,000');
+    expect(screen.getByTestId('ptf-gap-value').textContent).toBe('$1,300,000');
     expect(screen.getByTestId('path-to-fi-headline').textContent).toBe('13% of CoastFI');
     expect(screen.queryByText('$1,790,517')).toBeNull();
   });

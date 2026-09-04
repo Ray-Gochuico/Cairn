@@ -39,7 +39,7 @@ describe('history-fan copy contract (byte-exact)', () => {
   });
   it('CH-4 compound cadence caption', () => {
     expect(COMPOUND_CADENCE_CAPTION).toBe(
-      'History compounds annually at real (CPI-adjusted) historical returns — the frequency and variance knobs apply to the assumed view.',
+      'History compounds annually at real (CPI-adjusted) historical returns — the return rate, frequency and variance knobs apply to the assumed view.',
     );
   });
   it('CH-5 too-few line + singular variant', () => {

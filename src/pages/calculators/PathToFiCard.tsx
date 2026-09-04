@@ -17,6 +17,7 @@ import {
   buildHistoryFanView,
   usePathToFiBasisView,
   HISTORY_FAN_KEYS,
+  TODAY_SUFFIX,
   type RegisteredChart,
   type RegisteredFigure,
 } from '@/lib/calculators/basis-view';
@@ -91,7 +92,17 @@ const COLUMNS: CalcColumn[] = [
   { key: 'scenario', header: 'Scenario' },
   { key: 'rate', header: 'Rate', numeric: true },
   { key: 'years', header: 'Years', numeric: true },
-  { key: 'gap', header: 'Gap to coast', numeric: true },
+  {
+    key: 'gap',
+    // W2 review fix (W5 smoke fold): the gap is a today's-dollar figure in BOTH
+    // page bases (the goalpost law) and rendered with no basis mark at all
+    // under Future $. The header says so, in W5's short register — IMPORTED,
+    // never retyped — and the header is the node the registry pins: the sweep
+    // reads a figure node or its PARENT for the mark, and a table cell's parent
+    // is its own <td>, so the alternative is repeating the phrase per row.
+    header: <span data-testid="ptf-gap">Gap to coast {TODAY_SUFFIX}</span>,
+    numeric: true,
+  },
 ];
 
 interface PathToFiCardProps {
@@ -414,7 +425,13 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
             <span data-testid="ptf-target-fv">Target {view?.fmt.targetFv}</span> = 12 ×{' '}
             <span data-testid="ptf-monthly-expenses">{view?.fmt.monthlyExpenses}</span>/mo ÷{' '}
             {formatPercent(engine.swr)} SWR — in today&#39;s dollars.
-            {view?.teachingBridge && (
+            {/* W2 review fix: the bridge clause describes a target line that
+                GROWS with inflation — true of the Assumed chart it was written
+                for, false of the History chart, whose target line is pinned
+                flat in both bases. It renders only while Assumed is on screen.
+                W5's boundary is untouched: basis-view.ts still emits the field
+                for the future basis; this render site chooses when to say it. */}
+            {source === 'ASSUMED' && view?.teachingBridge && (
               <span data-testid="ptf-teaching-bridge"> {view.teachingBridge}</span>
             )}
           </p>
@@ -456,7 +473,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
                     </>,
                     Number.isFinite(s.years) ? s.years.toFixed(1) : '—',
                     coast && !atOrPastRetirement ? (
-                      <span data-testid="ptf-gap">{coast.gapFmt}</span>
+                      <span data-testid="ptf-gap-value">{coast.gapFmt}</span>
                     ) : (
                       '—'
                     ),
@@ -520,7 +537,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
                   fan={HISTORY_FAN_KEYS}
                   yFormatter={formatCurrency}
                 />
-                <HistoryFanLegend />
+                <HistoryFanLegend series={HISTORY_SERIES[mode]} />
                 <p
                   className="text-xs text-muted-foreground"
                   data-testid="path-to-fi-history-caption"
@@ -563,14 +580,18 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   );
 }
 
-/** W5 test-only registration (frozen contract for W2). `ptf-gap` repeats
- *  per table row — the sweep applies the invariant rule to every node. */
+/** W5 test-only registration (frozen contract for W2). `ptf-gap-value` repeats
+ *  per table row — the sweep applies the invariant rule to every node; the
+ *  Gap column's basis mark lives on its header, which is `ptf-gap` (the pinned
+ *  node), because the sweep reads a figure node or its parent and a cell's
+ *  parent is its own <td>. */
 export const PATH_TO_FI_BASIS_FIGURES: RegisteredFigure[] = [
   { testId: 'ptf-target-fv', cls: 'pinned', pinnedBasis: 'today' }, // inventory #7
   { testId: 'ptf-monthly-expenses', cls: 'invariant' },             // #8
   { testId: 'ptf-joint-portfolio', cls: 'invariant' },              // #9
   { testId: 'ptf-unattributed-contribution', cls: 'invariant' },    // #10
-  { testId: 'ptf-gap', cls: 'invariant' },                          // #11
+  { testId: 'ptf-gap', cls: 'pinned', pinnedBasis: 'today' },       // #11 header mark
+  { testId: 'ptf-gap-value', cls: 'invariant' },                    // #11 figures
 ];
 export const PATH_TO_FI_BASIS_CHARTS: RegisteredChart[] = [
   { chartTestId: 'path-to-fi-chart', captionTestId: 'path-to-fi-chart-caption', cls: 'convertible' }, // #12

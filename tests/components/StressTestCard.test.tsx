@@ -304,7 +304,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     ).toBeInTheDocument();
   });
 
-  it('accepting in-card records EXACTLY 1.3 and flips the gate; a stale 1.2 keeps it closed', async () => {
+  it('accepting in-card records EXACTLY the current version and flips the gate; a stale 1.2 keeps it closed', async () => {
     seedAcceptance('backtest', '1.2');
     const accept = vi.fn(async (id: string, version: string) => {
       useAcceptancesStore.setState((s) => ({

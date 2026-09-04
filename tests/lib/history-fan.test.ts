@@ -83,6 +83,15 @@ describe('historyFan — fixture census (hand-computed in the spec)', () => {
   it('pv ≥ target ⇒ every stretch holds at year 0', () => {
     expect(historyFan({ ...BASE, target: 500 }).holds).toEqual({ count: 4, target: 500 });
   });
+  /* W2 review fix (MAJOR 2): the pin above cannot see the year-0 clause of
+     D-UB9 — on BASE every path is ≥ 500 at year 1 too, so a k=1…H recurrence
+     satisfies it. Here pv === target and the contribution is 0 at H = 1, so
+     2002 (900) and 2006 (950) hold ONLY at year 0: skipping k = 0 gives 4. */
+  it('year 0 is a holding year: pv === target with H=1 ⇒ all 6 stretches hold', () => {
+    expect(
+      historyFan({ ...BASE, annualContribution: 0, horizonYears: 1, target: 1000 }).holds,
+    ).toEqual({ count: 6, target: 1000 });
+  });
 });
 
 describe('historyFan — engine/UI policy split (spec m1)', () => {
@@ -125,6 +134,21 @@ describe('historyFan — real-dataset historical anchors (the nominal-on-real tr
     const r = historyFan({ ...INPUT, target: 600_000 });
     expect(r.holds).toEqual({ count: 63, target: 600_000 });
   });
+  /* W2 review fix (MAJOR 2), real-data half: the UI-reachable STOP state where
+     the scoped portfolio already equals the FI number. Year 0 alone carries
+     every stretch, so the count must equal M(10) exactly — the 1973 stretch
+     never recovers to 1.0× within ten years, so a k=1…H recurrence reports
+     142 of the 143. */
+  it('holds census @ pv === target (H=10): all 143 stretches hold, on year 0', () => {
+    const r = historyFan({
+      pv: 600_000,
+      annualContribution: 0,
+      horizonYears: 10,
+      target: 600_000,
+    });
+    expect(r.m).toBe(143);
+    expect(r.holds).toEqual({ count: 143, target: 600_000 });
+  });
   it('ANTI-PIN: the nominal blend lands strictly above the real ceiling (D-P8 seam trick)', () => {
     // sp500Real := sp500Nominal ⇒ implied inflation 0 ⇒ bond leg stays nominal:
     // the exact wrong-basis blend, through the production engine.
@@ -166,8 +190,18 @@ describe('historyFan — determinism (the hard line)', () => {
     const b: HistoryFanResult = historyFan(input);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
-  it('source contains no randomness and no clock (structural, not merely seeded)', () => {
-    const src = readFileSync('src/lib/history-fan.ts', 'utf8');
+  /* W2 review fix (MINOR 0): the gate receipt claims the census AND the four
+     new calculator modules are free of randomness and clocks — the scan read
+     only the engine. Every module the History view is built from is enrolled
+     here, so the ratchet matches the claim. */
+  it.each([
+    'src/lib/history-fan.ts',
+    'src/lib/calculators/use-chart-source.ts',
+    'src/lib/calculators/history-fan-copy.ts',
+    'src/components/calculators/ReturnSourceControl.tsx',
+    'src/components/calculators/HistoryFanLegend.tsx',
+  ])('%s contains no randomness and no clock (structural, not merely seeded)', (path) => {
+    const src = readFileSync(path, 'utf8');
     expect(src).not.toMatch(/Math\.random/);
     expect(src).not.toMatch(/Date\.now/);
     expect(src).not.toMatch(/new Date/);

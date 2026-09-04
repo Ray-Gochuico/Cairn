@@ -207,4 +207,28 @@ describe('backtest disclosure', () => {
       'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
     );
   });
+  /* W2 review fix (MINOR 9): the v1.4 edits were byte-exact against the copy
+     contract but only CONTAINS-pinned, so one-word mutants in the consent text
+     the user actually reads (the body paragraph and the diff box) survived
+     every suite. The diff box IS consent copy: a bump without the matching
+     literal change must red. */
+  it('backtest v1.4 body carries the History paragraph byte-exact', () => {
+    expect(DISCLOSURES.backtest.body).toContain(
+      'The **History view** on the Path to FI and Compound Interest calculators replays a contribution plan (no withdrawals) against the same dataset: every full-length historical stretch at a fixed 75% stock / 25% bond real-return blend, rebalanced annually. At each year it reports the middle half (25th–75th percentile) and median of the balances those stretches had reached, and — where a target exists — a count of the stretches that reached the target within the horizon. The same rules apply: overlapping stretches are not independent samples, the count is a tally of past outcomes and never a probability, returns are real (CPI-adjusted) and gross of fees, and the view is history, not a forecast.',
+    );
+  });
+
+  it('backtest v1.4 opening names the third surface byte-exact (the Edit-1 clause)', () => {
+    const body = DISCLOSURES.backtest.body;
+    expect(body).toContain('from 1871 to 2022, in three views. The **Backtest tool**');
+    expect(body).toContain(
+      ', and the **History view** on the Path to FI and Compound Interest calculators replays your contribution plan against every full-length stretch in the same dataset. All three are history replayed, never a forecast.',
+    );
+  });
+
+  it('backtest v1.4 diffFromPrevious is the contract string, byte-exact', () => {
+    expect(DISCLOSURES.backtest.diffFromPrevious).toBe(
+      'Version 1.4 adds the History view on the Path to FI and Compound Interest calculators: the same 1871–2022 dataset now also drives an accumulation-side percentile band (the middle half and median across every full-length historical stretch) plus a reached-the-target count on those two cards. The opening now names those surfaces alongside the surfaces named in v1.3. No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.3. Please re-read and re-accept.',
+    );
+  });
 });

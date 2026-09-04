@@ -64,6 +64,30 @@ describe('useGatedReturnSource (D-UB10 deferred gate + restart-safe demotion)', 
       'HISTORY',
     );
   });
+  /* W2 review fix (MINOR 11): every Assumed click in the suites happened AFTER
+     acceptance, so D-UB10's "the Assumed view never gates" had no pin — a
+     selectAssumed that opened the gate survived all three files. */
+  it('un-accepted: selectAssumed NEVER opens the gate (D-UB10)', () => {
+    const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));
+    act(() => result.current.selectAssumed());
+    expect(result.current.source).toBe('ASSUMED');
+    expect(result.current.gateDocument).toBeNull();
+    // …and still not after the gate has been opened and cancelled once.
+    act(() => result.current.requestHistory());
+    act(() => result.current.cancelGate());
+    act(() => result.current.selectAssumed());
+    expect(result.current.gateDocument).toBeNull();
+  });
+  /* W2 review fix (MINOR 10): v1.4's real transition is 1.3 ⇒ re-gate, and no
+     test seeded '1.3' anywhere — a gate that grandfathered 1.3 accepters
+     survived 81 tests. */
+  it('an accepted v1.3 is re-gated on first History activation (the v1.4 transition)', () => {
+    useAcceptancesStore.setState({ acceptedVersions: { backtest: '1.3' } });
+    const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));
+    act(() => result.current.requestHistory());
+    expect(result.current.source).toBe('ASSUMED');
+    expect(result.current.gateDocument?.version).toBe(DISCLOSURES.backtest.version);
+  });
   it('selectAssumed returns to the assumed view and persists it', () => {
     accept();
     const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));

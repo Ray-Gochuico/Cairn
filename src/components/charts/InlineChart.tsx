@@ -141,7 +141,11 @@ export function InlineChart({
                 : undefined
             }
           />
-          {series.length > 1 && <Legend content={<ChartLegend />} />}
+          {/* D-P3: where a fan is drawn the hand-rolled HistoryFanLegend owns
+              the legend (band + median + the line series), so recharts' own
+              legend must not mount beside it — that duplicated 'Median (p50)'
+              and, before the ChartLegend type filter, printed the fan keys. */}
+          {fan == null && series.length > 1 && <Legend content={<ChartLegend />} />}
           {fan != null && (
             <>
               {/* Delta-stack fan (the BacktestChart bands idiom): invisible floor

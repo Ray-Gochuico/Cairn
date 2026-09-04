@@ -285,8 +285,53 @@ describe('PathToFiCard — History fan rendering (D-UB8, CH-3, CH-9)', () => {
     for (const dot of screen.queryAllByTestId('rc-refdot')) {
       expect(dot.getAttribute('data-shape')).not.toBe('custom');
     }
-    expect(screen.getByTestId('history-fan-legend')).toHaveTextContent('25th–75th percentile');
-    expect(screen.getByTestId('history-fan-legend')).toHaveTextContent('Median (p50)');
+    // W2 review fix (MAJOR 0/1 + MINOR 14): the hand-rolled legend is the ONLY
+    // legend on this chart, it names the target line too, and its swatch
+    // opacity IS the delta Area's fill opacity (not merely 0.28 twice).
+    const legend = screen.getByTestId('history-fan-legend');
+    expect(
+      Array.from(legend.querySelectorAll(':scope > span')).map((s) => s.textContent?.trim()),
+    ).toEqual(['25th–75th percentile', 'Median (p50)', 'Target']);
+    const swatch = legend.querySelector<HTMLElement>('span > span')!;
+    expect(swatch.style.opacity).toBe(delta.getAttribute('data-fill-opacity'));
+    expect(swatch.style.opacity).toBe('0.28');
+  });
+
+  /* W2 review fix (MINOR 12): the ReferenceDot's wiring was unpinned — only its
+     non-custom shape was asserted, so an x off-by-one survived the file. The
+     marker sits at the FIRST year p50 ≥ target (year 0 counts), at the target. */
+  it('the crossing marker sits on the first year the median reaches the target', () => {
+    renderCard();
+    clickHistory();
+    const expected = historyFan({
+      pv: SEEDED_PORTFOLIO,
+      annualContribution: SEEDED_ANNUAL_CONTRIBUTION,
+      horizonYears: 30,
+      target: SEEDED_TARGET_FV,
+    });
+    const k = expected.byYear.p50.findIndex((v) => v >= SEEDED_TARGET_FV);
+    const dots = screen.queryAllByTestId('rc-refdot');
+    if (k === -1) {
+      expect(dots).toHaveLength(0);
+    } else {
+      expect(dots).toHaveLength(1);
+      expect(dots[0].getAttribute('data-x')).toBe(String(k));
+      expect(dots[0].getAttribute('data-y')).toBe(String(SEEDED_TARGET_FV));
+    }
+  });
+
+  /* W2 review fix (MINOR 11), card half: the Assumed button never gates. */
+  it('un-accepted: clicking Assumed opens no modal', () => {
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Assumed' }));
+    expect(screen.queryByTestId('disclosure-modal-body')).toBeNull();
+    expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument();
   });
 
   it('the plotted rows ARE the engine census, encoded as the delta stack', () => {
@@ -425,6 +470,25 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     expect(screen.getByText(`Version ${DISCLOSURES.backtest.version}`)).toBeInTheDocument();
   });
 
+  /* W2 review fix (MINOR 10): the transition v1.4 actually creates is
+     accepted-1.3 ⇒ re-gated, and nothing in the repo seeded '1.3' — a gate
+     that grandfathered v1.3 accepters survived every suite. This is the
+     household that exists in the field on the day W2 ships. */
+  it('an accepted v1.3 is re-gated on first History activation (the v1.4 transition)', () => {
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: '1.3' },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+    renderCard();
+    clickHistory();
+    expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.4')).toBeInTheDocument();
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
+  });
+
   it('accept switches to History AND records the shared backtest consent', async () => {
     const accept = vi.fn(async (id: string, version: string) => {
       useAcceptancesStore.setState((s) => ({
@@ -487,11 +551,51 @@ describe('PathToFiCard — pinned basis (D-UB13) and scope ⊥ source (m9)', () 
     expect(label()).toBe("Path to FI — history (today's $)");
     expect(holds()).toBe(holdsToday); // the count copy carries no dollars at all
     expect(screen.getByTestId('ptf-monthly-expenses').textContent).toBe(monthlyExpensesToday); // invariant
-    expect(screen.getByTestId('ptf-teaching-line').textContent).not.toBe(teachingToday); // bridge clause
-    expect(screen.getByTestId('ptf-teaching-bridge')).toBeInTheDocument();
+    // W2 review fix (REFUTED 0, coordinator overrule): W5's C13 bridge speaks
+    // about a target line that GROWS with inflation; the History chart's target
+    // line is pinned FLAT, so the clause is suppressed while History is the
+    // chart on screen. Every figure on this surface is today's dollars, so the
+    // teaching line is byte-identical across bases here — this replaces the
+    // assertion that pinned the bridge as PRESENT (it defended the bug).
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toBe(teachingToday);
+    expect(screen.queryByTestId('ptf-teaching-bridge')).toBeNull();
+    // The pinned(today) mark the sweep reads still comes off the teaching line.
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toContain("in today's dollars");
 
     flipBasis('today');
     expect(rows()).toBe(rowsToday);
+  });
+
+  it('the C13 bridge renders only while the Assumed chart is the one on screen', () => {
+    renderCard();
+    // Assumed × Today's $: no bridge (W5's landed rule).
+    expect(screen.queryByTestId('ptf-teaching-bridge')).toBeNull();
+
+    flipBasis('future');
+    // Assumed × Future $: W5's landed bridge — the assumed chart's target line
+    // really does grow with inflation (PathToFiCard.test.tsx pins its text).
+    expect(screen.getByTestId('ptf-teaching-bridge')).toBeInTheDocument();
+    const assumedTeaching = screen.getByTestId('ptf-teaching-line').textContent;
+
+    clickHistory();
+    // History × Future $: the sentence would misdescribe the chart in view.
+    expect(screen.getByTestId('path-to-fi-history-chart')).toBeInTheDocument();
+    expect(screen.queryByTestId('ptf-teaching-bridge')).toBeNull();
+    expect(screen.getByTestId('ptf-teaching-line').textContent).not.toBe(assumedTeaching);
+    expect(screen.getByTestId('ptf-target-fv').textContent).toBe('Target $600,000');
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toContain("in today's dollars");
+
+    flipBasis('today');
+    // History × Today's $: still no bridge, same teaching line.
+    expect(screen.queryByTestId('ptf-teaching-bridge')).toBeNull();
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toContain("in today's dollars");
+
+    // Back on Assumed the clause returns under Future $ — the gate reads the
+    // SOURCE; it does not delete W5's bridge.
+    fireEvent.click(screen.getByRole('button', { name: 'Assumed' }));
+    flipBasis('future');
+    expect(screen.getByTestId('ptf-teaching-line').textContent).toBe(assumedTeaching);
+    expect(screen.getByTestId('ptf-teaching-bridge')).toBeInTheDocument();
   });
 
   it('the History view renders no unphrased dollar figure of its own', () => {

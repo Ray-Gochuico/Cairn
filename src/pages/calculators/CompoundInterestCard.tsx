@@ -144,7 +144,8 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
 
   // W2: the History census. Compound has no target ⇒ no holds line (D-UB9),
   // and the recurrence compounds ANNUALLY at real historical returns — CH-4
-  // says so, because the frequency/variance knobs govern the assumed view.
+  // says so, because the return-rate, frequency and variance knobs all govern
+  // the assumed view only.
   const historyView = useMemo(() => {
     if (source !== 'HISTORY') return null;
     const H = Math.max(0, Math.floor(values.years ?? 0)); // the landed years rule
@@ -310,7 +311,7 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
                   fan={HISTORY_FAN_KEYS}
                   yFormatter={(v) => formatCurrency(v)}
                 />
-                <HistoryFanLegend />
+                <HistoryFanLegend series={HISTORY_SERIES_COMPOUND} />
                 <p
                   className="text-xs text-muted-foreground"
                   data-testid="compound-history-caption"

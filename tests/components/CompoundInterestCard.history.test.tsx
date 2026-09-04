@@ -133,7 +133,12 @@ describe('CompoundInterestCard — History view', () => {
     for (const dot of screen.queryAllByTestId('rc-refdot')) {
       expect(dot.getAttribute('data-shape')).not.toBe('custom');
     }
-    expect(screen.getByTestId('history-fan-legend')).toHaveTextContent('25th–75th percentile');
+    // W2 review fix (MAJOR 0/1): the hand-rolled legend is the only legend, and
+    // Compound's single line series IS the median — it is never doubled.
+    const legend = screen.getByTestId('history-fan-legend');
+    expect(
+      Array.from(legend.querySelectorAll(':scope > span')).map((s) => s.textContent?.trim()),
+    ).toEqual(['25th–75th percentile', 'Median (p50)']);
   });
 
   it('AXIS PIN (m2): History rows begin at "Year 0" anchored at round(pv); Assumed rows begin at "Year 1"', () => {
@@ -173,7 +178,7 @@ describe('CompoundInterestCard — History view', () => {
       "At each year, the shaded band spans the middle half (25th–75th) of the balances the 143 full 10-year stretches in the bundled U.S. dataset (1871–2022) had reached by that year; the line is the per-year median, not any single stretch's path. 75% stocks / 25% bonds, rebalanced yearly, gross of fees · today's dollars, in both page views · history, not a forecast.",
     );
     expect(screen.getByTestId('compound-history-cadence')).toHaveTextContent(
-      'History compounds annually at real (CPI-adjusted) historical returns — the frequency and variance knobs apply to the assumed view.',
+      'History compounds annually at real (CPI-adjusted) historical returns — the return rate, frequency and variance knobs apply to the assumed view.',
     );
     // CH-3 drift-guard: the caption paraphrases DISCLOSURES.backtest — a future
     // body edit bumps the version, trips this pin, and forces a conscious review.

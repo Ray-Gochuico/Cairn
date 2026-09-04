@@ -73,7 +73,9 @@ export function historyFan(input: HistoryFanInput): HistoryFanResult {
     b[0] = input.pv;
     for (let k = 1; k <= H; k++) {
       const row = rowByYear.get(s + k - 1);
-      // Unreachable on the Zod-validated contiguous dataset; loud on a broken seam.
+      // Unreachable on the bundled dataset, whose CONTIGUITY is pinned by
+      // tests/data/shiller-schema.test.ts (the Zod schema validates per-row
+      // shape only, and loadShillerAnnual just sorts); loud on a broken seam.
       if (!row) throw new Error(`historyFan: missing dataset row for year ${s + k - 1}`);
       b[k] = b[k - 1] * (1 + blendedRealReturnForRow(row, stockPct)) + input.annualContribution;
     }
