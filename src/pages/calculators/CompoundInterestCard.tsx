@@ -353,7 +353,12 @@ export const COMPOUND_BASIS_FIGURES: RegisteredFigure[] = [
   { testId: 'compound-starting-provenance', cls: 'invariant' }, // #6 (year-0)
 ];
 export const COMPOUND_BASIS_CHARTS: RegisteredChart[] = [
-  { chartTestId: 'compound-chart', captionTestId: 'compound-chart-caption', cls: 'convertible' }, // #5
+  {
+    chartTestId: 'compound-chart',
+    captionTestId: 'compound-chart-caption',
+    cls: 'convertible',
+    rowsTestId: 'rc-composed-chart', // W-I: the sweep pins the rows, not only the caption
+  }, // #5
 ];
 
 /** W2 test-only registration (D-UB13): the History view swaps the Assumed
@@ -365,5 +370,6 @@ export const COMPOUND_HISTORY_BASIS_CHARTS: RegisteredChart[] = [
     captionTestId: 'compound-history-chart-caption',
     cls: 'pinned',
     pinnedBasis: 'today',
+    rowsTestId: 'rc-composed-chart', // W-I: the sweep pins the rows, not only the caption
   },
 ];

@@ -1,4 +1,47 @@
 import { describe, it, beforeEach, afterEach, vi } from 'vitest';
+import type { ReactNode } from 'react';
+
+// W-I: the house recharts mock (verbatim from the two *.history.test.tsx
+// siblings). jsdom renders no recharts SVG, so the sweep's rows hook needs the
+// mocked ComposedChart to expose the plotted rows as `data-rows` — the same
+// element the history files pin. Chart interiors stay exempt from the
+// completeness scan; captions live outside recharts and are unaffected.
+vi.mock('recharts', () => ({
+  ResponsiveContainer: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  ComposedChart: ({ children, data }: { children?: ReactNode; data?: unknown[] }) => (
+    <div data-testid="rc-composed-chart" data-rows={JSON.stringify(data ?? [])}>
+      {children}
+    </div>
+  ),
+  CartesianGrid: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+  Legend: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Line: (p: Record<string, unknown>) => (
+    <div
+      data-testid={`rc-line-${String(p.dataKey)}`}
+      data-stroke={String(p.stroke ?? '')}
+      data-stroke-width={String(p.strokeWidth ?? '')}
+      data-animation={String(p.isAnimationActive)}
+    />
+  ),
+  Area: (p: Record<string, unknown>) => (
+    <div
+      data-testid={`rc-area-${String(p.dataKey)}`}
+      data-stack={String(p.stackId ?? '')}
+      data-fill={String(p.fill ?? '')}
+      data-fill-opacity={String(p.fillOpacity ?? '')}
+      data-animation={String(p.isAnimationActive)}
+      data-tooltip-type={String(p.tooltipType ?? '')}
+      data-legend-type={String(p.legendType ?? '')}
+    />
+  ),
+  ReferenceDot: (p: Record<string, unknown>) => (
+    <div data-testid="rc-refdot" data-x={String(p.x)} data-shape={p.shape ? 'custom' : ''} />
+  ),
+}));
+
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../../helpers/basis-discipline';
 import {

@@ -62,3 +62,39 @@ describe('blendedRealReturnForRow (W2 additive export)', () => {
     }
   });
 });
+
+/* ── W-I D-I10: the year→row index must be invisible — bit-identical to the
+      linear reference, same errors. Written BEFORE the Map landed. ────────── */
+
+describe('blendedRealReturn year lookup (W-I equivalence pin)', () => {
+  const MIXES = [0, 0.25, 0.6, 0.75, 1];
+
+  it('is bit-identical (Object.is) to a linear .find() reference for EVERY dataset year × five mixes', () => {
+    const rows = loadShillerAnnual();
+    let checked = 0;
+    for (const r of rows) {
+      const ref = rows.find((x) => x.year === r.year)!;
+      for (const p of MIXES) {
+        expect(Object.is(blendedRealReturn(r.year, p), blendedRealReturnForRow(ref, p))).toBe(true);
+        checked += 1;
+      }
+    }
+    expect(checked).toBe(rows.length * MIXES.length);
+  });
+
+  it('unknown years throw the v1.6.0 message: before the first year, after the last, non-integer, NaN', () => {
+    const rows = loadShillerAnnual();
+    const first = rows[0].year;
+    const last = rows[rows.length - 1].year;
+    expect(() => blendedRealReturn(first - 1, 0.75)).toThrow(`No Shiller data for year ${first - 1}`);
+    expect(() => blendedRealReturn(last + 1, 0.75)).toThrow(`No Shiller data for year ${last + 1}`);
+    expect(() => blendedRealReturn(1929.5, 0.75)).toThrow('No Shiller data for year 1929.5');
+    expect(() => blendedRealReturn(Number.NaN, 0.75)).toThrow('No Shiller data for year NaN');
+  });
+
+  it('the index sees exactly the rows the census walks (one blend, one dataset — W2 D-P9)', () => {
+    for (const r of loadShillerAnnual()) {
+      expect(blendedRealReturn(r.year, 0.6)).toBe(blendedRealReturnForRow(r, 0.6));
+    }
+  });
+});

@@ -594,7 +594,12 @@ export const PATH_TO_FI_BASIS_FIGURES: RegisteredFigure[] = [
   { testId: 'ptf-gap-value', cls: 'invariant' },                    // #11 figures
 ];
 export const PATH_TO_FI_BASIS_CHARTS: RegisteredChart[] = [
-  { chartTestId: 'path-to-fi-chart', captionTestId: 'path-to-fi-chart-caption', cls: 'convertible' }, // #12
+  {
+    chartTestId: 'path-to-fi-chart',
+    captionTestId: 'path-to-fi-chart-caption',
+    cls: 'convertible',
+    rowsTestId: 'rc-composed-chart', // W-I: the sweep pins the rows, not only the caption
+  }, // #12
 ];
 
 /** W2 test-only registration (D-UB13): the History view swaps the Assumed
@@ -607,5 +612,6 @@ export const PATH_TO_FI_HISTORY_BASIS_CHARTS: RegisteredChart[] = [
     captionTestId: 'path-to-fi-history-chart-caption',
     cls: 'pinned',
     pinnedBasis: 'today',
+    rowsTestId: 'rc-composed-chart', // W-I: the sweep pins the rows, not only the caption
   },
 ];

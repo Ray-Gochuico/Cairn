@@ -62,6 +62,15 @@ export interface RegisteredChart {
   captionTestId: string;
   cls: 'convertible' | 'pinned';
   pinnedBasis?: DollarBasis;
+  /**
+   * v1.7.0 W-I — ADDITIVE, optional (the W2 freeze allows exactly this):
+   * data-testid of the element INSIDE this chart's subtree whose `data-rows`
+   * attribute carries the plotted rows — the house recharts mock renders
+   * `rc-composed-chart` with one. When present, the sweep pins the DATA, not
+   * only the caption: pinned charts byte-identical across bases (D-UB13),
+   * convertible charts different. Absent = caption-only (W2 semantics).
+   */
+  rowsTestId?: string;
 }
 
 /** The per-surface bundle base shape (D-T5): values + phrase travel together. */

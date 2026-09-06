@@ -309,3 +309,119 @@ describe('expectBasisDiscipline — every advertised clause has a sentinel', () 
     ).toThrow(/chart caption "cap-ghost" missing/);
   });
 });
+
+/* ── W-I: the rows hook — chart DATA, not only the caption. Every clause has a
+   witness; each `it` fails if — and only if — its clause is missing from
+   tests/helpers/basis-discipline.tsx. ───────────────────────────────────── */
+
+function mkDataChartCard(
+  caption: (b: DollarBasis) => string,
+  rows: (b: DollarBasis) => string,
+  hookOutside = false,
+) {
+  return function DataChartCard() {
+    const [basis] = useDollarBasis(CALCULATORS_PAGE_ID);
+    const hook = <div data-testid="rows" data-rows={rows(basis)} />;
+    return (
+      <div>
+        <BaselineBody />
+        <span data-testid="cap">{caption(basis)}</span>
+        <div data-testid="chart">{hookOutside ? null : hook}</div>
+        {hookOutside ? hook : null}
+      </div>
+    );
+  };
+}
+const dataRegistry = (cls: 'convertible' | 'pinned', pinnedBasis?: DollarBasis): BasisRegistry => ({
+  figures: REGISTRY.figures,
+  charts: [{ chartTestId: 'chart', captionTestId: 'cap', cls, pinnedBasis, rowsTestId: 'rows' }],
+});
+const PINNED_CAP = () => "Balance (today's $)";
+const CONV_CAP = (b: DollarBasis) => (b === 'today' ? "Balance (today's $)" : 'Balance (future $)');
+const SAME_ROWS = () => '[{"year":0,"p50":100}]';
+const FLIP_ROWS = (b: DollarBasis) =>
+  b === 'today' ? '[{"year":0,"p50":100}]' : '[{"year":0,"p50":103}]';
+
+describe('expectBasisDiscipline — the W-I rows hook (chart DATA across bases)', () => {
+  beforeEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
+
+  it('PINNED DATA: byte-identical rows pass; rows that change across bases fail (D-UB13: history is never re-inflated)', () => {
+    const Good = mkDataChartCard(PINNED_CAP, SAME_ROWS);
+    expect(() => expectBasisDiscipline(<Good />, dataRegistry('pinned', 'today'))).not.toThrow();
+    cleanup();
+    const Reinflated = mkDataChartCard(PINNED_CAP, FLIP_ROWS);
+    expect(() => expectBasisDiscipline(<Reinflated />, dataRegistry('pinned', 'today'))).toThrow(
+      /chart: pinned\(today\) chart DATA changed across bases/,
+    );
+  });
+
+  it('CONVERTIBLE DATA: rows must differ; identical rows fail (a chart that never re-bases)', () => {
+    const Good = mkDataChartCard(CONV_CAP, FLIP_ROWS);
+    expect(() => expectBasisDiscipline(<Good />, dataRegistry('convertible'))).not.toThrow();
+    cleanup();
+    const Stuck = mkDataChartCard(CONV_CAP, SAME_ROWS);
+    expect(() => expectBasisDiscipline(<Stuck />, dataRegistry('convertible'))).toThrow(
+      /chart: convertible chart DATA byte-identical across bases/,
+    );
+  });
+
+  it('CONTRACT: a declared hook rendered OUTSIDE the chart subtree does not count', () => {
+    const Outside = mkDataChartCard(PINNED_CAP, SAME_ROWS, true);
+    expect(() => expectBasisDiscipline(<Outside />, dataRegistry('pinned', 'today'))).toThrow(
+      /rows hook "rows" not rendered inside "chart"/,
+    );
+  });
+
+  it('CONTRACT: a hook element without a data-rows attribute throws', () => {
+    function NoAttr() {
+      return (
+        <div>
+          <BaselineBody />
+          <span data-testid="cap">Balance (today&#39;s $)</span>
+          <div data-testid="chart">
+            <div data-testid="rows" />
+          </div>
+        </div>
+      );
+    }
+    expect(() => expectBasisDiscipline(<NoAttr />, dataRegistry('pinned', 'today'))).toThrow(
+      /rows hook "rows" carries no data-rows attribute/,
+    );
+  });
+
+  it('CONTRACT: a hook carrying ZERO rows throws — the pinned clause may not pass vacuously (MINOR 14)', () => {
+    // `[]` in both bases satisfies rT === rF: a pinned chart would "prove" its
+    // history is never re-inflated while carrying no history at all.
+    const EMPTY = () => '[]';
+    const EmptyPinned = mkDataChartCard(PINNED_CAP, EMPTY);
+    expect(() => expectBasisDiscipline(<EmptyPinned />, dataRegistry('pinned', 'today'))).toThrow(
+      /rows hook "rows" in "chart" carries zero rows/,
+    );
+    cleanup();
+    const EmptyConvertible = mkDataChartCard(CONV_CAP, EMPTY);
+    expect(() =>
+      expectBasisDiscipline(<EmptyConvertible />, dataRegistry('convertible')),
+    ).toThrow(/carries zero rows/);
+    cleanup();
+    // an empty attribute value is just as vacuous
+    const Blank = mkDataChartCard(PINNED_CAP, () => '');
+    expect(() => expectBasisDiscipline(<Blank />, dataRegistry('pinned', 'today'))).toThrow(
+      /carries zero rows/,
+    );
+    cleanup();
+    // …and one row is enough to be a witness (the guard is a floor, not a shape check)
+    const OneRow = mkDataChartCard(PINNED_CAP, SAME_ROWS);
+    expect(() => expectBasisDiscipline(<OneRow />, dataRegistry('pinned', 'today'))).not.toThrow();
+  });
+
+  it('OPTIONAL: a chart registered without rowsTestId keeps the caption-only contract (W2 registrations untouched)', () => {
+    const RowsFlipButUnhooked = mkDataChartCard(PINNED_CAP, FLIP_ROWS);
+    expect(() =>
+      expectBasisDiscipline(<RowsFlipButUnhooked />, chartRegistry('pinned', 'today')),
+    ).not.toThrow();
+  });
+});
