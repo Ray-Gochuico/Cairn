@@ -21,7 +21,7 @@
  *   TR-RET        Milestones.retirementISO
  *   MD-*          buildLeverDiff over the PLAN_LEVER_KEYS
  *
- * NEVER cited: withdrawalTaxAccrued (not deflated by toReal — D-W3-15),
+ * NEVER cited: withdrawalTaxAccrued (D-W3-15 — uncited by choice; toReal scales it since C1),
  * total interest (not a MonthlyState output), IRS caps (the engine has none).
  *
  * PURE + byte-deterministic: no stores, no clocks, fixed-locale formatters,
