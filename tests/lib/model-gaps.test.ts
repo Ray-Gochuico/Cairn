@@ -166,17 +166,41 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     expect(rows.find((r) => r.id === 'G6')?.cta).toEqual({ label: 'Open Household →', to: '/inputs/household' });
   });
 
-  it('G8: fires per no-income person; hourly workers are NOT flagged (D-W3-P5)', () => {
+  // C1 (D-C1-6 ⚑, supersedes D-W3-P5): the engine reads ONLY annualSalaryPretax
+  // (engine.ts:516) and the employment contract persists 0 for HOURLY
+  // (employment-fields.ts:10), so an hourly person's income is $0 in every
+  // projection — staying silent for them was a false silence.
+  it('G8 / G8h: every $0-salary person gets a row — hourly workers get the hourly sentence', () => {
     const rows = buildModelGaps(settledInput({
       persons: [
-        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, hourlyRate: 45 }),   // hourly — silent
-        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, hourlyRate: null }),  // no income — row
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, hourlyRate: 45 }),   // hourly — G8h
+        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, hourlyRate: null }),  // no pay at all — G8
       ],
     })).rows;
     const g8 = rows.filter((r) => r.id.startsWith('G8'));
-    expect(g8.map((r) => r.text)).toEqual(['Sam has no salary entered — the projection carries no income for them.']);
-    expect(g8[0].cta).toEqual({ label: 'Open Persons →', to: '/inputs/persons' });
-    expect(g8[0].id).toBe('G8:2');
+    expect(g8.map((r) => [r.id, r.text])).toEqual([
+      ['G8h:1', "Alex is paid hourly — the projection doesn't model hourly pay, so it carries no income for them."],
+      ['G8:2', 'Sam has no salary entered — the projection carries no income for them.'],
+    ]);
+    for (const r of g8) expect(r.cta).toEqual({ label: 'Open Persons →', to: '/inputs/persons' });
+  });
+
+  it('G8 / G8h interleave in person-id order (one loop, one home)', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [
+        makePerson({ id: 3, name: 'Kim', annualSalaryPretax: 0, hourlyRate: 30 }),
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 }),
+        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, hourlyRate: 45 }),
+      ],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id)).toEqual(['G8:1', 'G8h:2', 'G8h:3']);
+  });
+
+  it('a salaried-with-overtime person (salary > 0, hourly rate set) gets NO row', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 90_000, hourlyRate: 45 })],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8'))).toEqual([]);
   });
 
   it('G8: two no-income persons render in person-id order', () => {
@@ -263,7 +287,10 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
       snapshots: [], contributions: [], roadmapHasUnanswered: true, settings: null,
-      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 })],
+      persons: [
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 }),
+        makePerson({ id: 2, name: 'Kim', annualSalaryPretax: 0, hourlyRate: 45 }),   // C1: the G8h shape
+      ],
       sides: [{ name: 'Baseline', payload: seq }, { name: 'B2', payload: seq }],
     })).rows;
     // …plus the one row shape the all-rows fixture cannot reach: G10n, whose
@@ -273,7 +300,7 @@ describe('buildModelGaps — absence is the calm outcome', () => {
       settings: null,
       sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: seq }],
     })).rows.filter((r) => r.id === 'G10');
-    expect(rows.length).toBeGreaterThanOrEqual(8);
+    expect(rows.length).toBeGreaterThanOrEqual(9);
     expect(named).toHaveLength(1);
     for (const r of [...rows, ...named]) {
       expect(r.text).not.toMatch(ADVICE_LEXICON);

@@ -24,7 +24,7 @@ import type { LeverPayload } from '@/lib/scenarios';
 import type { Account, AccountSnapshot, AppSettings, Contribution, Household, Person } from '@/types/schema';
 
 export interface ModelGapRow {
-  /** 'G1'…'G10'; G8 rows are 'G8:{personId}'. */
+  /** 'G1'…'G10'; G8 rows are 'G8:{personId}', hourly persons 'G8h:{personId}'. */
   id: string;
   text: string;
   cta: { label: string; to: string };
@@ -65,6 +65,7 @@ export interface ModelGapsInput {
 
 const OPEN_HOUSEHOLD = { label: 'Open Household →', to: '/inputs/household' } as const;
 const OPEN_SETTINGS = { label: 'Open Settings →', to: '/settings' } as const;
+const OPEN_PERSONS = { label: 'Open Persons →', to: '/inputs/persons' } as const;
 
 export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   const rows: ModelGapRow[] = [];
@@ -97,13 +98,25 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   if (provenance.swrPct === 'app default 4%') {
     rows.push({ id: 'G6', text: 'Withdrawal rate: app default 4% — not set in Inputs.', cta: OPEN_HOUSEHOLD });
   }
-  // D-W3-P5: a zero salary alone is legitimate for HOURLY employees — the
-  // employment test guards on both fields, mirroring Section1_WhoYouAre.
+  // D-W3-P5 SUPERSEDED (C1, D-C1-6 ⚑): the engine reads ONLY annualSalaryPretax
+  // (engine.ts:516) and the employment contract persists 0 for HOURLY
+  // (employment-fields.ts:10), so an hourly person's income is $0 in every
+  // projection — staying silent for them was a false silence. Two sentences,
+  // one fact each: no pay entered at all (G8) vs hourly pay the model does
+  // not read (G8h). One loop, person-id order, one home (Persons — where the
+  // figure lives).
   const noIncome = i.persons
-    .filter((p) => (p.annualSalaryPretax ?? 0) <= 0 && (p.hourlyRate ?? 0) <= 0)
+    .filter((p) => (p.annualSalaryPretax ?? 0) <= 0)
     .sort((x, y) => (x.id ?? 0) - (y.id ?? 0));
   for (const p of noIncome) {
-    rows.push({ id: `G8:${p.id ?? p.name}`, text: `${p.name} has no salary entered — the projection carries no income for them.`, cta: { label: 'Open Persons →', to: '/inputs/persons' } });
+    const hourly = (p.hourlyRate ?? 0) > 0;
+    rows.push({
+      id: `${hourly ? 'G8h' : 'G8'}:${p.id ?? p.name}`,
+      text: hourly
+        ? `${p.name} is paid hourly — the projection doesn't model hourly pay, so it carries no income for them.`
+        : `${p.name} has no salary entered — the projection carries no income for them.`,
+      cta: OPEN_PERSONS,
+    });
   }
   if (i.roadmapHasUnanswered) {
     rows.push({ id: 'G9', text: "The roadmap has questions you haven't answered — its checklist and frameworks assume less until you do.", cta: { label: 'Open Roadmap →', to: '/roadmap' } });
