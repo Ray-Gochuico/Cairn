@@ -81,6 +81,34 @@ describe('scrollIntoViewWhenSettled (C1 — the CalculatorsLayout settle idiom, 
     expect(calls).toEqual([{ block: 'start', behavior: 'auto' }]);
   });
 
+  // Review MINOR 2: the arrival latch needs a RECEIPT — "the scroll happened",
+  // not "a scroll was armed". A consumer that latched on arming would lose the
+  // scroll entirely if it unmounted mid-settle, and one that latched on every
+  // tick would consume the arrival before the target held still.
+  it('onScrolled fires ONCE, at the scroll itself — never on the arming commit, never after cancel, never for a missing target', () => {
+    const receipts: string[] = [];
+    const { node, calls } = el([100]);
+    scrollIntoViewWhenSettled(() => node, 'center', () => receipts.push('scrolled'));
+    expect(receipts).toEqual([]);                       // not on the arming commit
+    vi.advanceTimersByTime(100);
+    expect(receipts).toEqual([]);                       // not while it is still settling
+    vi.advanceTimersByTime(50);
+    expect(calls).toHaveLength(1);
+    expect(receipts).toEqual(['scrolled']);
+    vi.advanceTimersByTime(1000);
+    expect(receipts).toEqual(['scrolled']);             // once, not per tick
+
+    const cancelled = el([0]);
+    const cancel = scrollIntoViewWhenSettled(() => cancelled.node, 'start', () => receipts.push('cancelled-one'));
+    cancel();
+    vi.advanceTimersByTime(1000);
+    expect(receipts).toEqual(['scrolled']);
+
+    scrollIntoViewWhenSettled(() => null, 'start', () => receipts.push('missing-one'));
+    vi.advanceTimersByTime(1000);
+    expect(receipts).toEqual(['scrolled']);
+  });
+
   it('cancel stops the poll (effect cleanup on unmount); a missing target gives up silently', () => {
     const { node, calls } = el([0]);
     const cancel = scrollIntoViewWhenSettled(() => node, 'start');

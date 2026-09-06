@@ -17,10 +17,18 @@
  *
  * jsdom-safe: scrollIntoView / matchMedia / getBoundingClientRect may all be
  * absent. Returns a cancel function for effect cleanup.
+ *
+ * `onScrolled` (optional) is the RECEIPT: it fires exactly when the scroll
+ * happens — never on the arming commit, never per tick, never after cancel,
+ * never for a target that was gone. A caller latching a one-time arrival
+ * (review MINOR 2) needs "it happened", not "it was armed": arming can be
+ * cancelled by an unmount mid-settle, and the arrival would then be consumed
+ * without the user ever seeing the scroll.
  */
 export function scrollIntoViewWhenSettled(
   resolve: () => Element | null,
   block: ScrollLogicalPosition,
+  onScrolled?: () => void,
 ): () => void {
   const reduced =
     typeof window.matchMedia === 'function' &&
@@ -40,6 +48,7 @@ export function scrollIntoViewWhenSettled(
     if (stableTicks >= 2 || ticks >= 10) {
       const instant = reduced || document.visibilityState !== 'visible';
       el.scrollIntoView?.({ block, behavior: instant ? 'auto' : 'smooth' });
+      onScrolled?.();
       return;
     }
     timer = window.setTimeout(tick, 50);

@@ -182,15 +182,18 @@ export function computeAssumptionParity(
   // CR-P10 compares ENGINE-effective retirement ages PER PERSON (C1):
   // engine.ts:517 resolves `retirementAgeOverride ?? person.targetRetirementAge`
   // for each of real.persons, so an override equal to every person's own
-  // target is no difference at all, and a household with no persons never
-  // reads the field (engine-inert guard, the CR-P9 shape). Sides render the
-  // per-person ages joined ' / ' (the CR-MD2 raises idiom). `default` is only
-  // reachable for a hand-built person with no target — Zod-parsed persons
-  // always carry one (schema.ts:73).
+  // target is no difference at all. With NO persons on file the field is
+  // engine-inert, and the silence falls straight out of the per-person map —
+  // both age lists are empty, so `some` is false; no length guard carries it
+  // (review MINOR 7: the guard that used to sit here was an equivalent
+  // mutant, and reading it as CR-P9's engine-inert clause was misleading).
+  // Sides render the per-person ages joined ' / ' (the CR-MD2 raises idiom).
+  // `default` is only reachable for a hand-built person with no target —
+  // Zod-parsed persons always carry one (schema.ts:73).
   const agesA = engineRetirementAgesOf(a, ctx);
   const agesB = engineRetirementAgesOf(b, ctx);
   const ageLabel = (n: number | null): string => (n == null ? 'default' : String(n));
-  if (agesA.length > 0 && agesA.some((age, i) => age !== agesB[i])) {
+  if (agesA.some((age, i) => age !== agesB[i])) {
     d.push(`retirement age ${agesA.map(ageLabel).join(' / ')} vs ${agesB.map(ageLabel).join(' / ')}`);
   }
   if (a.expenseSource !== b.expenseSource) {

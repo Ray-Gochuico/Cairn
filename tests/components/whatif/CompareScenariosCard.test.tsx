@@ -218,4 +218,43 @@ describe('CompareScenariosCard', () => {
       for (const phrase of RESERVED_PHRASES) expect(line).not.toContain(phrase);
     }
   });
+
+  // Review MAJOR 2: the CARD is where the engine's read width becomes visible
+  // (D-C1-5: personCount is derived here from engineContext.persons.length).
+  // The lib rule is pinned in lever-diff.test.ts; this pins the WIRING, so a
+  // prop refactor cannot silently re-open the W3 chip (a differing second
+  // income.perPerson entry with one person on file rendering as a phantom
+  // 'Annual raises' / '(person 2)' line the projection never reads).
+  describe('income.perPerson is diffed at the ENGINE\'s width (D-C1-5)', () => {
+    const RAISE_EVT = { when: '2027-03-01', type: 'raise' as const, deltaAmount: 5_000 };
+    const twoEntries = {
+      ...emptyLeverPayload(),
+      income: {
+        perPerson: [
+          { annualRaiseRate: 0, events: [] },
+          { annualRaiseRate: 0.05, events: [RAISE_EVT] },
+        ],
+      },
+    };
+    const b = sc(2, { name: 'Aggressive payoff', leverPayload: twoEntries });
+    const renderWith = (persons: { targetRetirementAge?: number | null }[]) => renderCard({
+      scenarios: [baseline, b],
+      pair: { a: baseline, b },
+      engineContext: { inflation: 0.03, cashAccountsWithBalances: [], persons },
+    });
+
+    it('ONE person on file: the differing SECOND entry is engine-inert — no raises line, no "(person 2)" event', () => {
+      const { container } = renderWith([{ targetRetirementAge: 65 }]);
+      const lines = cardLines(container);
+      expect(lines.some((l) => l.includes('Annual raises'))).toBe(false);
+      expect(lines.some((l) => l.includes('(person 2)'))).toBe(false);
+    });
+
+    it('TWO persons on file: the SAME payload does name it — the fixture can produce the line', () => {
+      const { container } = renderWith([{ targetRetirementAge: 65 }, { targetRetirementAge: 62 }]);
+      const lines = cardLines(container);
+      expect(lines.some((l) => l.includes('Annual raises: 0% / 0% vs 0% / 5%'))).toBe(true);
+      expect(lines.some((l) => l.includes('Income event 2027-03: raise +$5,000 (person 2)'))).toBe(true);
+    });
+  });
 });

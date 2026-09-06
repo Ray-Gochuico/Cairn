@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { seedWhatIfRealStores } from './whatif-store-seed';
 
 vi.mock('@/components/whatif/ProjectionChart', () => ({
@@ -150,5 +151,70 @@ describe('WhatIf page management surfaces', () => {
     await waitFor(() =>
       expect(document.getElementById('whatif-lever-bar')).toHaveFocus(),
     );
+  });
+});
+
+// Review MINOR 2: the Send-to-What-If arrival scroll was once per MOUNT.
+// WhatIf renders the FI-cards row and the projection Card in swapped fragment
+// order for the pills-position toggle, so flipping that toggle re-parents the
+// Card and REMOUNTS ScenariosPanel — and the ringed row was centered again,
+// after a click that had nothing to do with the arrival. The page owns the
+// navigation state the id arrives on, so the page consumes the arrival once.
+// This is the page WIRING: the panel's own prop is pinned in
+// tests/components/whatif/ScenariosPanel.highlight.test.tsx.
+describe('WhatIf — the Send arrival scrolls once per ARRIVAL, not once per mount', () => {
+  let scrollSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    seedWhatIfRealStores();
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'P1', dateOfBirth: '1990-01-01', targetRetirementAge: 65, annualSalaryPretax: 100000 }],
+      isLoading: false, error: null, load: async () => {},
+    } as any);
+    // The FI-cards row (and with it the pills toggle) renders only with a
+    // household on file — it is the remount trigger this pin needs.
+    useHouseholdStore.setState({
+      household: {
+        id: 1, name: null, filingStatus: 'SINGLE', state: 'CA', city: null,
+        monthlyExpenseBaseline: 4000, withdrawalRate: 0.04, inflationAssumption: 0.025,
+        growthScenarios: [{ label: 'Moderate', rate: 0.06 }],
+      },
+      isLoading: false, error: null, load: async () => {},
+    } as any);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    vi.useFakeTimers();
+    scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {});
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener() {}, removeEventListener() {} }));
+  });
+  afterEach(() => {
+    scrollSpy.mockRestore();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null, load: async () => {} } as any);
+  });
+
+  it('the FI-pills toggle remounts the panel — the ring stays, the scroll does NOT repeat', () => {
+    let container!: HTMLElement;
+    act(() => {
+      container = render(
+        <MemoryRouter initialEntries={[{ pathname: '/what-if', state: { createdScenarioId: 5 } }]}>
+          <WhatIf />
+        </MemoryRouter>,
+      ).container;
+    });
+    const before = container.querySelector('[data-testid="scenarios-panel"]');
+    expect(before!.querySelector('li[data-row-id="5"]')!.className).toContain('ring-1');
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
+
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Move pills below charts' })); });
+    const after = container.querySelector('[data-testid="scenarios-panel"]');
+    // Guard: the toggle really does remount the panel — otherwise this pin
+    // would pass for the wrong reason.
+    expect(after).not.toBe(before);
+    expect(after!.querySelector('li[data-row-id="5"]')!.className).toContain('ring-1');
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(scrollSpy).toHaveBeenCalledTimes(1);
   });
 });

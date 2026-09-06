@@ -108,6 +108,52 @@ describe('ScenariosPanel highlightId (Wave C C11)', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  // Review MINOR 2: the arrival scroll was once per MOUNT, not once per
+  // ARRIVAL. WhatIf renders the FI-cards row and the projection Card in
+  // swapped fragment order for the pills-position toggle, so flipping that
+  // toggle re-parents the Card and REMOUNTS this panel — and the effect fired
+  // again with the same highlightId, re-centering the ringed row after an
+  // unrelated click. The arrival belongs to the page (it owns the navigation
+  // state the id arrives on), so the page consumes it and tells the panel;
+  // the panel keeps painting the ring for the whole visit either way.
+  it('scrollOnArrival={false}: the ring still paints, but a consumed arrival never scrolls again', () => {
+    const { spy } = scrollHarness();
+    const { container } = render(
+      <MemoryRouter>
+        <ScenariosPanel
+          milestones={new Map<number, Milestones>()}
+          onOpenManage={() => {}}
+          highlightId={2}
+          scrollOnArrival={false}
+        />
+      </MemoryRouter>,
+    );
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).not.toHaveBeenCalled();
+    expect(container.querySelector('li[data-row-id="2"]')!.className).toContain('ring-1');
+  });
+
+  it('reports the scroll back to the page ONCE, when it actually happens (never on the mount commit)', () => {
+    const { spy } = scrollHarness();
+    const onArrivalScrolled = vi.fn();
+    render(
+      <MemoryRouter>
+        <ScenariosPanel
+          milestones={new Map<number, Milestones>()}
+          onOpenManage={() => {}}
+          highlightId={2}
+          onArrivalScrolled={onArrivalScrolled}
+        />
+      </MemoryRouter>,
+    );
+    expect(onArrivalScrolled).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(onArrivalScrolled).toHaveBeenCalledTimes(1);
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(onArrivalScrolled).toHaveBeenCalledTimes(1);
+  });
+
   it('a collapsed panel has no row to scroll to — the user\'s collapse choice wins, silently', () => {
     const { spy } = scrollHarness();
     localStorage.setItem('scenariosPanel.collapsed', 'true');   // prefKey() is the identity outside explore mode

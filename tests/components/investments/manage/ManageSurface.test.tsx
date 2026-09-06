@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useSearchParams } from 'react-router-dom';
 import ManageSurface from '@/components/investments/manage/ManageSurface';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -134,5 +134,77 @@ describe('ManageSurface — ?manage deep link scrolls once the layout settles (C
     );
     act(() => { vi.advanceTimersByTime(2000); });
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  // Review MINOR 3: the tab strip writes the SAME ?manage param on every
+  // click, so an effect keyed on the raw param re-armed the settle loop for
+  // the surface's OWN clicks — and the region then jumped to its start two
+  // stable ticks later (>=150ms, up to 500ms while the panel lays out),
+  // after the user had started reading, fighting their own scroll. Only an
+  // arrival scrolls: the deep link the surface mounted with, or a card above
+  // deflecting into the region. A click inside the region is not an arrival.
+  it('an in-region tab click does NOT scroll — the surface\'s own param write is not an arrival', () => {
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    act(() => { vi.advanceTimersByTime(2000); });             // no param at mount
+    expect(spy).not.toHaveBeenCalled();
+    act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: 'Tickers' })); });
+    expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).not.toHaveBeenCalled();
+    // …and a second click, on another tab, stays quiet too.
+    act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: 'Holdings' })); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a tab click AFTER a deep link does not scroll again — the deep link scrolled once', () => {
+    render(
+      <MemoryRouter initialEntries={['/investments?manage=contributions']}>
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(spy).toHaveBeenCalledTimes(1);
+    act(() => { fireEvent.mouseDown(screen.getByRole('tab', { name: 'Tickers' })); });
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  // …and the guard stays NARROW: a card above the region deflecting into it
+  // (Investments.tsx:218-229 openManage — "Add an account" / "Add a ticker")
+  // writes the same param from OUTSIDE the surface, and that IS an arrival.
+  // A fix that simply froze the effect at mount would strand those buttons.
+  it('an EXTERNAL ?manage change (a card above deflecting in) still scrolls the region', () => {
+    function Deflector() {
+      const [, setSearchParams] = useSearchParams();
+      return (
+        <button
+          type="button"
+          onClick={() => setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set('manage', 'tickers');
+            return next;
+          }, { replace: true })}
+        >
+          Add a ticker
+        </button>
+      );
+    }
+    const { container } = render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Deflector />
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).not.toHaveBeenCalled();
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Add a ticker' })); });
+    expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(targets).toEqual([container.querySelector('section')]);
   });
 });

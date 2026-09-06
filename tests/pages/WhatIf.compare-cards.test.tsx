@@ -90,10 +90,20 @@ vi.mock('@/components/whatif/useRealState', () => ({
     persons: [personFixture],
     inflation: 0.025,
     defaultReturnRate: 0.07,
+    // Review MAJOR 3: the CASH leg of the engine slice, settable per test.
+    // The page is the only place that binds it into the parity fn's context,
+    // and no page test observed it — both drop-mutants
+    // (`cashAccountsWithBalances: []`, and deleting the `defaultCashApy`
+    // line, which is optional and so tsc-clean) survived tests/pages.
+    cashAccountsWithBalances: h.cashAccounts,
     // RealState.defaults IS the engine's settings leg (state-snapshot.ts:419)
     // — the page must pass it to the parity fn, never the display deflator
     // (household 2.5% here), or the CR-Y3a honesty appendix silently vanishes.
-    defaults: { inflation: 0.03, defaultDrawdownTaxRate: null },
+    defaults: {
+      inflation: 0.03,
+      defaultDrawdownTaxRate: null,
+      defaultCashApy: h.defaultCashApy,
+    },
   }),
 }));
 
@@ -118,6 +128,8 @@ const payload = () => ({
 });
 
 const h = vi.hoisted(() => ({
+  cashAccounts: [] as { account: unknown; balance: number }[],
+  defaultCashApy: null as number | null,
   scenarios: [] as unknown[],
   projections: new Map<number, unknown[]>(),
   dollarMode: 'nominal' as 'nominal' | 'real',
@@ -216,6 +228,8 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
   beforeEach(() => {
     seedWhatIfRealStores();
     setSettings();
+    h.cashAccounts = [];
+    h.defaultCashApy = null;
     h.dollarMode = 'nominal';
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
@@ -307,6 +321,8 @@ describe('WhatIf — W3 store wiring (loads + latched gate)', () => {
   beforeEach(() => {
     seedWhatIfRealStores();
     setSettings();
+    h.cashAccounts = [];
+    h.defaultCashApy = null;
     h.dollarMode = 'nominal';
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
@@ -349,6 +365,8 @@ describe('WhatIf — W3 page plumbing', () => {
   beforeEach(() => {
     seedWhatIfRealStores();
     setSettings();
+    h.cashAccounts = [];
+    h.defaultCashApy = null;
     h.dollarMode = 'nominal';
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
@@ -518,6 +536,49 @@ describe('WhatIf — W3 page plumbing', () => {
     ];
     renderWhatIf();
     expect(lineOf('These plans differ in assumptions, not just moves: retirement age 65 vs 60.')).toBeInTheDocument();
+  });
+
+  // Review MAJOR 3: the CASH half of the same props block. CR-P3 resolves a
+  // null lever to the balance-weighted APY the ENGINE freezes at projection
+  // start — but only if the page hands the parity fn the engine's own cash
+  // accounts. With `cashAccountsWithBalances: []` the mirror resolves 0 and
+  // the yardstick prints "cash rate 0% vs 4.5%" for a lever that changes
+  // nothing: exactly the false difference Task 1 exists to remove.
+  const cashAcct = (apyRate: number | null) =>
+    ({ account: { id: 9, type: AccountType.ACCOUNT_SAVINGS, name: 'Savings', apyRate } as unknown as Account, balance: 10_000 });
+
+  it('CR-P3 on the page: a cash lever equal to the ACCOUNTS\' weighted APY is SILENT; a different one is named', () => {
+    h.cashAccounts = [cashAcct(0.045)];
+    h.scenarios = [
+      scenario(1, 'Baseline'),
+      scenario(2, 'Aggressive payoff', {
+        leverPayload: { ...payload(), returns: { ...payload().returns, cashRate: 0.045 } },
+      }),
+    ];
+    const { unmount } = renderWhatIf();
+    expect(lineOf('Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers.')).toBeInTheDocument();
+    unmount();
+    h.scenarios = [
+      scenario(1, 'Baseline'),
+      scenario(2, 'Aggressive payoff', {
+        leverPayload: { ...payload(), returns: { ...payload().returns, cashRate: 0.03 } },
+      }),
+    ];
+    renderWhatIf();
+    expect(lineOf('These plans differ in assumptions, not just moves: cash rate 4.5% vs 3%.')).toBeInTheDocument();
+  });
+
+  it('CR-P3 on the page: an account with no APY of its own reads the Settings default (RealState.defaults.defaultCashApy)', () => {
+    h.cashAccounts = [cashAcct(null)];
+    h.defaultCashApy = 0.02;
+    h.scenarios = [
+      scenario(1, 'Baseline'),
+      scenario(2, 'Aggressive payoff', {
+        leverPayload: { ...payload(), returns: { ...payload().returns, cashRate: 0.02 } },
+      }),
+    ];
+    renderWhatIf();
+    expect(lineOf('Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers.')).toBeInTheDocument();
   });
 
   // ⚑ W3-F3 (review MINOR 9): the just-sent scenario is B on arrival.

@@ -67,6 +67,22 @@ const OPEN_HOUSEHOLD = { label: 'Open Household →', to: '/inputs/household' } 
 const OPEN_SETTINGS = { label: 'Open Settings →', to: '/settings' } as const;
 const OPEN_PERSONS = { label: 'Open Persons →', to: '/inputs/persons' } as const;
 
+/**
+ * Does either compared scenario model an income event for the person at this
+ * index? The engine reads `income.perPerson[idx] ?? income.perPerson[0]`
+ * (engine.ts:515) and applies every event it finds to that person's salary —
+ * from a $0 base a raise / promotion / job change / sabbatical CAN produce
+ * income (apply-real.ts:429-449). Any event at all is enough to make "carries
+ * no income for them" a claim this register cannot stand behind.
+ */
+function anySideModelsIncomeEventFor(sides: ModelGapsSide[], idx: number): boolean {
+  return sides.some((s) => {
+    const perPerson = s.payload.income?.perPerson ?? [];
+    const plan = perPerson[idx] ?? perPerson[0];
+    return (plan?.events?.length ?? 0) > 0;
+  });
+}
+
 export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   const rows: ModelGapRow[] = [];
   const { provenance } = buildScenarioDefaults({
@@ -105,11 +121,34 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   // one fact each: no pay entered at all (G8) vs hourly pay the model does
   // not read (G8h). One loop, person-id order, one home (Persons — where the
   // figure lives).
+  //
+  // Review MAJOR 0: HOURLY is read from employmentType, never from the rate
+  // alone (the PaycheckCard.tsx:199-202 precedent — "hourly is detected by
+  // employmentType"). employment-fields.ts zeroes salary FOR hourly persons
+  // but forbids a $0 salary for NO type, and employmentPatchFromDraft keeps
+  // hourlyRate for every type — so a SALARY_WITH_OT person at $0 salary, and
+  // a SALARY_NO_OT person carrying a stale rate after an HOURLY → salaried
+  // switch, both persist. PersonsTab (this row's own CTA destination) labels
+  // them 'Salary $0 + OT' / 'Salary $0'; they fall to G8, which is true.
+  //
+  // Review MINOR 0: the hourly row also stays SILENT when either compared
+  // scenario models an income event at that person's index. The engine seeds
+  // currentSalary from the $0 base and then APPLIES the payload's events
+  // (engine.ts:514-526 → apply-real.ts:429-449), so a raise / promotion /
+  // job change / sabbatical there can make the projection pay them — and
+  // "carries no income for them" would be false. Suppression over
+  // fabrication: no row rather than re-worded copy (CR-G8h is byte-frozen).
+  // The index is the person's position in the SAME persons list the engine
+  // walks (useRealState.ts:70 feeds both), read at the engine's own width
+  // (engine.ts:515: perPerson[idx] ?? perPerson[0] — a one-entry payload is
+  // read for every person). CR-G8 keeps its shipped reach (chip).
   const noIncome = i.persons
-    .filter((p) => (p.annualSalaryPretax ?? 0) <= 0)
-    .sort((x, y) => (x.id ?? 0) - (y.id ?? 0));
-  for (const p of noIncome) {
-    const hourly = (p.hourlyRate ?? 0) > 0;
+    .map((p, idx) => ({ p, idx }))
+    .filter(({ p }) => (p.annualSalaryPretax ?? 0) <= 0)
+    .sort((x, y) => (x.p.id ?? 0) - (y.p.id ?? 0));
+  for (const { p, idx } of noIncome) {
+    const hourly = p.employmentType === 'HOURLY' && (p.hourlyRate ?? 0) > 0;
+    if (hourly && anySideModelsIncomeEventFor(i.sides, idx)) continue;
     rows.push({
       id: `${hourly ? 'G8h' : 'G8'}:${p.id ?? p.name}`,
       text: hourly

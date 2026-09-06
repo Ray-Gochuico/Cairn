@@ -240,8 +240,10 @@ describe('engine-effective mirrors — C1 cash rate + retirement age', () => {
   });
 
   it('CR-P3 compares at the RENDERED precision — a floating-point ulp never names a difference (D-C1-1)', () => {
-    // 7000×0.04 + 3000×0.02 over 10000 is 0.034 in arithmetic and may not be
-    // the literal 0.034 in IEEE754; typing 3.4 into the lever must be silent.
+    // (7000×0.04 + 3000×0.02) / 10000 is EXACTLY 0.034 in IEEE754 (both
+    // products land on the integers 280 and 60), so this pair agrees under
+    // either comparison — it pins the PHRASE. The test below pins the
+    // rounding RULE with a book that really does carry a ulp (review MAJOR 1).
     const ctx = CTX({
       cashAccountsWithBalances: [{ account: acct(1, 0.04), balance: 7_000 }, { account: acct(2, 0.02), balance: 3_000 }],
     });
@@ -249,6 +251,27 @@ describe('engine-effective mirrors — C1 cash rate + retirement age', () => {
     expect(computeAssumptionParity(P(), typed, HH, ctx).differences).toEqual([]);
     const off = { ...P(), returns: { ...P().returns, cashRate: 0.0341 } };
     expect(computeAssumptionParity(P(), off, HH, ctx).differences).toEqual(['cash rate 3.4% vs 3.41%']);
+  });
+
+  it('CR-P3: a GENUINE sub-rendered-precision ulp stays silent — an exact-float compare would print "cash rate 1.3% vs 1.3%" (D-C1-1)', () => {
+    // The real input path, on two ordinary savings accounts: 1000 @ 1% +
+    // 1500 @ 1.5% weights to exactly 0.013, while the popover stores what the
+    // user typed as Number('1.3') / 100 === 0.013000000000000001
+    // (ReturnSchedulePopover.tsx:138; lever-types.ts:87 passes it through
+    // unrounded). Both render '1.3%' — ONE rate to the projection.
+    const ctx = CTX({
+      cashAccountsWithBalances: [{ account: acct(1, 0.01), balance: 1_000 }, { account: acct(2, 0.015), balance: 1_500 }],
+    });
+    const typed = { ...P(), returns: { ...P().returns, cashRate: Number('1.3') / 100 } };
+    // Precondition: the two engine-effective numbers really are UNEQUAL…
+    expect(engineCashApyOf(P(), ctx)).toBe(0.013);
+    expect(engineCashApyOf(typed, ctx)).not.toBe(engineCashApyOf(P(), ctx));
+    // …and the yardstick is silent anyway, because the projection sees one rate.
+    expect(computeAssumptionParity(P(), typed, HH, ctx).differences).toEqual([]);
+    expect(computeAssumptionParity(P(), typed, HH, ctx).equal).toBe(true);
+    // A difference AT the rendered precision is still named.
+    const off = { ...P(), returns: { ...P().returns, cashRate: 0.0131 } };
+    expect(computeAssumptionParity(P(), off, HH, ctx).differences).toEqual(['cash rate 1.3% vs 1.31%']);
   });
 
   it('CR-P10 is engine-effective: an override equal to EVERY person\'s target is silent; per-person ages join " / "', () => {
@@ -263,7 +286,11 @@ describe('engine-effective mirrors — C1 cash rate + retirement age', () => {
       .toEqual(['retirement age 65 / 65 vs 60 / 60']);
   });
 
-  it('CR-P10 is engine-inert without persons on file (the CR-P9 guard shape); a target-less person renders "default"', () => {
+  // Review MINOR 7: the silence here is NOT carried by a length guard — the
+  // one that used to sit in front of this clause was an equivalent mutant
+  // (`[].some(...)` is already false) commented as if it were load-bearing.
+  // The pin is unchanged; only the mechanism named in the source is.
+  it('CR-P10 is engine-inert without persons on file (the per-person map is empty); a target-less person renders "default"', () => {
     const over = (age: number | null): LeverPayload => ({ ...P(), retirementAgeOverride: age });
     expect(computeAssumptionParity(over(null), over(60), HH, CTX({ persons: [] })).differences).toEqual([]);
     expect(computeAssumptionParity(over(null), over(60), HH, CTX({ persons: [{}] })).differences)
