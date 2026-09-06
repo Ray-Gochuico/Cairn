@@ -359,7 +359,10 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   // exact:true — a diff box's first sentence ('Version 1.5 changes only…')
   // would otherwise substring-match too (strict mode).
   await expect(page.getByText('Version 1.5', { exact: true })).toBeVisible();
-  await expect(page.getByText('What changed since you last accepted:')).toBeVisible();
+  // R3 (D-R3-2): the seeded household has NO backtest acceptance row (the seed
+  // writes app_wide only), so this is a FIRST acceptance — the "What changed"
+  // box is re-prompt copy and must not render.
+  await expect(page.getByText('What changed since you last accepted:')).toHaveCount(0);
   // CR-R3-1, exact — the v1.5 label names all three views the document covers.
   await page
     .getByRole('checkbox', {

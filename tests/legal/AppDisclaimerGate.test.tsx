@@ -288,4 +288,27 @@ describe('AppDisclaimerGate', () => {
     expect(screen.getByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeInTheDocument();
     expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
   });
+
+  it('R3: the fail-closed re-prompt with an EMPTY cache shows the body without a "what changed" box (no prior acceptance can be proven)', () => {
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'error',
+      isLoading: false,
+      error: 'x',
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    renderGate();
+
+    expect(screen.getByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeInTheDocument();
+    expect(screen.queryByText(/what changed since you last accepted/i)).toBeNull();
+    expect(screen.queryByText(/Version 1\.5 adds two new bullets/i)).toBeNull();
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+  });
 });

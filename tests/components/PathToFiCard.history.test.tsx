@@ -438,11 +438,12 @@ describe('PathToFiCard — degradation (⚑F5, CH-5/CH-6)', () => {
 });
 
 describe('PathToFiCard — gate (D-UB10)', () => {
-  it('first History click un-accepted opens the modal (diff box shows); cancel stays Assumed', () => {
+  it('first History click un-accepted opens the modal WITHOUT the what-changed box (never accepted — R3); cancel stays Assumed', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURES.backtest.version}`)).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByTestId('disclosure-modal-body')).toBeNull();
     expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DisclosureModal } from '@/legal/DisclosureModal';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 
 const appWideDoc = {
   id: 'app_wide' as const,
@@ -19,6 +20,12 @@ const roadmapDoc = {
 };
 
 describe('DisclosureModal', () => {
+  // R3: the modal reads the acceptances projection (keyed by document id) to
+  // decide whether the "What changed" box is re-prompt copy for THIS household.
+  beforeEach(() => {
+    useAcceptancesStore.setState({ acceptedVersions: {}, status: 'ready', isLoading: false, error: null });
+  });
+
   it('renders the disclosure body as text', () => {
     render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
     expect(screen.getByText(/this is the disclosure/i)).toBeInTheDocument();
@@ -91,14 +98,51 @@ describe('DisclosureModal', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a "what changed" section when diffFromPrevious is provided', () => {
+  describe('the "What changed" box (R3, v1.7.0 — rendered only for a recorded EARLIER acceptance of this document)', () => {
     const updated = {
       ...appWideDoc,
+      version: '1.1',
       diffFromPrevious: '- Added the pro-rata caveat for backdoor Roth.',
     };
-    render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
-    expect(screen.getByText(/what changed since you last accepted/i)).toBeInTheDocument();
-    expect(screen.getByText(/added the pro-rata caveat/i)).toBeInTheDocument();
+    const seed = (acceptedVersions: Record<string, string>) =>
+      useAcceptancesStore.setState({ acceptedVersions, status: 'ready', isLoading: false, error: null });
+
+    it('renders the box with the re-prompt heading when THIS document has a recorded earlier acceptance', () => {
+      seed({ app_wide: '1.0' });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+      expect(screen.getByText(/added the pro-rata caveat/i)).toBeInTheDocument();
+    });
+
+    it('renders NO box — and no heading of any kind — for a household that never accepted this document (D-R3-2)', () => {
+      seed({});
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+      expect(screen.queryByText(/added the pro-rata caveat/i)).toBeNull();
+      expect(screen.queryByText(/what changed/i)).toBeNull();
+      // The body and the attestation still render — the modal is complete without the box.
+      expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox')).toBeInTheDocument();
+      expect(screen.getByText(/version 1\.1/i)).toBeInTheDocument();
+    });
+
+    it('a prior acceptance of a DIFFERENT document does not count (keyed by id, never by "any row")', () => {
+      seed({ roadmap: '1.0', learning: '1.0', interview: '1.1' });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    });
+
+    it('a recorded acceptance of the SAME version presented shows no box — nothing changed since (the fail-closed shape)', () => {
+      seed({ app_wide: '1.1' });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    });
+
+    it('no diffFromPrevious ⇒ no box, even with an earlier acceptance', () => {
+      seed({ app_wide: '1.0' });
+      render(<DisclosureModal document={{ ...appWideDoc, version: '1.1' }} onAccept={vi.fn()} />);
+      expect(screen.queryByText(/what changed/i)).toBeNull();
+    });
   });
 
   it('honours the custom continueLabel', () => {

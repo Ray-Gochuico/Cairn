@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { DisclosureDocument } from './disclosures';
 import type { DisclosureId } from './disclosures';
 
@@ -103,6 +104,26 @@ export function DisclosureModal({
   // safe even if a title were ever omitted.
   const title = document.title ?? 'Disclaimer';
 
+  // R3 (v1.7.0): the "What changed since you last accepted" box is RE-PROMPT
+  // copy (disclosures.ts docblock), and every diff ends "Please re-read and
+  // re-accept." — false for a household that never accepted this document.
+  // So the box renders only when the acceptances projection (the gate's
+  // single source of truth, MF-1, keyed by document id) holds an EARLIER
+  // acceptance of THIS id. Keyed by id — a row for another document is not a
+  // prior; the same version (the AppDisclaimerGate fail-closed path with a
+  // cached current version) means nothing changed since. Every gate
+  // (app_wide, roadmap, learning, backtest, interview) inherits the rule with
+  // no consumer edit; Step0Disclaimer's first-run diff drop is now redundant
+  // (left as is). ⚑ R3-F2 override: `Boolean(document.diffFromPrevious)`
+  // plus a first-time heading (CR-R3-3b in the R3 plan).
+  const priorAcceptedVersion = useAcceptancesStore(
+    (s) => s.acceptedVersions[document.id] ?? null,
+  );
+  const showDiff =
+    Boolean(document.diffFromPrevious) &&
+    priorAcceptedVersion !== null &&
+    priorAcceptedVersion !== document.version;
+
   const [error, setError] = useState<string | null>(null);
   /**
    * W4: the secondary action runs behind the SAME attestation gate as
@@ -193,7 +214,7 @@ export function DisclosureModal({
           </DialogDescription>
         </div>
 
-        {document.diffFromPrevious && (
+        {showDiff && (
           <div className="mx-6 mt-3 p-3 bg-warning-soft border border-warning/40 rounded text-sm">
             <div className="font-semibold text-warning-foreground mb-1">
               What changed since you last accepted:

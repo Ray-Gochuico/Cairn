@@ -350,6 +350,17 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     // A prior acceptance is recorded → the re-prompt box renders (Task 3 keeps this true).
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
   });
+
+  it('R3: a NEVER-accepted household opens the modal without the what-changed box', () => {
+    seedAcceptance('app_wide', DISCLOSURES.app_wide.version); // another document accepted; backtest never
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    expect(
+      screen.getByRole('checkbox', { name: DISCLOSURES.backtest.acceptanceCheckboxLabel }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('replay rendering — deterministic pins (portfolio 100k)', () => {
