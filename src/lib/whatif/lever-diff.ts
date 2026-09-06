@@ -275,11 +275,19 @@ const EMPTY_PLAN: PersonPlan = { annualRaiseRate: 0, events: [] };
 function planAt(pp: readonly PersonPlan[], idx: number): PersonPlan {
   return pp[idx] ?? pp[0] ?? EMPTY_PLAN;
 }
-/** Both sides' per-person plans padded to a common length by that fallback. */
-function alignedIncomePlans(a: LeverPayload, b: LeverPayload): { a: PersonPlan[]; b: PersonPlan[] } {
+/** Both sides' per-person plans padded to the ENGINE's read width by that
+ *  fallback. The width is one plan per PERSON ON FILE (engine.ts:515 reads
+ *  perPerson[idx] for idx < real.persons.length), not per entry — entries
+ *  past the person count are never read (C1). Without a person count (no
+ *  engine context) every entry is compared. */
+function alignedIncomePlans(
+  a: LeverPayload,
+  b: LeverPayload,
+  personCount: number | undefined,
+): { a: PersonPlan[]; b: PersonPlan[] } {
   const pa = a.income?.perPerson ?? [];
   const pb = b.income?.perPerson ?? [];
-  const n = Math.max(pa.length, pb.length);
+  const n = personCount ?? Math.max(pa.length, pb.length);
   const pad = (pp: readonly PersonPlan[]): PersonPlan[] =>
     pp.length === 0 ? [] : Array.from({ length: n }, (_, i) => planAt(pp, i));
   return { a: pad(pa), b: pad(pb) };
@@ -318,12 +326,21 @@ function incomeEventPhrase(e: IncomeEvt, personIdx: number, personCount: number)
   return `Income event ${fmtMonth(e.when)}: ${e.type}${suffix}${person}`;
 }
 
+export interface LeverDiffContext {
+  loanNames: Record<number, string>;
+  /** RealState.persons.length — the engine's read width for income.perPerson
+   *  (engine.ts:515). The page always passes it (derived from
+   *  EngineContext.persons in CompareScenariosCard); omitted ⇒ every entry
+   *  is compared. */
+  personCount?: number;
+}
+
 export function buildLeverDiff(
   a: LeverPayload,
   b: LeverPayload,
-  ctx: { loanNames: Record<number, string> },
+  ctx: LeverDiffContext,
 ): LeverDiff {
-  const aligned = alignedIncomePlans(a, b);
+  const aligned = alignedIncomePlans(a, b, ctx.personCount);
   const entries = (p: LeverPayload, pp: PersonPlan[]): Map<string, string> => {
     const m = new Map<string, string>();
     for (const e of p.extraLoanPayments ?? []) m.set(`elp:${canonicalJson(e)}`, loanPhrase(e, ctx.loanNames));

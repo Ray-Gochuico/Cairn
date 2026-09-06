@@ -566,3 +566,59 @@ describe('buildLeverDiff — income shape is not a difference (smoke D1)', () =>
     expect(d.onlyInB).toEqual([]);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C1 — the engine reads income.perPerson[idx] for idx < real.persons.length
+// ONLY (engine.ts:515), falling back to entry 0. With ONE person on file a
+// differing SECOND entry is never read — reporting it was a difference the
+// projected lines don't have (W3 review chip). The page passes the person
+// count; without it (no engine context) the entry-width comparison stands.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('buildLeverDiff — personCount is the engine\'s read width (C1)', () => {
+  const plans = (...pp: { annualRaiseRate: number; events?: LeverPayload['income']['perPerson'][number]['events'] }[]): LeverPayload => ({
+    ...P(),
+    income: { perPerson: pp.map((p) => ({ annualRaiseRate: p.annualRaiseRate, events: p.events ?? [] })) },
+  });
+  const RAISE_EVT = { when: '2027-03-01', type: 'raise', deltaAmount: 5_000 } as const;
+
+  it('one person on file: a differing SECOND entry is engine-inert — no raises line, no event', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05, events: [RAISE_EVT] });
+    const d = buildLeverDiff(a, b, { loanNames: {}, personCount: 1 });
+    expect(d).toEqual({ onlyInA: [], onlyInB: [], changed: [], isEmpty: true });
+  });
+
+  it('two persons on file: the same second entry IS a difference, in the frozen formats', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05, events: [RAISE_EVT] });
+    const d = buildLeverDiff(a, b, { loanNames: {}, personCount: 2 });
+    expect(d.changed).toEqual(['Annual raises: 3% / 3% vs 3% / 5%']);
+    expect(d.onlyInB).toEqual(['Income event 2027-03: raise +$5,000 (person 2)']);
+    expect(d.isEmpty).toBe(false);
+  });
+
+  it('one entry, two persons on file: the entry is read for BOTH persons (engine.ts:515), so its event renders per person', () => {
+    const d = buildLeverDiff(P(), plans({ annualRaiseRate: 0, events: [RAISE_EVT] }), { loanNames: {}, personCount: 2 });
+    expect(d.onlyInB).toEqual([
+      'Income event 2027-03: raise +$5,000 (person 1)',
+      'Income event 2027-03: raise +$5,000 (person 2)',
+    ]);
+  });
+
+  it('zero persons on file: income levers are inert', () => {
+    const d = buildLeverDiff(P(), plans({ annualRaiseRate: 0.05, events: [RAISE_EVT] }), { loanNames: {}, personCount: 0 });
+    expect(d.isEmpty).toBe(true);
+  });
+
+  it('omitted personCount keeps the entry-width comparison (no engine context)', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05 });
+    expect(buildLeverDiff(a, b, { loanNames: {} }).changed).toEqual(['Annual raises: 3% / 3% vs 3% / 5%']);
+  });
+
+  it('PROPERTY: byte-identical output for independently constructed equal inputs (with personCount)', () => {
+    const mk = () => plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05 });
+    expect(JSON.stringify(buildLeverDiff(mk(), P(), { loanNames: {}, personCount: 2 })))
+      .toBe(JSON.stringify(buildLeverDiff(mk(), P(), { loanNames: {}, personCount: 2 })));
+  });
+});
