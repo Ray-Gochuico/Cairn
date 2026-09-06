@@ -340,6 +340,16 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     renderCard(); // default seed: '1.5'
     expect(screen.getByTestId('stress-window-picker')).toBeInTheDocument();
   });
+
+  it('an accepted v1.4 is re-gated (the v1.5 transition — the field household on the day R3 ships)', () => {
+    seedAcceptance('backtest', '1.4');
+    renderCard();
+    expect(screen.queryByTestId('stress-window-picker')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    // A prior acceptance is recorded → the re-prompt box renders (Task 3 keeps this true).
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+  });
 });
 
 describe('replay rendering — deterministic pins (portfolio 100k)', () => {

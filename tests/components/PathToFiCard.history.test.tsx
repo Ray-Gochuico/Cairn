@@ -489,6 +489,21 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
   });
 
+  it('an accepted v1.4 is re-gated on first History activation (the v1.5 transition)', () => {
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: '1.4' },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+    renderCard();
+    clickHistory();
+    expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
+  });
+
   it('accept switches to History AND records the shared backtest consent', async () => {
     const accept = vi.fn(async (id: string, version: string) => {
       useAcceptancesStore.setState((s) => ({
