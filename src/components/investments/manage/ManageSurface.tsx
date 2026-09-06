@@ -5,6 +5,7 @@ import AccountsPanel from './AccountsPanel';
 import HoldingsPanel from './HoldingsPanel';
 import ContributionsPanel from './ContributionsPanel';
 import TickersPanel from './TickersPanel';
+import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
 
 const PANEL_IDS = ['accounts', 'holdings', 'contributions', 'tickers'] as const;
 type PanelId = (typeof PANEL_IDS)[number];
@@ -30,12 +31,15 @@ export default function ManageSurface() {
   const active: PanelId = isPanelId(raw) ? raw : 'accounts';
   const regionRef = useRef<HTMLElement | null>(null);
 
-  // Scroll the region into view when a ?manage deep link arrives (motion-safe;
-  // jsdom has no scrollIntoView, hence the optional call).
+  // Scroll the region into view when a ?manage deep link arrives — AFTER the
+  // analysis cards above have finished laying out (C1, smoke M3 2026-09-02:
+  // the mount-time scroll landed, then Recharts' async measurement grew the
+  // cards above and pushed the region back below the fold — the
+  // CalculatorsLayout deep-link class). Motion-safe + jsdom-safe inside;
+  // cleanup cancels the poll if the surface unmounts mid-settle.
   useEffect(() => {
     if (!raw) return;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-    regionRef.current?.scrollIntoView?.({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    return scrollIntoViewWhenSettled(() => regionRef.current, 'start');
   }, [raw]);
 
   const onValueChange = (value: string) => {
