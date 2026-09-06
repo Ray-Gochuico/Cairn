@@ -8,6 +8,7 @@ import { RenameScenarioDialog } from './RenameScenarioDialog';
 import type { Milestones } from '@/lib/scenarios';
 import { formatMonth } from '@/lib/format';
 import { prefKey } from '@/lib/explore-mode';
+import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
 
 interface ScenariosPanelProps {
   milestones: Map<number, Milestones>;
@@ -81,6 +82,21 @@ export function ScenariosPanel({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [openMenuId]);
+
+  // C1 (smoke M2, 2026-09-02): the Send-to-What-If arrival landed at
+  // scrollTop 0 and the ringed row sat below the fold at 1024×700. Bring the
+  // row itself into view — once the LeverBar / FI cards above have settled
+  // (the CalculatorsLayout deep-link class), centered so the ring and the
+  // chart beneath it are both on screen. Calm by construction: no focus
+  // move, no aria-live, once per arrival; a collapsed panel has no row and
+  // the user's collapse choice wins. Cleanup cancels the poll on unmount.
+  useEffect(() => {
+    if (highlightId == null) return;
+    return scrollIntoViewWhenSettled(
+      () => menuRootRef.current?.querySelector(`li[data-row-id="${highlightId}"]`) ?? null,
+      'center',
+    );
+  }, [highlightId]);
 
   return (
     <div

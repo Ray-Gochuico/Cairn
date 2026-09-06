@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { act, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ScenariosPanel } from '@/components/whatif/ScenariosPanel';
 import { emptyLeverPayload } from '@/lib/scenarios';
@@ -62,5 +62,65 @@ describe('ScenariosPanel highlightId (Wave C C11)', () => {
     const row2 = container.querySelector('li[data-row-id="2"]')!;
     expect(row2.className).toContain('ring-1');
     expect(row1.className).not.toContain('ring-1');
+  });
+
+  // C1 (smoke M2, 2026-09-02): the Send arrival landed at scrollTop 0 and the
+  // ringed row sat below the fold at 1024×700. The row scrolls itself into
+  // view — once the layout above has settled, calmly: no focus move, no
+  // announcement, and only the ringed row (never the panel, never the page).
+  // Targeted restore (NOT vi.restoreAllMocks — that would also reset the
+  // vi.fn() store mock above mid-file).
+  let scrollSpy: ReturnType<typeof vi.spyOn> | null = null;
+  const scrollHarness = () => {
+    vi.useFakeTimers();
+    const targets: Element[] = [];
+    scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) { targets.push(this); });
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener() {}, removeEventListener() {} }));
+    return { spy: scrollSpy, targets };
+  };
+  afterEach(() => { scrollSpy?.mockRestore(); scrollSpy = null; vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+  it('scrolls the ringed row into view after the layout settles — calmly (no focus, no aria-live)', () => {
+    const { spy, targets } = scrollHarness();
+    const { container } = render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={new Map<number, Milestones>()} onOpenManage={() => {}} highlightId={2} />
+      </MemoryRouter>,
+    );
+    expect(spy).not.toHaveBeenCalled();                    // never on the mount commit
+    act(() => { vi.advanceTimersByTime(150); });           // two stable 50ms samples
+    expect(targets).toEqual([container.querySelector('li[data-row-id="2"]')]);
+    expect(spy).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' });
+    expect(document.activeElement).toBe(document.body);
+    expect(container.querySelector('[aria-live]')).toBeNull();
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).toHaveBeenCalledTimes(1);                  // once per arrival, not per tick
+  });
+
+  it('no highlightId → no scroll at all', () => {
+    const { spy } = scrollHarness();
+    render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={new Map<number, Milestones>()} onOpenManage={() => {}} />
+      </MemoryRouter>,
+    );
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a collapsed panel has no row to scroll to — the user\'s collapse choice wins, silently', () => {
+    const { spy } = scrollHarness();
+    localStorage.setItem('scenariosPanel.collapsed', 'true');   // prefKey() is the identity outside explore mode
+    try {
+      render(
+        <MemoryRouter>
+          <ScenariosPanel milestones={new Map<number, Milestones>()} onOpenManage={() => {}} highlightId={2} />
+        </MemoryRouter>,
+      );
+      act(() => { vi.advanceTimersByTime(2000); });
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      localStorage.removeItem('scenariosPanel.collapsed');
+    }
   });
 });
