@@ -227,11 +227,10 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(conservative).toContainText('$5,467');
   await expect(conservative).toContainText('Debt in the 5–8% band');
   await expect(conservative).toContainText('$4,533');
-  // STOP-K1 residual (R1 plan § STOP report): the effect line's basis phrase is
-  // KERNEL copy and still says "12-month" over three months — re-pin when the
-  // coordinator rules on Appendix K1.
+  // Appendix K1 (coordinator ruling 2026-09-06): the effect line's basis phrase
+  // states the count — three complete months on the seed.
   await expect(conservative).toContainText(
-    'Your cash reserve would cover 6.0 months of expenses, up from 5.1 — based on $30,000 across cash and savings accounts and your 12-month spending baseline.',
+    'Your cash reserve would cover 6.0 months of expenses, up from 5.1 — based on $30,000 across cash and savings accounts and your spending over 3 months.',
   );
   await expect(conservative).toContainText(
     'Pays Mortgage from $540,000 down to $535,467 — highest rate first (6.25%).',
@@ -240,6 +239,8 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(conservative).toContainText(
     'Emergency fund already at 5.1× monthly expenses — skipped.',
   );
+  // Appendix K2: the card names the figure the whole split rests on, with its count.
+  await expect(conservative).toContainText('Monthly expenses: $5,911 — from 3 months of spending.');
   const moderate = page.getByTestId('framework-moderate');
   await expect(moderate).toContainText('$5,467'); // EF to 6× (assumed)
   await expect(moderate).toContainText('$2,267'); // half of the remainder — debt AND invest
@@ -248,6 +249,7 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await aggressive.getByText('What this assumes').click();
   await expect(aggressive).toContainText('Debt between 5–8% stays at minimum payments in this framework.');
   await expect(aggressive).toContainText('Emergency fund already at 5.1× monthly expenses — skipped.');
+  await expect(aggressive).toContainText('Monthly expenses: $5,911 — from 3 months of spending.');
   // Fixed footer on every card:
   await expect(page.getByText('One mechanical framework applied to your numbers — not advice, not a recommendation.')).toHaveCount(3);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -323,6 +325,10 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   // 5 — The plan reply (monthly figures vary with run date → pattern pins;
   //     the reserve is a seed literal → exact).
   await expect(card).toContainText('Cash and savings on hand: $30,000');
+  // Appendix K3: CI-H5 states the baseline and its count (was countless).
+  await expect(card).toContainText(
+    'is also the emergency fund the Moderate framework targets (6× expenses — $5,911 a month from 3 months of spending, assumed).',
+  );
   await expect(card).toContainText(new RegExp(`reaches \\$60,000 by June ${year}`));
   await expect(card).toContainText('The target is your number, not a suggestion.');
   // 6 — CTA → a real DOWN_PAYMENT goal; the tracked state reads back from

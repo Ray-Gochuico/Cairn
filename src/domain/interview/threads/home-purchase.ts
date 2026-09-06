@@ -106,7 +106,7 @@ function housePlanReply(ctx: InterviewContext, answers: AnswerValues) {
     }
   } else if (overlap.overlapDollars > 0) {
     lines.push(
-      `Of that, ${formatCurrency(overlap.overlapDollars)} is also the emergency fund the Moderate framework targets (${overlap.multiple}× expenses${overlap.assumed ? ', assumed' : ''}). The same dollars can't fund both.`,
+      `Of that, ${formatCurrency(overlap.overlapDollars)} is also the emergency fund the Moderate framework targets (${overlap.multiple}× expenses — ${formatCurrency(overlap.baselineDollars)} a month from ${overlap.baselineSource === 'transactions' ? `${overlap.monthsObserved} ${overlap.monthsObserved === 1 ? 'month' : 'months'} of spending` : 'Household'}${overlap.assumed ? ', assumed' : ''}). The same dollars can't fund both.`,
     );
   }
   // CI-H6 / CI-H7 / CI-H8 — the plan, degrading honestly (never Infinity).

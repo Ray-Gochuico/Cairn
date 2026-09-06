@@ -141,6 +141,18 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
       assumes.push({ group: 'provenance', text: `Contributions: ${provenance.annualContribution}.` });
     }
     // (b) constants
+    // R1 (CR-R1-5): the monthly-expense figure the whole card rests on, with
+    // its provenance and — for transactions — the number of complete months
+    // behind it. Absent under 'none' (the CI-11 skipped reasons carry that).
+    if (split.gaps.baselineSource !== 'none') {
+      const n = split.gaps.baselineMonths;
+      assumes.push({
+        group: 'constants',
+        text: split.gaps.baselineSource === 'transactions'
+          ? `Monthly expenses: ${formatCurrency(split.gaps.baselineDollars)} — from ${n} ${n === 1 ? 'month' : 'months'} of spending.`
+          : `Monthly expenses: ${formatCurrency(split.gaps.baselineDollars)} — from Household.`,
+      });
+    }
     const overridden = ctx.household.interestThresholdLowPct != null || ctx.household.interestThresholdHighPct != null;
     assumes.push({
       group: 'constants',

@@ -126,7 +126,7 @@ describe('home_purchase — the plan reply (hand-computed, fixture: reserve $30,
     expect(r.reply.title).toBe('Home down payment');
     expect(r.reply.lines).toEqual([
       'Cash and savings on hand: $30,000 — from your latest account snapshots.',
-      "Of that, $30,000 is also the emergency fund the Moderate framework targets (6× expenses, assumed). The same dollars can't fund both.",
+      "Of that, $30,000 is also the emergency fund the Moderate framework targets (6× expenses — $6,000 a month from Household, assumed). The same dollars can't fund both.",
       'Saving $1,364/mo reaches $60,000 by June 2028; about $1,180/mo if savings grow at 5% (moderate scenario).',
     ]);
     expect(r.reply.assumes).toEqual([

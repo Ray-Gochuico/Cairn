@@ -4,6 +4,7 @@ import { splitAmount } from '@/lib/interview/waterfall';
 import { makeHousehold, makeAccount, makeLoan } from '../../factories';
 import { AccountType } from '@/types/enums';
 import { fixtureCtx } from './fixture';
+import { ADVICE_LEXICON } from '../../helpers/advice-lexicon';
 
 const GROWTH = [
   { label: 'low', rate: 0.04 }, { label: 'moderate', rate: 0.06 }, { label: 'high', rate: 0.08 },
@@ -152,5 +153,53 @@ describe('computeFiMonthlyDelta (T3 standalone two-solve, D-T3-16)', () => {
       household: makeHousehold({ monthlyExpenseBaseline: 0, growthScenarios: GROWTH }),
     });
     expect(computeFiMonthlyDelta(ctx, 300)).toEqual({ kind: 'not-computable' });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R1 Appendix K1 (CR-R1-3, ruling 4's noun): the effect line's basis phrase
+// states the COUNT when the baseline came from transactions. The household
+// branch is unchanged (pinned above at 'entered monthly baseline').
+// ─────────────────────────────────────────────────────────────────────────────
+describe('computeEffect — count-stated basis phrase (R1 K1)', () => {
+  // fixtureCtx.today = 2026-08-01 → complete-month window 2025-08 … 2026-07.
+  // Every month carries $6,000, so the baseline matches the fixture household's
+  // $6,000 and ONLY the phrase moves — the arithmetic is held constant.
+  const spend = (id: number, date: string) =>
+    ({ id, householdId: 1, date, amount: 6000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 } as never);
+  const monthsBack = (n: number) => Array.from({ length: n }, (_, i) => {
+    const idx = 2026 * 12 + 7 - n + i; // ends at 2026-07 (the window's last complete month)
+    return spend(i + 1, `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}-05`);
+  });
+  const headlineFor = (n: number) => {
+    const ctx = fixtureCtx({ transactions: monthsBack(n) });
+    return computeEffect(splitAmount({ amountCents: 1_000_000, cadence: 'one-time' }, 'conservative', ctx), ctx).headline;
+  };
+
+  it('n = 3 reads "your spending over 3 months"', () => {
+    expect(headlineFor(3)).toBe(
+      'Your cash reserve would cover 6.0 months of expenses, up from 5.0 — based on $30,000 across cash and savings accounts and your spending over 3 months.',
+    );
+  });
+
+  it('n = 1 pluralizes as "month"', () => {
+    expect(headlineFor(1)).toBe(
+      'Your cash reserve would cover 6.0 months of expenses, up from 5.0 — based on $30,000 across cash and savings accounts and your spending over 1 month.',
+    );
+  });
+
+  it('n = 12 states twelve — never an "{n}-month" baseline noun (ruling 4)', () => {
+    const h = headlineFor(12);
+    expect(h).toBe(
+      'Your cash reserve would cover 6.0 months of expenses, up from 5.0 — based on $30,000 across cash and savings accounts and your spending over 12 months.',
+    );
+    expect(h).not.toMatch(/spending baseline/);
+  });
+
+  it('no new string carries an advice lexeme or an exclamation', () => {
+    for (const n of [1, 3, 12]) {
+      expect(headlineFor(n)).not.toMatch(ADVICE_LEXICON);
+      expect(headlineFor(n)).not.toContain('!');
+    }
   });
 });
