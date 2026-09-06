@@ -33,6 +33,7 @@ function decimalFromPctInput(s: string): number {
  *   - "Default inflation (this scenario)" blank ⇒ household / settings fallback.
  *   - Year-strip cells either green (override > default), red (override <
  *     default), or muted (no override).
+ *   - "↺ Reset" clears the whole lever (default + every year); Apply persists it.
  */
 export default function InflationPopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
@@ -96,10 +97,17 @@ export default function InflationPopover({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
+  // C1 (smoke chip, 2026-09-02): "↺ Reset" + Apply did not clear a saved
+  // override — Reset only re-loaded the saved lever, which Cancel already
+  // does, so the button was a near-duplicate of Cancel. In THIS dialog the
+  // per-year sibling is "↺ Default" (back to the fallback for one year), so
+  // Reset means the same for the whole lever: no scenario default rate, no
+  // year overrides — the household / app default drives every year. Apply
+  // then persists the cleared lever; Cancel discards it (D-C1-4 ⚑ — the
+  // other six popovers keep revert-edits Reset; chip).
   const handleReset = () => {
-    const base = active?.leverPayload.inflation ?? { defaultRate: null, overrides: {} };
-    setDraft(base);
-    setDefaultStr(base.defaultRate != null ? pctFromDecimal(base.defaultRate) : '');
+    setDraft({ defaultRate: null, overrides: {} });
+    setDefaultStr('');
   };
 
   // For the year-strip color logic: a year is "tinted" if the override
