@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { defineConfig } from '@playwright/test';
+import { currentLoadPolicy } from './e2e/load-guard';
 import { E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER } from './e2e/servers';
 
 /**
@@ -26,13 +27,30 @@ const NONCE = process.env.CAIRN_DEV_NONCE ?? '';
 // PW_REUSE_SERVER=1 the global setup still refuses a server from another tree.
 const REUSE = process.env.PW_REUSE_SERVER === '1';
 
+// W-I D-I6: the load policy, read ONCE at config load. It travels to the
+// reporter through `metadata`. The banner and the hard refusal print/throw
+// only in the main process (workers re-evaluate this file) — and BEFORE any
+// server launches, so a refusal costs nothing and reads as one line, not as
+// twenty timeouts.
+const LOAD = currentLoadPolicy();
+if (!process.env.TEST_WORKER_INDEX) {
+  console.log(LOAD.line);
+  if (LOAD.refuse) throw new Error(LOAD.line);
+}
+
+const REPORTERS: Array<[string] | [string, Record<string, unknown>]> = [['list']];
+if (process.env.CI) REPORTERS.push(['html', { open: 'never' }]);
+REPORTERS.push(['./e2e/load-reporter.ts']);
+
 export default defineConfig({
   testDir: './e2e',
-  timeout: 60_000,
+  timeout: LOAD.timeoutMs,
+  ...(LOAD.workers !== null ? { workers: LOAD.workers } : {}),
+  // Unchanged: one retry on CI only. The load policy adds NONE (D-I6).
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  reporter: REPORTERS,
   globalSetup: './e2e/global-setup.ts',
-  metadata: { reuseExistingServer: REUSE },
+  metadata: { loadPolicy: LOAD, reuseExistingServer: REUSE },
   use: {
     trace: 'retain-on-failure',
   },
