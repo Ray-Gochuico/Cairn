@@ -7,6 +7,8 @@ import {
   yearEnd,
   type ReplayRow,
 } from '@/lib/backtest/replay';
+import { loadShillerAnnual } from '@/data/shiller-schema';
+import { blendedRealReturnForRow } from '@/lib/backtest/data';
 
 /** Synthetic pre-blended rows: years ascending from startYear. */
 const mkRows = (startYear: number, returns: number[]): ReplayRow[] =>
@@ -223,5 +225,16 @@ describe('flatPathEnd (the D-W1-9 baseline, same cadence by construction)', () =
 describe('DEFAULT_STOCK_PCT (D-W1-6 single source)', () => {
   it('is 0.75 — the Backtest form default', () => {
     expect(DEFAULT_STOCK_PCT).toBe(0.75);
+  });
+});
+
+describe('datasetReplayRows (W-I pin: the consumer of the year lookup)', () => {
+  it('maps EVERY dataset row through the one blend, in dataset order, bit-identically', () => {
+    const rows = loadShillerAnnual();
+    const replay = datasetReplayRows(DEFAULT_STOCK_PCT);
+    expect(replay.map((r) => r.year)).toEqual(rows.map((r) => r.year));
+    replay.forEach((r, i) => {
+      expect(Object.is(r.realReturn, blendedRealReturnForRow(rows[i], DEFAULT_STOCK_PCT))).toBe(true);
+    });
   });
 });

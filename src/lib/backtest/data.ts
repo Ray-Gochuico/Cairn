@@ -1,5 +1,29 @@
 import { loadShillerAnnual } from '@/data/shiller-schema';
 
+type ShillerRow = ReturnType<typeof loadShillerAnnual>[number];
+
+/**
+ * v1.7.0 W-I: year → row, built once from the memoized series.
+ * `loadShillerAnnual` parses once and never resets (no seam, no mock
+ * anywhere), so this index has the same lifetime and needs none either.
+ * Replaces a linear `.find()` per year: the Backtest asks ~3,700 times per run
+ * (123 thirty-year starts × 30) and the stress replay once per dataset row
+ * (O(n²) over 152 rows). The census (history-fan.ts) walks rows directly and
+ * never comes here. Same row object → same arithmetic → bit-identical output
+ * (tests/lib/backtest/data.test.ts pins it for every year × five mixes).
+ */
+let byYear: Map<number, ShillerRow> | null = null;
+
+function rowForYear(year: number): ShillerRow {
+  if (byYear === null) {
+    byYear = new Map();
+    for (const r of loadShillerAnnual()) byYear.set(r.year, r);
+  }
+  const row = byYear.get(year);
+  if (!row) throw new Error(`No Shiller data for year ${year}`);
+  return row;
+}
+
 /**
  * Real annual return of the bond sleeve for a calendar year.
  *
@@ -34,9 +58,7 @@ function bondRealReturn(row: { sp500NominalReturn: number; sp500RealReturn: numb
  * downstream.
  */
 export function blendedRealReturn(year: number, stockPct: number): number {
-  const row = loadShillerAnnual().find((r) => r.year === year);
-  if (!row) throw new Error(`No Shiller data for year ${year}`);
-  return blendedRealReturnForRow(row, stockPct);
+  return blendedRealReturnForRow(rowForYear(year), stockPct);
 }
 
 /**
