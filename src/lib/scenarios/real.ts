@@ -34,6 +34,11 @@ export function toReal(states: MonthlyState[], inflation: number, startISO: stri
       leverContributionsInvested: scaleOpt(s.leverContributionsInvested),
       lumpSumInvested: scaleOpt(s.lumpSumInvested),
       withdrawnFromInvestments: scaleOpt(s.withdrawnFromInvestments),
+      // C1 (W3 chip c): the per-step implied tax on a grossed-up sequential
+      // Trad withdrawal — reset to 0 every step (engine.ts:474), so the same
+      // factor applies. No surface cites it (plan-review keeps it uncited by
+      // choice); one that does will now read today's dollars like its siblings.
+      withdrawalTaxAccrued: scaleOpt(s.withdrawalTaxAccrued),
     };
   });
 }

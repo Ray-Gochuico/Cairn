@@ -166,17 +166,134 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     expect(rows.find((r) => r.id === 'G6')?.cta).toEqual({ label: 'Open Household →', to: '/inputs/household' });
   });
 
-  it('G8: fires per no-income person; hourly workers are NOT flagged (D-W3-P5)', () => {
+  // C1 (D-C1-6 ⚑, supersedes D-W3-P5): the engine reads ONLY annualSalaryPretax
+  // (engine.ts:516) and the employment contract persists 0 for HOURLY
+  // (employment-fields.ts:10), so an hourly person's income is $0 in every
+  // projection — staying silent for them was a false silence.
+  // Review MAJOR 0: the discriminator is employmentType, never the rate alone
+  // (the PaycheckCard.tsx:199-202 precedent) — makePerson's employmentType
+  // DEFAULTS to SALARY_NO_OT (schema.ts:80), so every G8h fixture states it.
+  it('G8 / G8h: every $0-salary person gets a row — hourly workers get the hourly sentence', () => {
     const rows = buildModelGaps(settledInput({
       persons: [
-        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, hourlyRate: 45 }),   // hourly — silent
-        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, hourlyRate: null }),  // no income — row
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 45 }),   // hourly — G8h
+        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, hourlyRate: null }),  // no pay at all — G8
       ],
     })).rows;
     const g8 = rows.filter((r) => r.id.startsWith('G8'));
-    expect(g8.map((r) => r.text)).toEqual(['Sam has no salary entered — the projection carries no income for them.']);
-    expect(g8[0].cta).toEqual({ label: 'Open Persons →', to: '/inputs/persons' });
-    expect(g8[0].id).toBe('G8:2');
+    expect(g8.map((r) => [r.id, r.text])).toEqual([
+      ['G8h:1', "Alex is paid hourly — the projection doesn't model hourly pay, so it carries no income for them."],
+      ['G8:2', 'Sam has no salary entered — the projection carries no income for them.'],
+    ]);
+    for (const r of g8) expect(r.cta).toEqual({ label: 'Open Persons →', to: '/inputs/persons' });
+  });
+
+  it('G8 / G8h interleave in person-id order (one loop, one home)', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [
+        makePerson({ id: 3, name: 'Kim', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 }),
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 }),
+        makePerson({ id: 2, name: 'Sam', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 45 }),
+      ],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id)).toEqual(['G8:1', 'G8h:2', 'G8h:3']);
+  });
+
+  it('a salaried-with-overtime person (salary > 0, hourly rate set) gets NO row', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 90_000, hourlyRate: 45 })],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8'))).toEqual([]);
+  });
+
+  // Review MAJOR 0 (fix): the app's own hourly discriminator is employmentType
+  // (PaycheckCard.tsx:199-202 rejected salary/rate detection for exactly this
+  // misread). employment-fields.ts zeroes salary FOR hourly persons but
+  // forbids a $0 salary for NO type, and employmentPatchFromDraft keeps
+  // d.hourlyRate for every type — so both salaried shapes below are
+  // persistable, and PersonsTab (the row's own CTA destination) labels them
+  // 'Salary $0' / 'Salary $0 + OT'. They get G8, which is true for them.
+  it('a SALARY_WITH_OT person at $0 salary with an hourly rate gets G8, not the hourly sentence', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'SALARY_WITH_OT', hourlyRate: 45 })],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => [r.id, r.text])).toEqual([
+      ['G8:1', 'Alex has no salary entered — the projection carries no income for them.'],
+    ]);
+  });
+
+  it('a SALARY_NO_OT person carrying a stale hourly rate (an HOURLY → salaried switch) gets G8', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'SALARY_NO_OT', hourlyRate: 45 })],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => [r.id, r.text])).toEqual([
+      ['G8:1', 'Alex has no salary entered — the projection carries no income for them.'],
+    ]);
+  });
+
+  it('an HOURLY person with no rate on file still gets G8 (nothing says they are paid hourly but the type)', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: null })],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id)).toEqual(['G8:1']);
+  });
+
+  // Review MINOR 0 (folded into the MAJOR 0 fix): "carries no income for them"
+  // is false the moment a compared scenario models a raise / promotion /
+  // job change / sabbatical for that person — the engine seeds currentSalary
+  // at the $0 base and then APPLIES the payload's events (apply-real.ts:429-449
+  // on engine.ts:514-526). The row goes silent instead of stating it.
+  const EVENT_AT = (idx: number) => ({
+    ...P(),
+    income: {
+      perPerson: Array.from({ length: idx + 1 }, (_, i) => (
+        i === idx
+          ? { annualRaiseRate: 0, events: [{ when: '2027-03-01', type: 'raise' as const, deltaAmount: 5_000 }] }
+          : { annualRaiseRate: 0, events: [] }
+      )),
+    },
+  });
+
+  it('G8h stays silent when a compared scenario gives that hourly person an income event', () => {
+    const hourly = makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 45 });
+    const withEvent = settledInput({
+      persons: [hourly],
+      sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: EVENT_AT(0) }],
+    });
+    expect(buildModelGaps(withEvent).rows.filter((r) => r.id.startsWith('G8'))).toEqual([]);
+    // …and the same person WITHOUT the event still gets the hourly sentence.
+    expect(buildModelGaps(settledInput({ persons: [hourly] })).rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id))
+      .toEqual(['G8h:1']);
+  });
+
+  it('the event guard is PER PERSON INDEX, at the engine\'s own read width (engine.ts:515)', () => {
+    const persons = [
+      makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 45 }),
+      makePerson({ id: 2, name: 'Kim', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 }),
+    ];
+    // An event on the SECOND entry silences the second person only.
+    const second = settledInput({
+      persons,
+      sides: [{ name: 'Baseline', payload: P() }, { name: 'B', payload: EVENT_AT(1) }],
+    });
+    expect(buildModelGaps(second).rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id)).toEqual(['G8h:1']);
+    // A ONE-entry payload is read for BOTH persons (perPerson[idx] ?? [0]),
+    // so its event silences both.
+    const shared = settledInput({
+      persons,
+      sides: [{ name: 'Baseline', payload: P() }, { name: 'B', payload: EVENT_AT(0) }],
+    });
+    expect(buildModelGaps(shared).rows.filter((r) => r.id.startsWith('G8'))).toEqual([]);
+  });
+
+  // The byte-frozen CR-G8 keeps its pre-C1 reach (the same exposure shipped in
+  // v1.6.0): only the hourly row's causal clause is narrowed here. Chipped.
+  it('G8 (no pay of any kind) still renders under an income event — CR-G8 is byte-frozen', () => {
+    const rows = buildModelGaps(settledInput({
+      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 })],
+      sides: [{ name: 'Baseline', payload: P() }, { name: 'B', payload: EVENT_AT(0) }],
+    })).rows;
+    expect(rows.filter((r) => r.id.startsWith('G8')).map((r) => r.id)).toEqual(['G8:1']);
   });
 
   it('G8: two no-income persons render in person-id order', () => {
@@ -263,7 +380,10 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
       snapshots: [], contributions: [], roadmapHasUnanswered: true, settings: null,
-      persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 })],
+      persons: [
+        makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 }),
+        makePerson({ id: 2, name: 'Kim', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 45 }),   // C1: the G8h shape
+      ],
       sides: [{ name: 'Baseline', payload: seq }, { name: 'B2', payload: seq }],
     })).rows;
     // …plus the one row shape the all-rows fixture cannot reach: G10n, whose
@@ -273,7 +393,7 @@ describe('buildModelGaps — absence is the calm outcome', () => {
       settings: null,
       sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: seq }],
     })).rows.filter((r) => r.id === 'G10');
-    expect(rows.length).toBeGreaterThanOrEqual(8);
+    expect(rows.length).toBeGreaterThanOrEqual(9);
     expect(named).toHaveLength(1);
     for (const r of [...rows, ...named]) {
       expect(r.text).not.toMatch(ADVICE_LEXICON);

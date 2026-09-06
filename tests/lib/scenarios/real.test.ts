@@ -69,4 +69,33 @@ describe('toReal', () => {
     expect(realStates[0].gapToBrokerage).toBeUndefined();
     expect(realStates[0].gapToCash).toBeUndefined();
   });
+
+  // C1 (W3 chip c / D-C1-7): withdrawalTaxAccrued was the one per-step dollar
+  // flow toReal skipped. It resets to 0 every step (engine.ts:474) and
+  // accumulates within the step (engine.ts:754), so the month's factor is the
+  // right one — the same treatment as withdrawnFromInvestments beside it.
+  it('scales withdrawalTaxAccrued by the same factor as its sibling withdrawnFromInvestments', () => {
+    const states: MonthlyState[] = [
+      { ...make('2026-05', 100_000), withdrawalTaxAccrued: 0 },
+      { ...make('2027-05', 100_000), withdrawalTaxAccrued: 1000, withdrawnFromInvestments: 4000 },
+    ];
+    const real = toReal(states, 0.03, '2026-05');
+    expect(real[1].withdrawalTaxAccrued).toBeCloseTo(1000 / 1.03, 2);
+    expect(real[1].withdrawnFromInvestments).toBeCloseTo(4000 / 1.03, 2);
+    expect(real[0].withdrawalTaxAccrued).toBe(0);
+  });
+
+  it('preserves an undefined withdrawalTaxAccrued (seed month) distinctly from 0', () => {
+    expect(toReal([make('2027-05', 1)], 0.03, '2026-05')[0].withdrawalTaxAccrued).toBeUndefined();
+  });
+
+  it('COMPLETENESS: every optional per-step flow the engine resets (engine.ts:467-474) is scaled — add a new one here AND to toReal', () => {
+    const FLOWS = [
+      'compoundReturnAdded', 'gapToTaxAdvantaged', 'gapToBrokerage', 'gapToCash',
+      'leverContributionsInvested', 'lumpSumInvested', 'withdrawnFromInvestments', 'withdrawalTaxAccrued',
+    ] as const;
+    const s: MonthlyState = { ...make('2027-05', 100_000), ...Object.fromEntries(FLOWS.map((f) => [f, 100])) };
+    const real = toReal([s], 0.03, '2026-05')[0];
+    for (const f of FLOWS) expect(real[f], f).toBeCloseTo(100 / 1.03, 6);
+  });
 });

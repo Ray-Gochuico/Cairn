@@ -8,6 +8,7 @@ import { RenameScenarioDialog } from './RenameScenarioDialog';
 import type { Milestones } from '@/lib/scenarios';
 import { formatMonth } from '@/lib/format';
 import { prefKey } from '@/lib/explore-mode';
+import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
 
 interface ScenariosPanelProps {
   milestones: Map<number, Milestones>;
@@ -16,6 +17,13 @@ interface ScenariosPanelProps {
   /** Wave C (C11): the just-sent scenario's id (navigation state) — its row
    *  gets a calm ring on arrival so the handoff is visible. */
   highlightId?: number | null;
+  /** Review MINOR 2: whether the arrival is still UNCONSUMED. The ring is
+   *  painted for the whole visit; the one-time scroll is not. Defaults to
+   *  true, so every other caller keeps the C1 behavior. */
+  scrollOnArrival?: boolean;
+  /** Called once, when the arrival scroll actually happened — the page's
+   *  latch receipt. */
+  onArrivalScrolled?: () => void;
 }
 
 // W4 smoke D1: composed through prefKey() at both touches — collapsing the
@@ -32,6 +40,8 @@ export function ScenariosPanel({
   onOpenManage,
   onEditLevers,
   highlightId,
+  scrollOnArrival = true,
+  onArrivalScrolled,
 }: ScenariosPanelProps) {
   const store = useScenariosStore();
   const { scenarios, toggleVisibility, setActive, duplicate, remove } = store;
@@ -81,6 +91,36 @@ export function ScenariosPanel({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [openMenuId]);
+
+  // Latest-ref for the page's receipt: the callback must never widen the
+  // effect's deps, or an inline arrow from the caller would re-arm — and
+  // re-scroll — on every render.
+  const arrivalReceipt = useRef(onArrivalScrolled);
+  useEffect(() => { arrivalReceipt.current = onArrivalScrolled; }, [onArrivalScrolled]);
+
+  // C1 (smoke M2, 2026-09-02): the Send-to-What-If arrival landed at
+  // scrollTop 0 and the ringed row sat below the fold at 1024×700. Bring the
+  // row itself into view — once the LeverBar / FI cards above have settled
+  // (the CalculatorsLayout deep-link class), centered so the ring and the
+  // chart beneath it are both on screen. Calm by construction: no focus
+  // move, no aria-live, once per arrival; a collapsed panel has no row and
+  // the user's collapse choice wins. Cleanup cancels the poll on unmount.
+  //
+  // Review MINOR 2: "once per arrival" is the PAGE's fact, not this mount's —
+  // WhatIf swaps the FI-cards row and the projection Card in fragment order
+  // for the pills-position toggle, which re-parents the Card and remounts
+  // this panel with the same highlightId. So the page owns the latch (the
+  // CalculatorsLayout.tsx:344 consumedInitialHash shape) and passes
+  // scrollOnArrival; the panel reports back the moment it really scrolled.
+  // The RING is unaffected: it stays on the row for the whole visit.
+  useEffect(() => {
+    if (highlightId == null || !scrollOnArrival) return;
+    return scrollIntoViewWhenSettled(
+      () => menuRootRef.current?.querySelector(`li[data-row-id="${highlightId}"]`) ?? null,
+      'center',
+      () => arrivalReceipt.current?.(),
+    );
+  }, [highlightId, scrollOnArrival]);
 
   return (
     <div

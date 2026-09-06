@@ -1,18 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { emptyLeverPayload, LeverPayloadSchema, effectiveSwr } from '@/lib/scenarios';
+import {
+  emptyLeverPayload, LeverPayloadSchema, effectiveSwr, projectScenario,
+  type LeverPayload, type MonthlyState, type RealState,
+} from '@/lib/scenarios';
+import { effectiveCashApy } from '@/lib/scenarios/effective-cash-apy';
 import { summarizeLevers } from '@/lib/whatif/lever-summary';
 import {
   PLAN_LEVER_KEYS, ASSUMPTION_LEVER_KEYS, canonicalJson,
   computeAssumptionParity, buildLeverDiff, effectiveSwrOf, effectiveDrawdownTaxOf,
-  engineBaselineInflationOf,
+  engineBaselineInflationOf, engineCashApyOf, engineRetirementAgesOf,
+  type EngineContext,
 } from '@/lib/whatif/lever-diff';
-import type { LeverPayload } from '@/lib/scenarios';
+import { AccountType } from '@/types/enums';
+import type { Account, AppSettings, Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 import { makeHousehold } from '../../factories';
 
 const P = () => emptyLeverPayload();
 const HH = makeHousehold({ withdrawalRate: 0.04, inflationAssumption: 0.03 });
-const DEF = { inflation: 0.03, defaultDrawdownTaxRate: undefined };
+/** The RealState slice the parity mirrors read (C1): no cash accounts (the
+ *  engine grows cash at 0%), one person retiring at 65. */
+const DEF: EngineContext = {
+  inflation: 0.03, defaultDrawdownTaxRate: undefined,
+  defaultCashApy: null, cashAccountsWithBalances: [], persons: [{ targetRetirementAge: 65 }],
+};
+const CTX = (over: Partial<EngineContext> = {}): EngineContext => ({ ...DEF, ...over });
+const scenarioOf = (payload: LeverPayload): Scenario => ({
+  id: 1, name: 'S', isBaseline: false, color: '#4f86f7', lineStyle: 'solid',
+  visible: true, isActive: false, sortOrder: 1, leverPayload: payload,
+  createdAt: '2026-08-25T00:00:00Z', updatedAt: '2026-08-25T00:00:00Z',
+});
 
 describe('lever classification (completeness ratchet)', () => {
   it('every LeverPayload key belongs to exactly ONE class — a new lever fails until classified', () => {
@@ -33,11 +50,6 @@ describe('canonicalJson', () => {
 
 describe('engine-effective mirrors (parity with shipped resolvers)', () => {
   it('PARITY: effectiveSwrOf matches effectiveSwr across all three branches', () => {
-    const scenarioOf = (payload: LeverPayload): Scenario => ({
-      id: 1, name: 'S', isBaseline: false, color: '#4f86f7', lineStyle: 'solid',
-      visible: true, isActive: false, sortOrder: 1, leverPayload: payload,
-      createdAt: '2026-08-25T00:00:00Z', updatedAt: '2026-08-25T00:00:00Z',
-    });
     const withOverride = { ...P(), swrOverride: 0.035 };
     expect(effectiveSwrOf(withOverride, HH)).toBe(effectiveSwr(scenarioOf(withOverride), HH));
     expect(effectiveSwrOf(P(), HH)).toBe(effectiveSwr(scenarioOf(P()), HH));
@@ -74,14 +86,16 @@ describe('computeAssumptionParity', () => {
     const cases: [LeverPayload, string][] = [
       [{ ...base, returns: { ...base.returns, defaultRate: 0.055 } }, 'return 7% vs 5.5%'],
       [{ ...base, returns: { ...base.returns, overrides: { '2030': 0.02 } } }, 'year-specific return overrides differ'],
-      [{ ...base, returns: { ...base.returns, cashRate: 0.045 } }, 'cash rate default APY vs 4.5%'],
+      // CR-P3 renders ENGINE-effective values (C1): DEF has no cash accounts, so the engine's cash APY is 0%.
+      [{ ...base, returns: { ...base.returns, cashRate: 0.045 } }, 'cash rate 0% vs 4.5%'],
       // CR-P5 renders ENGINE-effective values (review MINOR 7): DEF.inflation
       // 0.03 is what the engine reads for the null-lever side.
       [{ ...base, inflation: { ...base.inflation, defaultRate: 0.04 } }, 'inflation 3% vs 4%'],
       [{ ...base, inflation: { ...base.inflation, overrides: { '2031': 0.05 } } }, 'year-specific inflation overrides differ'],
       [{ ...base, swrOverride: 0.035 }, 'withdrawal rate 4% vs 3.5%'],
       [{ ...base, withdrawalStrategy: 'sequential' }, 'withdrawal strategy proportional vs sequential'],
-      [{ ...base, retirementAgeOverride: 60 }, 'retirement age default vs 60'],
+      // CR-P10 renders ENGINE-effective ages (C1): DEF's one person retires at 65.
+      [{ ...base, retirementAgeOverride: 60 }, 'retirement age 65 vs 60'],
       [{ ...base, expenseSource: 'rolling12m' }, 'expenses base custom vs 12-month average'],
       [{ ...base, annualLongTermGains: 12_000 }, 'long-term gains $0/yr vs $12,000/yr'],
       [{ ...base, annualQualifiedDividends: 2_500 }, 'qualified dividends $0/yr vs $2,500/yr'],
@@ -119,17 +133,17 @@ describe('computeAssumptionParity', () => {
   // (engine.ts:196-201), so the claim would be false.
   it('CR-P5 is engine-effective: a null lever against an equal engine default is SILENT', () => {
     const a = { ...P(), inflation: { defaultRate: 0.03, overrides: {} } };
-    const r = computeAssumptionParity(a, P(), HH, { inflation: 0.03 });
+    const r = computeAssumptionParity(a, P(), HH, CTX({ inflation: 0.03 }));
     expect(r.differences).toEqual([]);
     expect(r.equal).toBe(true);
   });
 
   it('CR-P5 names the EFFECTIVE values when they genuinely differ', () => {
     const a = { ...P(), inflation: { defaultRate: 0.03, overrides: {} } };
-    expect(computeAssumptionParity(a, P(), HH, { inflation: 0.025 }).differences)
+    expect(computeAssumptionParity(a, P(), HH, CTX({ inflation: 0.025 })).differences)
       .toEqual(['inflation 3% vs 2.5%']);
     // Both sides null, engine default present → the engine sees one number.
-    expect(computeAssumptionParity(P(), P(), HH, { inflation: 0.025 }).differences).toEqual([]);
+    expect(computeAssumptionParity(P(), P(), HH, CTX({ inflation: 0.025 })).differences).toEqual([]);
   });
 
   // Review MAJOR 4 (CR-P9 / CR-P12): the guards are "≥1 side", not "both
@@ -137,7 +151,7 @@ describe('computeAssumptionParity', () => {
   it('CR-P9/CR-P12 fire at the ONE-side boundary (the engine-live side is named)', () => {
     const base = P();
     const seqA = { ...base, withdrawalStrategy: 'sequential' as const, effectiveDrawdownTaxRate: 0.22 };
-    expect(computeAssumptionParity(seqA, base, HH, { inflation: 0.03, defaultDrawdownTaxRate: 0.15 }).differences)
+    expect(computeAssumptionParity(seqA, base, HH, CTX({ defaultDrawdownTaxRate: 0.15 })).differences)
       .toEqual(['withdrawal strategy sequential vs proportional', 'drawdown tax 22% vs 15%']);
     const rollingA = { ...base, expenseSource: 'rolling12m' as const };
     const customB = { ...base, expenseSource: 'custom' as const, customMonthly: 5_000 };
@@ -159,13 +173,13 @@ describe('computeAssumptionParity', () => {
     expect(r.differences).toEqual([
       'return 7% vs 5.5%',
       'withdrawal rate 4% vs 3.5%',
-      'retirement age default vs 60',
+      'retirement age 65 vs 60',
     ]);
   });
 
   it('inflation view feeds the deflator clause (effective + overrides flags)', () => {
     const b = { ...P(), inflation: { defaultRate: 0.04, overrides: { '2031': 0.05 } } };
-    const r = computeAssumptionParity(P(), b, HH, { inflation: 0.03 });
+    const r = computeAssumptionParity(P(), b, HH, CTX());
     expect(r.inflation).toEqual({ aEffective: 0.03, bEffective: 0.04, aHasOverrides: false, bHasOverrides: true });
   });
 
@@ -174,6 +188,191 @@ describe('computeAssumptionParity', () => {
     const r = computeAssumptionParity(P(), P(), hhHighInflation, DEF);
     expect(r.equal).toBe(true);
     expect(r.inflation.aEffective).toBe(0.03);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C1 — CR-P3 (cash rate) and CR-P10 (retirement age) were the last two RAW
+// comparisons in the parity table (review chip, 2026-09-01). The yardstick's
+// clause 4 claims the PROJECTION's assumptions differ, so both now resolve
+// the way the ENGINE resolves them and are checked against a projectScenario
+// run — silence where the projection is byte-identical, the engine's own
+// numbers where it is not.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('engine-effective mirrors — C1 cash rate + retirement age', () => {
+  const acct = (id: number, apyRate: number | null): Account =>
+    ({ id, type: AccountType.ACCOUNT_SAVINGS, apyRate } as unknown as Account);
+
+  it('engineCashApyOf builds the engine\'s two shims and calls the SHIPPED resolver (engine.ts:158-173)', () => {
+    const accounts = [{ account: acct(1, 0.04), balance: 7_000 }, { account: acct(2, null), balance: 3_000 }];
+    const withDefault = CTX({ cashAccountsWithBalances: accounts, defaultCashApy: 0.02 });
+    const noDefault = CTX({ cashAccountsWithBalances: accounts, defaultCashApy: null });
+    // 1. the lever wins outright
+    const lever = { ...P(), returns: { ...P().returns, cashRate: 0.045 } };
+    expect(engineCashApyOf(lever, withDefault)).toBe(0.045);
+    expect(engineCashApyOf(lever, withDefault))
+      .toBe(effectiveCashApy(scenarioOf(lever), accounts, { defaultCashApy: 0.02 } as AppSettings));
+    // 2. balance-weighted: (7000×0.04 + 3000×0.02) / 10000 with the Settings default;
+    //    the null-APY account reads 0 without it (settingsShim is null — engine.ts:166-168)
+    expect(engineCashApyOf(P(), withDefault)).toBeCloseTo(0.034, 12);
+    expect(engineCashApyOf(P(), noDefault)).toBeCloseTo(0.028, 12);
+    expect(engineCashApyOf(P(), noDefault)).toBe(effectiveCashApy(scenarioOf(P()), accounts, null));
+    // 3. no cash accounts → 0 (the engine then applies no cash growth at all)
+    expect(engineCashApyOf(P(), CTX({ cashAccountsWithBalances: [] }))).toBe(0);
+  });
+
+  it('engineRetirementAgesOf mirrors engine.ts:517 PER PERSON (override ?? target ?? null)', () => {
+    const persons = [{ targetRetirementAge: 65 }, { targetRetirementAge: 62 }];
+    expect(engineRetirementAgesOf(P(), CTX({ persons }))).toEqual([65, 62]);
+    expect(engineRetirementAgesOf({ ...P(), retirementAgeOverride: 60 }, CTX({ persons }))).toEqual([60, 60]);
+    expect(engineRetirementAgesOf(P(), CTX({ persons: [{}] }))).toEqual([null]);
+    expect(engineRetirementAgesOf({ ...P(), retirementAgeOverride: 60 }, CTX({ persons: [] }))).toEqual([]);
+  });
+
+  it('CR-P3 is engine-effective: a lever EQUAL to the weighted account APY is SILENT; unequal names both engine numbers', () => {
+    const ctx = CTX({ cashAccountsWithBalances: [{ account: acct(1, 0.045), balance: 10_000 }] });
+    const lever = (cashRate: number | null): LeverPayload => ({ ...P(), returns: { ...P().returns, cashRate } });
+    expect(computeAssumptionParity(lever(null), lever(0.045), HH, ctx).differences).toEqual([]);
+    expect(computeAssumptionParity(lever(null), lever(0.045), HH, ctx).equal).toBe(true);
+    expect(computeAssumptionParity(lever(null), lever(0.03), HH, ctx).differences).toEqual(['cash rate 4.5% vs 3%']);
+    // both null → one number to the engine, whatever it is
+    expect(computeAssumptionParity(lever(null), lever(null), HH, ctx).differences).toEqual([]);
+  });
+
+  it('CR-P3 compares at the RENDERED precision — a floating-point ulp never names a difference (D-C1-1)', () => {
+    // (7000×0.04 + 3000×0.02) / 10000 is EXACTLY 0.034 in IEEE754 (both
+    // products land on the integers 280 and 60), so this pair agrees under
+    // either comparison — it pins the PHRASE. The test below pins the
+    // rounding RULE with a book that really does carry a ulp (review MAJOR 1).
+    const ctx = CTX({
+      cashAccountsWithBalances: [{ account: acct(1, 0.04), balance: 7_000 }, { account: acct(2, 0.02), balance: 3_000 }],
+    });
+    const typed = { ...P(), returns: { ...P().returns, cashRate: 0.034 } };
+    expect(computeAssumptionParity(P(), typed, HH, ctx).differences).toEqual([]);
+    const off = { ...P(), returns: { ...P().returns, cashRate: 0.0341 } };
+    expect(computeAssumptionParity(P(), off, HH, ctx).differences).toEqual(['cash rate 3.4% vs 3.41%']);
+  });
+
+  it('CR-P3: a GENUINE sub-rendered-precision ulp stays silent — an exact-float compare would print "cash rate 1.3% vs 1.3%" (D-C1-1)', () => {
+    // The real input path, on two ordinary savings accounts: 1000 @ 1% +
+    // 1500 @ 1.5% weights to exactly 0.013, while the popover stores what the
+    // user typed as Number('1.3') / 100 === 0.013000000000000001
+    // (ReturnSchedulePopover.tsx:138; lever-types.ts:87 passes it through
+    // unrounded). Both render '1.3%' — ONE rate to the projection.
+    const ctx = CTX({
+      cashAccountsWithBalances: [{ account: acct(1, 0.01), balance: 1_000 }, { account: acct(2, 0.015), balance: 1_500 }],
+    });
+    const typed = { ...P(), returns: { ...P().returns, cashRate: Number('1.3') / 100 } };
+    // Precondition: the two engine-effective numbers really are UNEQUAL…
+    expect(engineCashApyOf(P(), ctx)).toBe(0.013);
+    expect(engineCashApyOf(typed, ctx)).not.toBe(engineCashApyOf(P(), ctx));
+    // …and the yardstick is silent anyway, because the projection sees one rate.
+    expect(computeAssumptionParity(P(), typed, HH, ctx).differences).toEqual([]);
+    expect(computeAssumptionParity(P(), typed, HH, ctx).equal).toBe(true);
+    // A difference AT the rendered precision is still named.
+    const off = { ...P(), returns: { ...P().returns, cashRate: 0.0131 } };
+    expect(computeAssumptionParity(P(), off, HH, ctx).differences).toEqual(['cash rate 1.3% vs 1.31%']);
+  });
+
+  it('CR-P10 is engine-effective: an override equal to EVERY person\'s target is silent; per-person ages join " / "', () => {
+    const two = CTX({ persons: [{ targetRetirementAge: 65 }, { targetRetirementAge: 62 }] });
+    const over = (age: number | null): LeverPayload => ({ ...P(), retirementAgeOverride: age });
+    expect(computeAssumptionParity(over(null), over(65), HH, two).differences)
+      .toEqual(['retirement age 65 / 62 vs 65 / 65']);
+    const same = CTX({ persons: [{ targetRetirementAge: 65 }, { targetRetirementAge: 65 }] });
+    expect(computeAssumptionParity(over(null), over(65), HH, same).differences).toEqual([]);
+    expect(computeAssumptionParity(over(null), over(65), HH, same).equal).toBe(true);
+    expect(computeAssumptionParity(over(null), over(60), HH, same).differences)
+      .toEqual(['retirement age 65 / 65 vs 60 / 60']);
+  });
+
+  // Review MINOR 7: the silence here is NOT carried by a length guard — the
+  // one that used to sit in front of this clause was an equivalent mutant
+  // (`[].some(...)` is already false) commented as if it were load-bearing.
+  // The pin is unchanged; only the mechanism named in the source is.
+  it('CR-P10 is engine-inert without persons on file (the per-person map is empty); a target-less person renders "default"', () => {
+    const over = (age: number | null): LeverPayload => ({ ...P(), retirementAgeOverride: age });
+    expect(computeAssumptionParity(over(null), over(60), HH, CTX({ persons: [] })).differences).toEqual([]);
+    expect(computeAssumptionParity(over(null), over(60), HH, CTX({ persons: [{}] })).differences)
+      .toEqual(['retirement age default vs 60']);
+  });
+
+  it('a sparse EngineContext throws instead of silently reporting "engine-inert" (D-C1-2)', () => {
+    expect(() => computeAssumptionParity(P(), P(), HH, { inflation: 0.03 } as unknown as EngineContext)).toThrow();
+  });
+
+  // ── ENGINE-RUN parity: the mirror's verdict against projectScenario's own output ──
+  // A deliberately SPARSE RealState (tests sit outside tsconfig's `include`;
+  // the engine `?? []`s / `?? 0`s every field left out — the retirement.test.ts
+  // / engine-compounding.test.ts fixture idiom). No income tax: a no-tax
+  // schedule is a single ZERO-RATE bracket, never [] (house gotcha).
+  const ZERO_TAX = {
+    federal: [{ min: 0, max: null, rate: 0 }],
+    state: [], city: null,
+    standardDeduction: { federal: 0, state: 0, city: 0 },
+  };
+  const sparseReal = (over: Partial<RealState>): RealState => ({
+    accounts: [], holdings: [], loans: [], loanPayments: [],
+    household: {
+      id: 1, filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0,
+      withdrawalRate: 0.04, inflationAssumption: 0.025, growthScenarios: [],
+    } as unknown as Household,
+    persons: [],
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
+    initialCash: 0,
+    initialInvestmentsByAccount: {},
+    cashAccountsWithBalances: [],
+    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    startISO: '2026-05',
+    taxBrackets: ZERO_TAX,
+    ...over,
+  } as unknown as RealState);
+
+  it('ENGINE PARITY (CR-P3): a null cash lever against the engine\'s own weighted APY projects the SAME cash — and the mirror says so', () => {
+    const real = sparseReal({
+      initialCash: 10_000,
+      cashAccountsWithBalances: [{ account: acct(99, 0.05), balance: 10_000 }],
+    });
+    const ctx: EngineContext = {
+      inflation: 0, defaultCashApy: null,
+      cashAccountsWithBalances: real.cashAccountsWithBalances, persons: [],
+    };
+    const noGrowth = (cashRate: number | null): LeverPayload =>
+      ({ ...P(), returns: { ...P().returns, defaultRate: 0, cashRate } });
+    const H = { startISO: '2026-05', months: 13 };
+    const nullLever = projectScenario(real, noGrowth(null), H);
+    const sameRate = projectScenario(real, noGrowth(0.05), H);
+    const lowerRate = projectScenario(real, noGrowth(0.03), H);
+    expect(nullLever[12].cash).toBeCloseTo(10_500, 0);                    // the engine really grows cash at 5%
+    expect(sameRate[12].cash).toBeCloseTo(nullLever[12].cash, 8);         // an equal lever changes nothing…
+    expect(computeAssumptionParity(noGrowth(null), noGrowth(0.05), HH, ctx).differences).toEqual([]); // …so parity is silent
+    expect(lowerRate[12].cash).toBeLessThan(nullLever[12].cash);          // a real difference…
+    expect(computeAssumptionParity(noGrowth(null), noGrowth(0.03), HH, ctx).differences)
+      .toEqual(['cash rate 5% vs 3%']);                                    // …is named with the engine's numbers
+  });
+
+  it('ENGINE PARITY (CR-P10): an override equal to the person\'s own target changes nothing the engine does — silent; a different age is named', () => {
+    // Born 1981-05-15, target 50 → salary stops at 2031-06 (month 61 from 2026-05;
+    // ageAtMonth('1981-05-15','2031-06') = 50 — retirement.test.ts).
+    const person = {
+      id: 1, householdId: 1, name: 'P1', dateOfBirth: '1981-05-15',
+      targetRetirementAge: 50, annualSalaryPretax: 135_000,
+    } as unknown as Person;
+    const real = sparseReal({ persons: [person] });
+    const ctx: EngineContext = { inflation: 0, cashAccountsWithBalances: [], persons: real.persons };
+    const withAge = (retirementAgeOverride: number | null): LeverPayload => ({ ...P(), retirementAgeOverride });
+    const H = { startISO: '2026-05', months: 120 };
+    const income = (states: MonthlyState[]): number[] => states.map((s) => s.incomeAfterTax);
+    const target = projectScenario(real, withAge(null), H);
+    const same = projectScenario(real, withAge(50), H);
+    const later = projectScenario(real, withAge(55), H);
+    expect(income(same)).toEqual(income(target));                                       // month for month
+    expect(computeAssumptionParity(withAge(null), withAge(50), HH, ctx).differences).toEqual([]);
+    expect(target[61].incomeAfterTax).toBe(0);                                          // retired at 50
+    expect(later[61].incomeAfterTax).toBeGreaterThan(0);                                // still earning at 50 under 55
+    expect(income(later)).not.toEqual(income(target));
+    expect(computeAssumptionParity(withAge(null), withAge(55), HH, ctx).differences)
+      .toEqual(['retirement age 50 vs 55']);
   });
 });
 
@@ -392,5 +591,61 @@ describe('buildLeverDiff — income shape is not a difference (smoke D1)', () =>
     );
     expect(d.onlyInA).toEqual(['Income event 2027-03: raise +$5,000 (person 2)']);
     expect(d.onlyInB).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C1 — the engine reads income.perPerson[idx] for idx < real.persons.length
+// ONLY (engine.ts:515), falling back to entry 0. With ONE person on file a
+// differing SECOND entry is never read — reporting it was a difference the
+// projected lines don't have (W3 review chip). The page passes the person
+// count; without it (no engine context) the entry-width comparison stands.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('buildLeverDiff — personCount is the engine\'s read width (C1)', () => {
+  const plans = (...pp: { annualRaiseRate: number; events?: LeverPayload['income']['perPerson'][number]['events'] }[]): LeverPayload => ({
+    ...P(),
+    income: { perPerson: pp.map((p) => ({ annualRaiseRate: p.annualRaiseRate, events: p.events ?? [] })) },
+  });
+  const RAISE_EVT = { when: '2027-03-01', type: 'raise', deltaAmount: 5_000 } as const;
+
+  it('one person on file: a differing SECOND entry is engine-inert — no raises line, no event', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05, events: [RAISE_EVT] });
+    const d = buildLeverDiff(a, b, { loanNames: {}, personCount: 1 });
+    expect(d).toEqual({ onlyInA: [], onlyInB: [], changed: [], isEmpty: true });
+  });
+
+  it('two persons on file: the same second entry IS a difference, in the frozen formats', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05, events: [RAISE_EVT] });
+    const d = buildLeverDiff(a, b, { loanNames: {}, personCount: 2 });
+    expect(d.changed).toEqual(['Annual raises: 3% / 3% vs 3% / 5%']);
+    expect(d.onlyInB).toEqual(['Income event 2027-03: raise +$5,000 (person 2)']);
+    expect(d.isEmpty).toBe(false);
+  });
+
+  it('one entry, two persons on file: the entry is read for BOTH persons (engine.ts:515), so its event renders per person', () => {
+    const d = buildLeverDiff(P(), plans({ annualRaiseRate: 0, events: [RAISE_EVT] }), { loanNames: {}, personCount: 2 });
+    expect(d.onlyInB).toEqual([
+      'Income event 2027-03: raise +$5,000 (person 1)',
+      'Income event 2027-03: raise +$5,000 (person 2)',
+    ]);
+  });
+
+  it('zero persons on file: income levers are inert', () => {
+    const d = buildLeverDiff(P(), plans({ annualRaiseRate: 0.05, events: [RAISE_EVT] }), { loanNames: {}, personCount: 0 });
+    expect(d.isEmpty).toBe(true);
+  });
+
+  it('omitted personCount keeps the entry-width comparison (no engine context)', () => {
+    const a = plans({ annualRaiseRate: 0.03 });
+    const b = plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05 });
+    expect(buildLeverDiff(a, b, { loanNames: {} }).changed).toEqual(['Annual raises: 3% / 3% vs 3% / 5%']);
+  });
+
+  it('PROPERTY: byte-identical output for independently constructed equal inputs (with personCount)', () => {
+    const mk = () => plans({ annualRaiseRate: 0.03 }, { annualRaiseRate: 0.05 });
+    expect(JSON.stringify(buildLeverDiff(mk(), P(), { loanNames: {}, personCount: 2 })))
+      .toBe(JSON.stringify(buildLeverDiff(mk(), P(), { loanNames: {}, personCount: 2 })));
   });
 });
