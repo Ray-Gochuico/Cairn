@@ -48,16 +48,25 @@ archive paths.
   other's cold optimize. The first start of a role in a tree pays one cold
   optimize; `rm -rf .vite.local` resets.
 - **Dev stamp.** Every dev server answers `GET /__cairn/dev-stamp` with
-  `{ root, role, port, seed, nonce, pid, head, cacheDir }` (a serve-only plugin;
-  absent from `vite build`). `curl -s localhost:1422/__cairn/dev-stamp` tells you
-  which tree a port is serving.
+  `{ root, role, port, seed, shim, nonce, pid, head, cacheDir }` (a serve-only
+  plugin; absent from `vite build`). `curl -s localhost:1422/__cairn/dev-stamp`
+  tells you which tree a port is serving.
 - **Playwright never attaches silently.** `reuseExistingServer` is off by
   default; a busy 1422/1423 fails at once with Playwright's "is already used"
   error. `PW_REUSE_SERVER=1` attaches to a server you started yourself —
-  `e2e/global-setup.ts` still refuses a server from another tree or of the
-  wrong role.
-- **Load policy.** At or above `0.7 × cores` 1-min load the suite runs
-  serialized with a 120 s test timeout and says so; at or above `1.5 × cores`
-  (local only) it refuses to run. `E2E_LOAD_SOFT`, `E2E_LOAD_HARD`,
-  `E2E_LOAD_GUARD=0`. The last log line names timeouts apart from failures with
-  the load at start and end; the exit code is never changed by it.
+  `e2e/global-setup.ts` still refuses a server from another tree, of another
+  role, or without the browser shim (the tree is compared as a path, not as a
+  spelling: realpath, forward slashes, no trailing separator).
+- **Load policy.** Above `0.7 × cores` 1-min load the suite runs serialized with
+  a 120 s test timeout and says so; at or above `1.5 × cores` (local only) it
+  refuses to run, once, with that one line. `E2E_LOAD_SOFT`, `E2E_LOAD_HARD`,
+  `E2E_LOAD_GUARD=0`. The reading is taken once per run, in the main process,
+  and every worker inherits it. After the run summary the reporter prints one
+  line naming timeouts apart from failures with the load at start and end (the
+  list reporter's failure detail follows it, so it is not the last line of the
+  log); the exit code is never changed by it — `onEnd` returns nothing, and a
+  test pins that it never returns a status.
+- **Type-checking the harness.** `npx tsc -p tsconfig.node.json --noEmit` covers
+  `vite.config.ts`, `playwright.config.ts`, `scripts/dev-servers.ts` and all of
+  `e2e/`; the root `npx tsc --noEmit` still covers `src/` only. Its build info
+  is written under `.vite.local/`, so the receipt leaves the tree clean.

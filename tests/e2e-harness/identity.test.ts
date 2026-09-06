@@ -2,7 +2,7 @@
 import http from 'node:http';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { assertServerIdentity, fetchDevStamp } from '../../e2e/identity';
+import { assertServerIdentity, fetchDevStamp, type ExpectedIdentity } from '../../e2e/identity';
 import { E2E_ROOT, E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER } from '../../e2e/servers';
 import { DEV_ROLE_PORTS, DEV_STAMP_PATH, type DevStamp } from '../../scripts/dev-servers';
 
@@ -11,13 +11,22 @@ const stamp = (over: Partial<DevStamp> = {}): DevStamp => ({
   role: 'seed',
   port: 1422,
   seed: true,
+  shim: true,
   nonce: 'run-1',
   pid: 42,
   head: 'a'.repeat(40),
   cacheDir: '/trees/main/.vite.local/seed',
   ...over,
 });
-const expected = { root: '/trees/main', nonce: 'run-1', seed: true, port: 1422, label: 'seeded' };
+const expected: ExpectedIdentity = {
+  root: '/trees/main',
+  nonce: 'run-1',
+  seed: true,
+  role: 'seed',
+  shim: true,
+  port: 1422,
+  label: 'seeded',
+};
 
 describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
   it('passes for the server this run launched from this tree', () => {
@@ -51,16 +60,60 @@ describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
     );
   });
 
+  it('enforces the ROLE, not only the seed flag: a hand-started tauri-role server with VITE_SEED_DEMO=1 is refused', () => {
+    // MINOR 4: role tauri optimizes deps into .vite.local/tauri — the very
+    // per-role isolation T1 built — while still reporting seed=true.
+    expect(() => assertServerIdentity(stamp({ role: 'tauri' }), expected)).toThrow(
+      /reports role=tauri; this project expects role=seed/,
+    );
+    expect(() =>
+      assertServerIdentity(stamp({ role: 'fresh', seed: false }), {
+        ...expected,
+        role: 'fresh',
+        seed: false,
+        label: 'fresh',
+        port: 1423,
+      }),
+    ).not.toThrow();
+  });
+
+  it('enforces the SHIM flag: a server resolving the real @tauri-apps modules is refused', () => {
+    expect(() => assertServerIdentity(stamp({ shim: false }), expected)).toThrow(
+      /reports shim=false; this project expects shim=true/,
+    );
+    // a stamp from a server that predates the shim field fails closed, too
+    const old = stamp();
+    delete (old as { shim?: boolean }).shim;
+    expect(() => assertServerIdentity(old, expected)).toThrow(/shim=undefined/);
+  });
+
+  it('compares TREES, not spellings: separators and a trailing slash are normalized (MINOR 3, Windows)', () => {
+    const win = { ...expected, root: 'C:\\trees\\main' };
+    expect(() => assertServerIdentity(stamp({ root: 'C:/trees/main' }), win)).not.toThrow();
+    expect(() => assertServerIdentity(stamp({ root: 'C:/trees/main/' }), win)).not.toThrow();
+    expect(() => assertServerIdentity(stamp({ root: '/trees/main/' }), expected)).not.toThrow();
+    // a genuinely different tree is still a different tree
+    expect(() => assertServerIdentity(stamp({ root: 'C:/trees/w4' }), win)).toThrow(
+      /DIFFERENT tree/,
+    );
+  });
+
   it('every message keeps the calm register', () => {
     const messages: string[] = [];
-    for (const bad of [stamp({ root: '/x' }), stamp({ nonce: null }), stamp({ seed: false })]) {
+    for (const bad of [
+      stamp({ root: '/x' }),
+      stamp({ nonce: null }),
+      stamp({ seed: false }),
+      stamp({ role: 'tauri' }),
+      stamp({ shim: false }),
+    ]) {
       try {
         assertServerIdentity(bad, expected);
       } catch (e) {
         messages.push((e as Error).message);
       }
     }
-    expect(messages).toHaveLength(3);
+    expect(messages).toHaveLength(5);
     for (const m of messages) {
       expect(m).not.toMatch(/!/);
       expect(m).not.toMatch(/you should/i);
@@ -111,6 +164,7 @@ describe('e2e/servers.ts — the two servers and this tree', () => {
       role: 'seed',
       port: DEV_ROLE_PORTS.seed,
       seed: true,
+      shim: true,
       script: 'dev:browser:seed',
       url: 'http://localhost:1422',
     });
@@ -118,8 +172,11 @@ describe('e2e/servers.ts — the two servers and this tree', () => {
       role: 'fresh',
       port: DEV_ROLE_PORTS.fresh,
       seed: false,
+      shim: true,
       script: 'dev:browser:fresh',
       url: 'http://localhost:1423',
     });
+    // both e2e projects run the browser-shim app (identity enforces it)
+    for (const s of E2E_SERVERS) expect(s.shim, s.name).toBe(true);
   });
 });

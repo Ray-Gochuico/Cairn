@@ -72,6 +72,8 @@ export interface DevStamp {
   role: DevRole;
   port: number | null;
   seed: boolean;
+  /** VITE_BROWSER_SHIM: the @tauri-apps/* imports are the browser shims, not the real plugins. */
+  shim: boolean;
   /** CAIRN_DEV_NONCE of the launching process; null for a hand-started server. */
   nonce: string | null;
   pid: number;

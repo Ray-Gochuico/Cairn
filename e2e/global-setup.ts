@@ -20,6 +20,8 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       root: E2E_ROOT,
       nonce: reuse ? null : nonce,
       seed: s.seed,
+      role: s.role,
+      shim: s.shim,
       port: s.port,
       label: s.name,
     });

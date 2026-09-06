@@ -1,6 +1,6 @@
 // @vitest-environment node
 import path from 'node:path';
-import { loadConfigFromFile, type Plugin, type UserConfig } from 'vite';
+import { loadConfigFromFile, resolveConfig, type Plugin, type UserConfig } from 'vite';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEV_STAMP_PATH,
@@ -115,6 +115,19 @@ describe('vite.config.ts — the dev stamp (W-I D-I3)', () => {
     expect(plugin?.apply).toBe('serve');
   });
 
+  it('and Vite AGREES: the RESOLVED build plugin set has no stamp, and nothing defines its path (MINOR 7)', async () => {
+    // The pin above reads the declared literal off the user config;
+    // loadConfigFromFile does no filtering. This one asks Vite to resolve the
+    // config the way `vite build` does and checks what actually survives.
+    for (const k of ENV_KEYS) delete process.env[k];
+    const built = await resolveConfig({ configFile: CONFIG, root: ROOT }, 'build');
+    expect(built.plugins.map((p) => p.name)).not.toContain('cairn-dev-stamp');
+    expect(JSON.stringify(built.define ?? {})).not.toMatch(/__cairn|CAIRN_DEV|dev-stamp/);
+    // …and it IS there under serve, so the pin above is not vacuous.
+    const served = await resolveConfig({ configFile: CONFIG, root: ROOT }, 'serve');
+    expect(served.plugins.map((p) => p.name)).toContain('cairn-dev-stamp');
+  });
+
   it('answers with THIS tree, the role, the seed flag, the launcher nonce and the cache dir', async () => {
     const cfg = await loadViteConfig({
       VITE_BROWSER_SHIM: '1',
@@ -135,7 +148,16 @@ describe('vite.config.ts — the dev stamp (W-I D-I3)', () => {
     expect(body.nonce).toBe('run-42');
     expect(body.pid).toBe(process.pid);
     expect(body.cacheDir).toBe(devCacheDirFor(ROOT, 'seed'));
+    expect(body.shim).toBe(true);
     expect(body.head === null || /^[0-9a-f]{40}$/.test(body.head)).toBe(true);
+  });
+
+  it('names the SHIM flag too: a server without VITE_BROWSER_SHIM says so (identity refuses it)', async () => {
+    const cfg = await loadViteConfig({ CAIRN_DEV_ROLE: 'seed', VITE_SEED_DEMO: '1' });
+    const { body } = await askStamp(cfg, { root: ROOT, cacheDir: cfg.cacheDir! });
+    expect(body.shim).toBe(false);
+    expect(body.seed).toBe(true);
+    expect(body.role).toBe('seed');
   });
 
   it('a hand-started server carries no nonce (null), and the fresh role reports seed=false', async () => {
@@ -143,6 +165,7 @@ describe('vite.config.ts — the dev stamp (W-I D-I3)', () => {
     const { body } = await askStamp(cfg, { root: ROOT, cacheDir: cfg.cacheDir! });
     expect(body.nonce).toBeNull();
     expect(body.seed).toBe(false);
+    expect(body.shim).toBe(true);
     expect(body.role).toBe('fresh');
     expect(body.port).toBeNull();
   });

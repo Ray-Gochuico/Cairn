@@ -393,6 +393,31 @@ describe('expectBasisDiscipline — the W-I rows hook (chart DATA across bases)'
     );
   });
 
+  it('CONTRACT: a hook carrying ZERO rows throws — the pinned clause may not pass vacuously (MINOR 14)', () => {
+    // `[]` in both bases satisfies rT === rF: a pinned chart would "prove" its
+    // history is never re-inflated while carrying no history at all.
+    const EMPTY = () => '[]';
+    const EmptyPinned = mkDataChartCard(PINNED_CAP, EMPTY);
+    expect(() => expectBasisDiscipline(<EmptyPinned />, dataRegistry('pinned', 'today'))).toThrow(
+      /rows hook "rows" in "chart" carries zero rows/,
+    );
+    cleanup();
+    const EmptyConvertible = mkDataChartCard(CONV_CAP, EMPTY);
+    expect(() =>
+      expectBasisDiscipline(<EmptyConvertible />, dataRegistry('convertible')),
+    ).toThrow(/carries zero rows/);
+    cleanup();
+    // an empty attribute value is just as vacuous
+    const Blank = mkDataChartCard(PINNED_CAP, () => '');
+    expect(() => expectBasisDiscipline(<Blank />, dataRegistry('pinned', 'today'))).toThrow(
+      /carries zero rows/,
+    );
+    cleanup();
+    // …and one row is enough to be a witness (the guard is a floor, not a shape check)
+    const OneRow = mkDataChartCard(PINNED_CAP, SAME_ROWS);
+    expect(() => expectBasisDiscipline(<OneRow />, dataRegistry('pinned', 'today'))).not.toThrow();
+  });
+
   it('OPTIONAL: a chart registered without rowsTestId keeps the caption-only contract (W2 registrations untouched)', () => {
     const RowsFlipButUnhooked = mkDataChartCard(PINNED_CAP, FLIP_ROWS);
     expect(() =>

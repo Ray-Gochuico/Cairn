@@ -70,6 +70,9 @@ function cairnDevStamp(): Plugin {
           role: devRole,
           port: server.config.server.port ?? null,
           seed: process.env.VITE_SEED_DEMO === "1",
+          // The e2e projects need the SHIM app: a server resolving the real
+          // @tauri-apps/* packages answers on the same port and cannot boot.
+          shim: browserShim,
           nonce: process.env.CAIRN_DEV_NONCE ?? null,
           pid: process.pid,
           head,
