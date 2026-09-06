@@ -1,11 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { devCacheDirFor, devRoleFromEnv } from "./scripts/dev-servers";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 // @ts-expect-error process is a nodejs global
 const browserShim = process.env.VITE_BROWSER_SHIM === "1";
+
+// W-I D-I2: the server ROLE keys the dep cache (the config function cannot
+// see `--port`). CAIRN_DEV_ROLE wins; else seed / browser / tauri is derived
+// from the two VITE_ flags. A typo throws in devRoleFromEnv.
+const devRole = devRoleFromEnv(process.env);
 
 const shimDir = path.resolve(__dirname, "./src/lib/browser-shims");
 
@@ -29,6 +35,16 @@ const shimAliases = browserShim
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+
+  // W-I D-I1: `<tree>/.vite.local/<role>` — one dep cache per server role, per
+  // worktree. Vite's default (`node_modules/.vite`) is SHARED by every tree
+  // whose node_modules is a symlink to the main checkout: two servers cold-
+  // optimizing at once rewrote it under each other (two `?v=<hash>` values in
+  // one page → "Failed to fetch dynamically imported module", lazy routes stuck
+  // at "Loading page…", two React copies → "Invalid hook call"). `.vite.local`
+  // is covered by .gitignore's `*.local` — no ignore line needed.
+  cacheDir: devCacheDirFor(__dirname, devRole),
+
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "./src") },

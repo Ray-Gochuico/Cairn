@@ -89,14 +89,22 @@ function createMemoryStorage(): Storage {
 // Radix select migration to be deferred. They are purely additive and cannot
 // affect existing tests — all three are guarded so they never overwrite a
 // real implementation should jsdom eventually ship them.
-if (!Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = (): boolean => false;
-}
-if (!Element.prototype.releasePointerCapture) {
-  Element.prototype.releasePointerCapture = (): void => {};
-}
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = (): void => {};
+//
+// v1.7.0 W-I: also guarded on `typeof Element`, so this shared setup file
+// loads under `// @vitest-environment node` too (no DOM there at all). The
+// W-I harness tests need the node environment because esbuild — which vite's
+// `loadConfigFromFile` runs — cannot work under jsdom (its Uint8Array comes
+// from another realm). jsdom runs are byte-unaffected.
+if (typeof Element !== 'undefined') {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = (): boolean => false;
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = (): void => {};
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = (): void => {};
+  }
 }
 
 // Radix Checkbox/RadioGroup indicators reach @radix-ui/react-use-size, which
