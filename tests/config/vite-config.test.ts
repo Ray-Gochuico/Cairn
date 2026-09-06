@@ -2,7 +2,12 @@
 import path from 'node:path';
 import { loadConfigFromFile, type Plugin, type UserConfig } from 'vite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { devCacheDirFor, type DevRole } from '../../scripts/dev-servers';
+import {
+  DEV_STAMP_PATH,
+  devCacheDirFor,
+  type DevRole,
+  type DevStamp,
+} from '../../scripts/dev-servers';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const CONFIG = path.join(ROOT, 'vite.config.ts');
@@ -56,5 +61,89 @@ describe('vite.config.ts — per-role, per-tree dep cache (W-I D-I1/D-I2)', () =
   it('the shim port rule is unchanged (1421 shim, 1420 tauri; the seed/fresh scripts pass --port)', async () => {
     expect((await loadViteConfig({})).server?.port).toBe(1420);
     expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1' })).server?.port).toBe(1421);
+  });
+});
+
+class FakeRes {
+  statusCode = 200;
+  headers: Record<string, string> = {};
+  body = '';
+  setHeader(k: string, v: string) {
+    this.headers[k.toLowerCase()] = v;
+  }
+  end(chunk: string) {
+    this.body = chunk;
+  }
+}
+
+/** Drive the plugin's configureServer with a fake connect server; return the JSON it answers. */
+async function askStamp(
+  cfg: UserConfig,
+  fake: { root: string; cacheDir: string; port?: number },
+): Promise<{ status: number; type: string; body: DevStamp }> {
+  const plugin = flatPlugins(cfg).find((p) => p.name === 'cairn-dev-stamp');
+  if (!plugin) throw new Error('cairn-dev-stamp plugin missing');
+  const hook = plugin.configureServer;
+  const configure = typeof hook === 'function' ? hook : hook?.handler;
+  if (!configure) throw new Error('cairn-dev-stamp has no configureServer');
+  const mounts: Array<{ route: string; handler: (req: unknown, res: FakeRes) => void }> = [];
+  const server = {
+    config: { root: fake.root, cacheDir: fake.cacheDir, server: { port: fake.port } },
+    middlewares: {
+      use(route: string, handler: (req: unknown, res: FakeRes) => void) {
+        mounts.push({ route, handler });
+      },
+    },
+  };
+  await (configure as (s: unknown) => unknown).call(plugin, server);
+  const mounted = mounts[0];
+  if (!mounted) throw new Error('configureServer mounted nothing');
+  expect(mounted.route).toBe(DEV_STAMP_PATH);
+  const res = new FakeRes();
+  mounted.handler({}, res);
+  return {
+    status: res.statusCode,
+    type: String(res.headers['content-type']),
+    body: JSON.parse(res.body) as DevStamp,
+  };
+}
+
+describe('vite.config.ts — the dev stamp (W-I D-I3)', () => {
+  it('is serve-only: never part of a production build', async () => {
+    const cfg = await loadViteConfig({}, 'build');
+    const plugin = flatPlugins(cfg).find((p) => p.name === 'cairn-dev-stamp');
+    expect(plugin?.apply).toBe('serve');
+  });
+
+  it('answers with THIS tree, the role, the seed flag, the launcher nonce and the cache dir', async () => {
+    const cfg = await loadViteConfig({
+      VITE_BROWSER_SHIM: '1',
+      VITE_SEED_DEMO: '1',
+      CAIRN_DEV_NONCE: 'run-42',
+    });
+    const { status, type, body } = await askStamp(cfg, {
+      root: ROOT,
+      cacheDir: cfg.cacheDir!,
+      port: 1422,
+    });
+    expect(status).toBe(200);
+    expect(type).toBe('application/json');
+    expect(body.root).toBe(ROOT);
+    expect(body.role).toBe('seed');
+    expect(body.seed).toBe(true);
+    expect(body.port).toBe(1422);
+    expect(body.nonce).toBe('run-42');
+    expect(body.pid).toBe(process.pid);
+    expect(body.cacheDir).toBe(devCacheDirFor(ROOT, 'seed'));
+    expect(body.head === null || /^[0-9a-f]{40}$/.test(body.head)).toBe(true);
+  });
+
+  it('a hand-started server carries no nonce (null), and the fresh role reports seed=false', async () => {
+    const cfg = await loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh' });
+    const { body } = await askStamp(cfg, { root: ROOT, cacheDir: cfg.cacheDir! });
+    expect(body.nonce).toBeNull();
+    expect(body.seed).toBe(false);
+    expect(body.role).toBe('fresh');
+    expect(body.port).toBeNull();
   });
 });
