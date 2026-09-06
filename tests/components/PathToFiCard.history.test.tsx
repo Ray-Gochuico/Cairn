@@ -364,7 +364,7 @@ describe('PathToFiCard — History fan rendering (D-UB8, CH-3, CH-9)', () => {
     );
     // CH-3 drift-guard: the caption paraphrases DISCLOSURES.backtest — a future
     // body edit bumps the version, trips this pin, and forces a conscious review.
-    expect(DISCLOSURES.backtest.version).toBe('1.4');
+    expect(DISCLOSURES.backtest.version).toBe('1.5');
   });
 
   it('STOP holds line is byte-exact (CH-2 worked literal)', () => {
@@ -474,7 +474,7 @@ describe('PathToFiCard — gate (D-UB10)', () => {
      accepted-1.3 ⇒ re-gated, and nothing in the repo seeded '1.3' — a gate
      that grandfathered v1.3 accepters survived every suite. This is the
      household that exists in the field on the day W2 ships. */
-  it('an accepted v1.3 is re-gated on first History activation (the v1.4 transition)', () => {
+  it('an accepted v1.3 is re-gated on first History activation (the v1.4 transition, kept at v1.5: two versions back)', () => {
     useAcceptancesStore.setState({
       acceptedVersions: { backtest: '1.3' },
       status: 'ready',
@@ -484,7 +484,7 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.4')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
   });

@@ -356,11 +356,17 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   await page.getByTestId('stress-test-trigger').click();
   await expect(page.getByTestId('stress-test-meaning')).toContainText('Accept the Historical Backtest disclosure');
   await page.getByRole('button', { name: 'Read and accept the Backtest disclosure' }).click();
-  // exact:true — the diff box's first sentence ('Version 1.4 adds the
-  // History view…') would otherwise substring-match too (strict mode).
-  await expect(page.getByText('Version 1.4', { exact: true })).toBeVisible();
+  // exact:true — a diff box's first sentence ('Version 1.5 changes only…')
+  // would otherwise substring-match too (strict mode).
+  await expect(page.getByText('Version 1.5', { exact: true })).toBeVisible();
   await expect(page.getByText('What changed since you last accepted:')).toBeVisible();
-  await page.getByRole('checkbox', { name: /historical outcomes only/ }).check();
+  // CR-R3-1, exact — the v1.5 label names all three views the document covers.
+  await page
+    .getByRole('checkbox', {
+      name: 'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
+      exact: true,
+    })
+    .check();
   // DisclosureModal's continueLabel default is 'Continue' (verified at execution).
   await page.getByRole('button', { name: 'Continue' }).click();
   // Chips render; pick 2008 (the chip is a <label> wrapping a sr-only radio);

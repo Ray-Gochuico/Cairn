@@ -47,14 +47,16 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     expect(Object.keys(DISCLOSURES)).toHaveLength(5);
   });
 
-  it('shows each document version', () => {
+  it('shows each document version (exact text — the R3 what-changed notes also begin "Version x.y …")', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.4, interview=1.1 —
-    // versions are surfaced so a user can see which revision they are reading.
-    expect(screen.getByText(/Version 1\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/Version 1\.4/)).toBeInTheDocument(); // backtest, W2
-    expect(screen.getByText(/Version 1\.1/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Version 1\.0/).length).toBeGreaterThanOrEqual(2);
+    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.5, interview=1.1.
+    // Exact-string matches on purpose: two documents are now 1.5, and each
+    // note's first sentence ("Version 1.5 adds…", "Version 1.5 changes only…",
+    // "Version 1.1 adds…") would substring-match a regex.
+    expect(screen.getAllByText('Version 1.5')).toHaveLength(2); // app_wide + backtest (R3 bump)
+    expect(screen.getAllByText('Version 1.1')).toHaveLength(1); // interview
+    expect(screen.getAllByText('Version 1.0')).toHaveLength(2); // roadmap + learning
+    expect(screen.queryByText('Version 1.4')).toBeNull(); // the backtest bump landed
   });
 
   it('renders each document body as Markdown (bold → <strong>, no literal asterisks)', () => {
@@ -115,6 +117,6 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       '[data-testid="disclosure-viewer"]',
     );
     expect(appWide).not.toBeNull();
-    expect(within(appWide as HTMLElement).getByText(/Version 1\.5/)).toBeInTheDocument();
+    expect(within(appWide as HTMLElement).getByText('Version 1.5')).toBeInTheDocument();
   });
 });

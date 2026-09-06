@@ -79,6 +79,12 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 // (2026-09-02) widens the opening to a THIRD view — the History fan on the
 // Path to FI and Compound Interest calculators — and appends one paragraph
 // describing it. Every other v1.3 paragraph is carried over byte-identically.
+// v1.5 (v1.7.0 R3, 2026-09-06) changes the ACCEPTANCE CHECKBOX LABEL only:
+// it now names all three views the body covers (the v1.4 label named two).
+// The body is v1.4's, byte-identical (pinned by SHA-256 in tests/legal), so
+// the constant keeps its name; the version bumps because the label is consent
+// copy — a label change without a bump would silently rewrite what a v1.4
+// accepter agreed to.
 const BACKTEST_TEXT_v1_4 = `**About the Historical Backtest**
 
 This data replays your plan against U.S. market data from 1871 to 2022, in three views. The **Backtest tool** replays every historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 1973, and so on; only start years with a full horizon of data are shown (for a 30-year horizon the latest start is 1993, since the data ends in 2022). The **Stress Test card** replays a handful of named historical windows — specific starting sequences from the same dataset (the 1929 crash, the 1970s inflation run, and so on) — against the portfolio and contributions you hold today, and the **History view** on the Path to FI and Compound Interest calculators replays your contribution plan against every full-length stretch in the same dataset. All three are history replayed, never a forecast.
@@ -152,13 +158,13 @@ export const DISCLOSURES = {
       'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
   } satisfies DisclosureDocument,
   backtest: {
-    version: '1.4',
+    version: '1.5',
     title: 'About the Historical Backtest',
     body: BACKTEST_TEXT_v1_4,
     diffFromPrevious:
-      'Version 1.4 adds the History view on the Path to FI and Compound Interest calculators: the same 1871–2022 dataset now also drives an accumulation-side percentile band (the middle half and median across every full-length historical stretch) plus a reached-the-target count on those two cards. The opening now names those surfaces alongside the surfaces named in v1.3. No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.3. Please re-read and re-accept.',
+      'Version 1.5 changes only the acceptance checkbox: it now names all three views of the 1871–2022 replay that this document covers — the Backtest tool, the Stress Test card, and the History view — where the v1.4 checkbox named only the backtest and stress test. The body is unchanged from v1.4. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
-      'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
+      'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
   } satisfies DisclosureDocument,
   interview: {
     version: '1.1',
