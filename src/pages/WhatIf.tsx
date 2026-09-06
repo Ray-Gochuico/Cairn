@@ -505,9 +505,15 @@ export default function WhatIf() {
             projections={projections}
             milestones={milestones}
             household={household ?? null}
-            engineDefaults={{
+            engineContext={{
               inflation: real.defaults?.inflation,
               defaultDrawdownTaxRate: real.defaults?.defaultDrawdownTaxRate,
+              // C1: the cash-rate + retirement-age mirrors read the ENGINE's
+              // own inputs (engine.ts:158-173 / :517) — the same RealState the
+              // projections above were run from, never the stores' slices.
+              defaultCashApy: real.defaults?.defaultCashApy,
+              cashAccountsWithBalances: real.cashAccountsWithBalances ?? [],
+              persons: real.persons,
             }}
             dollarMode={dollarMode}
             horizonMonths={horizonMonths}

@@ -500,6 +500,26 @@ describe('WhatIf — W3 page plumbing', () => {
     )).toBeInTheDocument();
   });
 
+  // C1: the parity fn receives the ENGINE's persons (real.persons — the
+  // useRealState mock's one person retires at 65) and its cash accounts, not
+  // the stores' — an override equal to the person's own target is no
+  // difference to the projection, so the yardstick must say "identical".
+  it('CR-P10 on the page: a retirement override equal to the person\'s target is SILENT; a different one is named', () => {
+    h.scenarios = [
+      scenario(1, 'Baseline'),
+      scenario(2, 'Aggressive payoff', { leverPayload: { ...payload(), retirementAgeOverride: 65 } }),
+    ];
+    const { unmount } = renderWhatIf();
+    expect(lineOf('Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers.')).toBeInTheDocument();
+    unmount();
+    h.scenarios = [
+      scenario(1, 'Baseline'),
+      scenario(2, 'Aggressive payoff', { leverPayload: { ...payload(), retirementAgeOverride: 60 } }),
+    ];
+    renderWhatIf();
+    expect(lineOf('These plans differ in assumptions, not just moves: retirement age 65 vs 60.')).toBeInTheDocument();
+  });
+
   // ⚑ W3-F3 (review MINOR 9): the just-sent scenario is B on arrival.
   it('B defaults to the highest-sortOrder scenario…', () => {
     h.scenarios = [

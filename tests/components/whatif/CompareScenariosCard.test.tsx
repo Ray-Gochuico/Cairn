@@ -40,7 +40,7 @@ const baseProps = {
   projections: new Map([[1, [st('2026-09')]], [2, [st('2026-09')]]]),
   milestones: new Map<number, Milestones>([[1, {} as Milestones], [2, {} as Milestones]]),
   household: HH,
-  engineDefaults: { inflation: 0.03 },
+  engineContext: { inflation: 0.03, cashAccountsWithBalances: [], persons: [] },
   dollarMode: 'nominal' as const,
   horizonMonths: 360,
   displayInflation: 0.03,
@@ -70,8 +70,8 @@ describe('CompareScenariosCard', () => {
       b: { name: 'Aggressive payoff', payload: other.leverPayload, states: [st('2026-09')], milestones: {} as Milestones },
       dollarMode: 'nominal', horizonMonths: 360,
       deflator: { rate: 0.03, sourceLabel: 'your household setting' },
-      parity: computeAssumptionParity(baseline.leverPayload, other.leverPayload, HH, { inflation: 0.03 }),
-      leverDiff: buildLeverDiff(baseline.leverPayload, other.leverPayload, { loanNames: {} }),
+      parity: computeAssumptionParity(baseline.leverPayload, other.leverPayload, HH, { inflation: 0.03, cashAccountsWithBalances: [], persons: [] }),
+      leverDiff: buildLeverDiff(baseline.leverPayload, other.leverPayload, { loanNames: {}, personCount: 0 }),
     });
     expect(cardLines(container)).toEqual(
       [...expected.yardstick, expected.bottomLine, ...expected.tradeoffs, ...expected.mainDifference].map(lineText),
