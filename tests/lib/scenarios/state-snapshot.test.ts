@@ -298,8 +298,9 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     ] as never as Category[];
     const transactions = [
       { id: 1, householdId: 1, date: '2026-04-10', amount: 3000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 },
-      { id: 2, householdId: 1, date: '2026-03-10', amount: 2000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 },
+      { id: 2, householdId: 1, date: '2026-03-05', amount: 2000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 }, // history's first real row: day 5 (R1-F6 guard inert)
       { id: 3, householdId: 1, date: '2026-04-15', amount: 9999, merchant: 'X', merchantRaw: null, categoryId: 2, sourceAccountId: 1 }, // transfer → excluded
+      { id: 4, householdId: 1, date: '2026-05-09', amount: 4444, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 }, // the as-of month — in-progress, excluded from BOTH bases
     ] as never as Transaction[];
 
     const real = captureRealState({
@@ -313,7 +314,27 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     expect(real.expenseBasis.latestMonth).toBe(latestCompleteMonthBaseline(transactions, categories, '2026-05'));
     expect(real.expenseBasis.latestMonth).toBeCloseTo(3000, 0); // April, transfer excluded
     expect(real.expenseBasis.rolling12m).toBe(rolling12mBaseline(transactions, categories, '2026-05'));
-    expect(real.expenseBasis.rolling12m).toBeCloseTo(2500, 0); // (3000 + 2000) / 2 months
+    expect(real.expenseBasis.rolling12m).toBeCloseTo(2500, 0); // (3000 + 2000) / 2 COMPLETE months
+    expect(real.expenseBasis.rolling12mMonths).toBe(2);
+  });
+
+  it('"complete" for the YYYY-MM capture = months strictly before startISO\'s month', () => {
+    const categories = [
+      { id: 1, name: 'Groceries', parentCategoryId: null, color: null, icon: null, type: 'EXPENSE', isCapital: false, systemManaged: false, monthlyBudget: null },
+    ] as never as Category[];
+    const transactions = [
+      { id: 1, householdId: 1, date: '2026-04-03', amount: 3000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 },
+      { id: 2, householdId: 1, date: '2026-05-20', amount: 9999, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 }, // startISO's own month → never counts
+    ] as never as Transaction[];
+    const real = captureRealState({
+      accounts: [], holdings: [], loans: [], loanPayments: [],
+      household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
+      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      startISO: '2026-05', taxRules: [],
+      transactions, categories,
+    });
+    expect(real.expenseBasis.rolling12m).toBeCloseTo(3000, 0);
+    expect(real.expenseBasis.rolling12mMonths).toBe(1);
   });
 
   it('defaults expenseBasis to {0,0} when there are no transactions', () => {
@@ -324,7 +345,7 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
       startISO: '2026-05', taxRules: [],
       transactions: [], categories: [],
     });
-    expect(real.expenseBasis).toEqual({ latestMonth: 0, rolling12m: 0 });
+    expect(real.expenseBasis).toEqual({ latestMonth: 0, rolling12m: 0, rolling12mMonths: 0 });
   });
 });
 
