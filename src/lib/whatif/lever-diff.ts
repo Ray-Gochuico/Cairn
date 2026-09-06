@@ -81,7 +81,7 @@ const rateOrDefault = (r: number | null | undefined): string => (r == null ? 'de
 
 const EXPENSE_SOURCE_LABELS: Record<string, string> = {
   latestMonth: 'latest month',
-  rolling12m: '12-month average',
+  rolling12m: 'spending average',
   custom: 'custom',
 };
 

@@ -30,7 +30,8 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   'tests/components/Investments.test.tsx',
   'tests/components/MonthlyMiniWindow.test.tsx',
   'tests/components/Spending.test.tsx',
-  'tests/components/levers/ExpensePeriodsPopover.test.tsx',
+  // ExpensePeriodsPopover.test.tsx pruned 2026-09 (R1): its count-label describe
+  // pins the clock via vi.useFakeTimers({ toFake: ['Date'] }).
   'tests/components/levers/IncomePopover.test.tsx',
   'tests/components/levers/InflationPopover.test.tsx',
   'tests/db/init.test.ts',
