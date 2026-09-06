@@ -30,6 +30,8 @@ interface FigureSnap {
 interface Snapshot {
   figures: Map<string, FigureSnap[]>;
   captions: Map<string, string>;
+  /** W-I: chartTestId → the hook's data-rows attribute (only for charts that declare rowsTestId). */
+  rows: Map<string, string>;
   looseDollarTexts: string[];
 }
 
@@ -51,10 +53,29 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
     );
   }
   const captions = new Map<string, string>();
+  const rows = new Map<string, string>();
   for (const c of registry.charts) {
     const cap = container.querySelector<HTMLElement>(`[data-testid="${c.captionTestId}"]`);
     if (!cap) throw new Error(`basis sweep: chart caption "${c.captionTestId}" missing`);
     captions.set(c.captionTestId, cap.textContent ?? '');
+    if (c.rowsTestId) {
+      // W-I: the data hook is read INSIDE the chart subtree, so two charts
+      // sharing the mock's testid can never cross-read each other's rows.
+      const chart = container.querySelector<HTMLElement>(`[data-testid="${c.chartTestId}"]`);
+      if (!chart)
+        throw new Error(`basis sweep: chart "${c.chartTestId}" missing (rowsTestId declared)`);
+      const hook = chart.querySelector<HTMLElement>(`[data-testid="${c.rowsTestId}"]`);
+      if (!hook) {
+        throw new Error(
+          `basis sweep: rows hook "${c.rowsTestId}" not rendered inside "${c.chartTestId}" (mock recharts with a data-rows element in this fixture)`,
+        );
+      }
+      const data = hook.getAttribute('data-rows');
+      if (data === null) {
+        throw new Error(`basis sweep: rows hook "${c.rowsTestId}" carries no data-rows attribute`);
+      }
+      rows.set(c.chartTestId, data);
+    }
   }
   // Completeness scan: every $-digit text node outside registered chart
   // subtrees must sit inside a registered figure's testid element.
@@ -71,7 +92,7 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
     if (figureSelectors.some((s) => el.closest(s))) continue;
     looseDollarTexts.push(text.trim());
   }
-  return { figures, captions, looseDollarTexts };
+  return { figures, captions, rows, looseDollarTexts };
 }
 
 /**
@@ -84,6 +105,9 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *    its parent element in BOTH bases (the phrase may close the sentence).
  *  - charts: the caption names the active basis (convertible) or the declared
  *    pinnedBasis, in both bases.
+ *  - chart DATA (W-I, only when rowsTestId is declared): the hook's data-rows
+ *    inside the chart subtree is byte-identical across bases for pinned charts
+ *    and differs for convertible ones.
  *  - completeness: no unregistered $-figure anywhere outside chart subtrees.
  * Fixture contract: positive figures, inflation > 0, all registered nodes
  * rendered. Renders once, flips the page basis live, restores today.
@@ -154,6 +178,16 @@ export function expectBasisDiscipline(el: ReactElement, registry: BasisRegistry)
       if (!basis) throw new Error(`${c.captionTestId}: pinned chart missing pinnedBasis`);
       if (!hasMark(capT, basis) || !hasMark(capF, basis))
         problems.push(`${c.captionTestId}: pinned(${basis}) caption mark missing in one basis`);
+    }
+    if (c.rowsTestId) {
+      const rT = today.rows.get(c.chartTestId)!;
+      const rF = future.rows.get(c.chartTestId)!;
+      if (c.cls === 'pinned' && rT !== rF)
+        problems.push(
+          `${c.chartTestId}: pinned(${c.pinnedBasis}) chart DATA changed across bases — history re-inflated`,
+        );
+      if (c.cls === 'convertible' && rT === rF)
+        problems.push(`${c.chartTestId}: convertible chart DATA byte-identical across bases`);
     }
   }
   for (const snap of [today, future]) {
