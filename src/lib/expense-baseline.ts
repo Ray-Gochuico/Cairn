@@ -1,5 +1,6 @@
 import type { Transaction, Category } from '@/types/schema';
 import { isRealSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
+import { MONTHLY_INPUT_GRACE_DAY } from '@/lib/input-pending';
 
 // NOTE (Wave 2 §8): the legacy raw `amount > 0` baseline helper — which
 // counted credit-card-payment transfers and pending reimbursables as spending
@@ -38,52 +39,89 @@ export function recentMonthlyExpenseTotals(
   return sorted.slice(0, count);
 }
 
+/** 'YYYY-MM' for a months-since-epoch index (`y * 12 + (m - 1)`). Pure
+ *  integer/string arithmetic — never a Date, so no zone can shift a window. */
+function monthFromIndex(idx: number): string {
+  return `${String(Math.floor(idx / 12)).padStart(4, '0')}-${String((idx % 12) + 1).padStart(2, '0')}`;
+}
+
+export interface RollingBaselineDetail {
+  /** Average real spending per observed complete month; 0 when monthsObserved === 0. */
+  average: number;
+  /** Distinct complete months in the window with ≥ 1 real-spending row, after the
+   *  first-month guard. 0..12 — the COUNT every consumer states. */
+  monthsObserved: number;
+  /** Inclusive 'YYYY-MM' bounds: the 12 complete months before asOf's month. */
+  window: { fromMonth: string; toMonth: string };
+  /** R1-F6: the history's first month, dropped because its first real-spending
+   *  row is dated after MONTHLY_INPUT_GRACE_DAY; null when the guard did not fire. */
+  droppedFirstMonth: string | null;
+}
+
 /**
- * Feature B mode resolver — trailing-12-month average monthly REAL spending,
- * anchored at `asOfISO`. The window is a CALENDAR-MONTH bound — the 12 most
- * recent months up to and including asOf's month (`lowerMonth <= m <= asOfMonth`,
- * via YYYY-MM string compare) — NOT a 360-day (12*30d) day-window. The day-window
- * dropped boundary months non-deterministically by day-of-month and diverged from
- * latestCompleteMonthBaseline's month-string compare; the calendar bound coheres
- * with it (same `slice(0,7)` granularity). Divisor = distinct YYYY-MM months
- * observed (so 4 months of data → /4, not /12). Routes through
- * isRealSpending/effectiveSpendingAmount so the figure matches the Spending
- * page (excludes TRANSFER/INCOME, nets reimbursements) — unlike the deleted
- * raw-sum legacy helper (Wave 2 §8; see note at top of file).
- * Returns 0 when no real spending exists in the window.
+ * Roadmap / What-If spending baseline (v1.7.0 R1): average monthly REAL
+ * spending over the 12 most recent COMPLETE calendar months before `asOfISO`'s
+ * month — window `[asOfMonth − 12, asOfMonth − 1]` on the 'YYYY-MM' prefix
+ * (day-of-month invariant; accepts 'YYYY-MM-DD' or the What-If capture's
+ * 'YYYY-MM'). The in-progress month never counts: a partial month at full
+ * weight understated the figure by up to 1/(n+1) of a month and moved it on
+ * every posting; this figure is flat within a month and moves once, on the 1st,
+ * for a fixed transaction set. Both selectors in this module now exclude the
+ * as-of month (latestCompleteMonthBaseline always did).
  *
- * Note (intentional, coheres with latestMonth): rolling12m INCLUDES asOf's
- * in-progress month (it averages every observed month `<= asOfMonth`); latestMonth
- * EXCLUDES it (`< asOfMonth`). They share the month-string convention but differ in
- * inclusivity by design — an average is robust to a partial month, a single-month
- * pick is not.
+ * Divisor = distinct observed months (a 3-month history averages over 3, not
+ * 12) — `monthsObserved` is returned so every consumer can state it. Routes
+ * through isRealSpending/effectiveSpendingAmount (Spending-page parity:
+ * TRANSFER/INCOME out, pending reimbursables out, reimbursed rows at net).
+ *
+ * First-month guard (⚑ R1-F6 ON): a history that BEGINS mid-month yields a
+ * half-observed "complete" first month. If the earliest real-spending row of
+ * the entire set falls in an observed month and is dated after the grace day
+ * (MONTHLY_INPUT_GRACE_DAY, shared with the monthly-input prompt), that month
+ * leaves numerator and divisor. A history older than the window makes the
+ * guard inert — the window's first month is a full month of an established
+ * history. Only the first month is inspected; never recursive.
  */
+export function rolling12mBaselineDetail(
+  transactions: Transaction[],
+  categories: Category[],
+  asOfISO: string,
+): RollingBaselineDetail {
+  const byId = new Map<number, Category>();
+  for (const c of categories) if (c.id != null) byId.set(c.id, c);
+  const asOfMonth = asOfISO.slice(0, 7); // 'YYYY-MM'
+  const asOfIdx = Number(asOfMonth.slice(0, 4)) * 12 + (Number(asOfMonth.slice(5, 7)) - 1);
+  const window = { fromMonth: monthFromIndex(asOfIdx - 12), toMonth: monthFromIndex(asOfIdx - 1) };
+  const byMonth = new Map<string, number>();
+  let earliestRealDate: string | null = null; // across the ENTIRE set — the guard asks where the history begins
+  for (const t of transactions) {
+    if (!isRealSpending(t, byId)) continue;
+    if (earliestRealDate === null || t.date < earliestRealDate) earliestRealDate = t.date;
+    const month = t.date.slice(0, 7);
+    if (month < window.fromMonth || month > window.toMonth) continue; // complete-month window
+    byMonth.set(month, (byMonth.get(month) ?? 0) + effectiveSpendingAmount(t));
+  }
+  let droppedFirstMonth: string | null = null;
+  if (earliestRealDate !== null) {
+    const firstMonth = earliestRealDate.slice(0, 7);
+    if (byMonth.has(firstMonth) && Number(earliestRealDate.slice(8, 10)) > MONTHLY_INPUT_GRACE_DAY) {
+      byMonth.delete(firstMonth);
+      droppedFirstMonth = firstMonth;
+    }
+  }
+  if (byMonth.size === 0) return { average: 0, monthsObserved: 0, window, droppedFirstMonth };
+  let total = 0;
+  for (const v of byMonth.values()) total += v;
+  return { average: total / byMonth.size, monthsObserved: byMonth.size, window, droppedFirstMonth };
+}
+
+/** The scalar form every existing call site uses — `rolling12mBaselineDetail(...).average`. */
 export function rolling12mBaseline(
   transactions: Transaction[],
   categories: Category[],
   asOfISO: string,
 ): number {
-  const byId = new Map<number, Category>();
-  for (const c of categories) if (c.id != null) byId.set(c.id, c);
-  const asOfMonth = asOfISO.slice(0, 7); // 'YYYY-MM'
-  // Calendar lower bound: 11 whole months before asOf's month (inclusive of asOf's
-  // month → a 12-month span). Pure year/month arithmetic on the 'YYYY-MM' prefix,
-  // so it is day-of-month invariant and uses the same string compare as latestMonth.
-  const y = Number(asOfMonth.slice(0, 4));
-  const m = Number(asOfMonth.slice(5, 7)); // 1..12
-  const lowerIdx = y * 12 + (m - 1) - 11; // monthsSinceEpoch index of the lower bound
-  const lowerMonth = `${String(Math.floor(lowerIdx / 12)).padStart(4, '0')}-${String((lowerIdx % 12) + 1).padStart(2, '0')}`;
-  const byMonth = new Map<string, number>();
-  for (const t of transactions) {
-    if (!isRealSpending(t, byId)) continue;
-    const month = t.date.slice(0, 7);
-    if (month < lowerMonth || month > asOfMonth) continue; // calendar-month window
-    byMonth.set(month, (byMonth.get(month) ?? 0) + effectiveSpendingAmount(t));
-  }
-  if (byMonth.size === 0) return 0;
-  let total = 0;
-  for (const v of byMonth.values()) total += v;
-  return total / byMonth.size;
+  return rolling12mBaselineDetail(transactions, categories, asOfISO).average;
 }
 
 /**
