@@ -17,6 +17,17 @@ import { efContext, evaluateSmallEmergencyFund } from '@/domain/roadmap/rules/em
 import { splitAmount } from '@/lib/interview/waterfall';
 import { dateFromLocalISO } from '@/lib/dates';
 import type { InterviewContext } from '@/types/interview';
+import { TaxRulesRepo } from '@/domain/tax-rules';
+import { JurisdictionType } from '@/types/enums';
+import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
+import { computePaycheck } from '@/lib/calculators/paycheck';
+import {
+  evaluateBackdoorRoth,
+  evaluateIraBand,
+  evaluateRothIra,
+  evaluateTraditionalIra,
+} from '@/domain/roadmap/rules/iraBranch';
+import { formatCurrency } from '@/lib/format';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -794,5 +805,83 @@ describe('R1 historical anchors — the shipped seed through the production mapp
       expect(s.skipped.find((k) => k.bucket === 'ef_floor')?.reason).toBe(floorSkip);
     }
     expect(aggressive.skipped.find((k) => k.bucket === 'ef_target')?.reason).toBe(floorSkip);
+  });
+});
+
+/** PaycheckCard.tsx's own `annual` assembly, off the SEEDED rows: FEDERAL/US
+ *  + STATE/CA at the household's filing status, no city (city NULL →
+ *  cityBrackets null, SD 0), the per-return pretax aggregate. The card is a
+ *  summary of exactly this engine call (Wave 15 D1). */
+async function seededPaycheck(db: SqliteAdapter) {
+  const household = (await new HouseholdRepo(db).get())!;
+  const persons = await new PersonsRepo(db).list();
+  const dependents = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM dependents');
+  const rules = new TaxRulesRepo(db);
+  const federal = (await rules.lookup(2026, JurisdictionType.FEDERAL, 'US', household.filingStatus))!;
+  const state = (await rules.lookup(2026, JurisdictionType.STATE, household.state, household.filingStatus))!;
+  const { totalSalary, pretax } = aggregateHouseholdPretax(persons, {
+    filingStatus: household.filingStatus,
+    personCount: persons.length,
+    dependentCount: dependents[0].n,
+  });
+  return computePaycheck({
+    gross: totalSalary,
+    perPersonGross: persons.map((p) => p.annualSalaryPretax),
+    filingStatus: household.filingStatus,
+    federalBrackets: federal.brackets,
+    stateBrackets: state.brackets,
+    cityBrackets: null,
+    standardDeduction: {
+      federal: federal.standardDeduction,
+      state: state.standardDeduction,
+      city: 0,
+    },
+    pretax,
+  });
+}
+
+describe('R2 tax anchors — the MFJ seed through the production W-2 engine and the IRA-band rule (Appendix A.2 / A.3)', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = await freshDb();
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+  });
+
+  it('Paycheck (household, annual): $202,179.46 take-home under MFJ — SINGLE read $179,492.63', async () => {
+    const r = await seededPaycheck(db);
+    expect(r.gross).toBe(325_000);                        // 180,000 + 145,000
+    expect(r.pretax401k).toBe(29_600);                    // 18,000 (10%) + 11,600 (8%), both under the $24,500 cap
+    expect(r.pretaxTotal).toBe(29_600);                   // health / DCFSA / HSA are 0001 defaults (0)
+    expect(r.federal).toBeCloseTo(48_364, 2);             // taxable 263,200 through the 2026 MFJ schedule (0031)
+    expect(r.ss).toBeCloseTo(20_150, 2);                  // 11,160 + 8,990 — per-earner bases, both under $184,500
+    expect(r.medicare).toBeCloseTo(4_712.5, 2);           // 325,000 × 1.45%
+    expect(r.additionalMedicare).toBeCloseTo(675, 2);     // (325,000 − 250,000) × 0.9% — SINGLE's $200k threshold read 1,125
+    expect(r.fica).toBeCloseTo(25_537.5, 2);
+    expect(r.stateTax).toBeCloseTo(19_319.036, 2);        // CA MFJ (0002), SD 11,080, taxable 284,320
+    expect(r.cityTax).toBe(0);
+    expect(r.hasCity).toBe(false);
+    expect(r.hasStateTax).toBe(true);
+    expect(r.takeHome).toBeCloseTo(202_179.464, 2);       // 325,000 − 29,600 − (48,364 + 25,537.5 + 19,319.036)
+    // The card's Monthly strings (formatCurrency, whole dollars, halfExpand):
+    expect(formatCurrency(r.takeHome / 12)).toBe('$16,848');
+    expect(formatCurrency(r.federal / 12)).toBe('$4,030');
+    expect(formatCurrency(r.fica / 12)).toBe('$2,128');
+    expect(formatCurrency(r.stateTax / 12)).toBe('$1,610');
+  });
+
+  it('IRA band on the seed: MAGI $325,000 sits above the MFJ Roth phase-out start ($242,000) — every node states the MFJ band', async () => {
+    // The seed writes no contributions rows, so MAGI = salary (computeMagi).
+    const contributions = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM contributions');
+    expect(contributions[0].n).toBe(0);
+    const ctx = await seededCtx(db, '2026-07-08');
+    expect(evaluateIraBand(ctx).evidence).toBe(
+      'MAGI $325,000 is above the Roth phase-out start ($242,000). Backdoor Roth applies.',
+    );
+    expect(evaluateBackdoorRoth(ctx)).toMatchObject({
+      status: 'active',
+      evidence: 'MAGI $325,000 ≥ $242,000 (Roth phase-out start) — direct Roth contribution restricted. Be aware of the IRS pro-rata rule on any pre-tax IRA balance.',
+    });
+    expect(evaluateRothIra(ctx).evidence).toBe('MAGI $325,000 above $242,000 — backdoor Roth path instead.');
+    expect(evaluateTraditionalIra(ctx).evidence).toBe('MAGI $325,000 above $129,000 — Roth or backdoor path applies instead.');
   });
 });
