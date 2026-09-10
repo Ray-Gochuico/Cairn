@@ -177,11 +177,17 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    household with a dependent, a joint account, a joint mortgage and a
   //    shared surname ran every W-2 surface (Paycheck card, What-If engine,
   //    the Roadmap's IRA band) through SINGLE brackets. 'SINGLE' is also a
-  //    value a person can type, so the guard is the whole migration-default
-  //    tuple: the row exactly as 0001 wrote it.
+  //    value a person can type, so the guard is the COMPLETE migration-
+  //    default tuple — all five columns 0001 writes (name NULL,
+  //    filing_status 'SINGLE', state 'CA', city NULL, baseline 0): the row
+  //    exactly as 0001 wrote it. Residual, accepted (R2 review MINOR 3): a
+  //    row on which someone typed SINGLE and changed NOTHING else still
+  //    reads MFJ after a seed — reachable only on the VITE_SEED_DEMO dev
+  //    path, since explore always seeds a fresh database.
   await db.execute(
     `UPDATE household SET filing_status = 'MFJ'
-     WHERE id = 1 AND filing_status = 'SINGLE' AND name IS NULL AND monthly_expense_baseline = 0`,
+     WHERE id = 1 AND filing_status = 'SINGLE' AND name IS NULL AND monthly_expense_baseline = 0
+       AND state = 'CA' AND city IS NULL`,
   );
   //    city: deliberately NOT backfilled (D-R2-2). The column holds a CITY
   //    tax-jurisdiction code ('AL_BIRMINGHAM'-shaped — HouseholdForm's

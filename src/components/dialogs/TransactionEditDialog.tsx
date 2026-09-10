@@ -198,13 +198,18 @@ export function TransactionEditDialog({
             </div>
           )}
           <div className="flex items-center gap-2">
+            {/* R2 review MINOR 0: the house trio — the status line is the
+                checkbox's DESCRIPTION, so it is announced on focus and not
+                only to someone reading the dialog linearly. */}
             <input id="edit-reimbursable" type="checkbox" aria-label="Reimbursable"
               checked={reimbursable}
+              aria-describedby={reimbursementStatus ? 'edit-reimbursement-status' : undefined}
               onChange={(e) => setReimbursable(e.target.checked)} />
             <Label htmlFor="edit-reimbursable">Reimbursable</Label>
           </div>
           {reimbursementStatus && (
-            <p className="text-xs text-muted-foreground" data-testid="edit-reimbursement-status">
+            <p id="edit-reimbursement-status" className="text-xs text-muted-foreground"
+              data-testid="edit-reimbursement-status">
               {reimbursementStatus}
             </p>
           )}

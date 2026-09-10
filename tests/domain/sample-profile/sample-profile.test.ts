@@ -28,6 +28,7 @@ import {
   evaluateTraditionalIra,
 } from '@/domain/roadmap/rules/iraBranch';
 import { formatCurrency } from '@/lib/format';
+import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -138,6 +139,31 @@ describe('seedSampleProfile', () => {
       'SELECT filing_status AS fs, monthly_expense_baseline AS b FROM household WHERE id = 1',
     );
     expect(rows[0]).toEqual({ fs: 'SINGLE', b: 4321 });
+  });
+
+  it('R2 (review MINOR 3): a typed STATE holds the filing-status guard closed — the tuple is the COMPLETE 0001 row', async () => {
+    // 0001 writes the singleton as (name NULL, filing_status 'SINGLE',
+    // state 'CA', city NULL, monthly_expense_baseline 0). A household in New
+    // York that left the filing status on SINGLE is no longer that row, so
+    // the status is theirs: the guard names all five columns, not three.
+    await db.execute("UPDATE household SET state = 'NY' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; state: string }>(
+      'SELECT filing_status AS fs, state FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', state: 'NY' });
+  });
+
+  it('R2 (review MINOR 3): a typed CITY holds it closed too — the fifth column of the tuple', async () => {
+    // Unreachable through the shipped CA form today (no 'CA_*' CITY rule —
+    // D-R2-2), which is exactly why it is pinned: if a CA city rule ever
+    // lands, the guard already refuses to flip a row someone touched.
+    await db.execute("UPDATE household SET city = 'NY_NYC' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; city: string | null }>(
+      'SELECT filing_status AS fs, city FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', city: 'NY_NYC' });
   });
 
   it('R2: city stays NULL — the column is a CITY tax-jurisdiction code and CA has none (D-R2-2)', async () => {
@@ -576,6 +602,23 @@ describe('seedSampleProfile', () => {
     expect(pending).toEqual([{ reimbursed_at: null }]);
   });
 
+  it('R2 (review MINOR 1): the SEEDED rows render the editor status line — Appendix A.5 through the production mapper', async () => {
+    // A.5 says the tour's Skyline row reads 'Reimbursed $132.40 on Jun 25,
+    // 2026.' at todayISO 2026-07-08, but only a hand-typed dialog fixture
+    // proved it: a drift in the seed's `monthDay(today, 1, 25)` or in its
+    // reimbursed amount would leave every other R2 test green while the line
+    // the tour actually shows moved. This joins the seed to the shipped
+    // helper the way the tax anchors join it to computePaycheck.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await new TransactionsRepo(db).list();
+    const skyline = rows.find((t) => t.merchant === 'Skyline Bistro');
+    const harborCab = rows.find((t) => t.merchant === 'Harbor Cab Co');
+    expect(skyline).toBeDefined();
+    expect(harborCab).toBeDefined();
+    expect(reimbursementStatusLine(skyline!)).toBe('Reimbursed $132.40 on Jun 25, 2026.');
+    expect(reimbursementStatusLine(harborCab!)).toBe('Awaiting reimbursement.');
+  });
+
   it('W4: real-spending months are deterministic — $5,911.12 per complete month, $179.01 partial', async () => {
     await seedSampleProfile(db, { todayISO: '2026-07-08' });
     // Net real spending per month, Spending-page semantics expressed in SQL:
@@ -657,6 +700,18 @@ describe('R2: the seed is pure over its todayISO option — no real-clock read a
     ['2026-09-01', '2026-08-31'], // Mon
     ['2027-01-15', '2026-12-31'], // Thu — the December rollover
     ['2026-03-01', '2026-02-27'], // Sat Feb 28 → Fri Feb 27
+    // Review MINOR 2/5 — three more discriminating rows (weekdays derived
+    // from Jan 1 2026 = Thursday, Appendix A.4 style):
+    ['2028-03-01', '2028-02-29'], // leap February: Jan 1 2028 = Sat (2026, 2027 are
+                                  // common years, +365 ≡ 1 each); Feb 1 = +31 ≡ 3 → Tue;
+                                  // Feb 29 = +28 ≡ 0 → Tue, a business day and the 29th
+                                  // exists — an off-by-one in `Date.UTC(y, m, 0)` reads
+                                  // Feb 28 or Mar 1 here
+    ['2027-01-31', '2026-12-31'], // a 31st as the SEED day + the December rollover:
+                                  // Dec 1 2026 = +334 ≡ 5 → Tue, Dec 31 = +30 ≡ 2 → Thu
+    ['2026-11-01', '2026-10-30'], // weekend month-end #2 (so the business-day rule keeps a
+                                  // killer in every run month): Oct 1 2026 = +273 ≡ 0 → Thu,
+                                  // Oct 31 = +30 ≡ 2 → Sat → step back to Fri Oct 30
   ])('seed %s → prior-month close %s (business-day + rollover arithmetic, no clock)', async (todayISO, close) => {
     await seedSampleProfile(db, { todayISO });
     const rows = await db.select<{ d: string }>(
@@ -665,7 +720,7 @@ describe('R2: the seed is pure over its todayISO option — no real-clock read a
     expect(rows.map((r) => r.d)).toEqual([close, todayISO]);
   });
 
-  it.each(['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])(
+  it.each(['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'America/Santiago'])(
     'identical snapshot dates under TZ=%s — string-pure over todayISO on a month boundary (D-R2-5)',
     async (tz) => {
       // The discriminating case: a UTC parse of '2026-07-01' (`new Date(iso)`)
@@ -686,6 +741,29 @@ describe('R2: the seed is pure over its todayISO option — no real-clock read a
       }
     },
   );
+
+  it('a seed day whose LOCAL midnight does not exist still closes the prior month — TZ=America/Santiago, 2026-09-06 (review MINOR 2)', async () => {
+    // Chile's DST begins at local midnight on Sunday 2026-09-06 (the first
+    // Sunday of September: Sep 1 2026 = Jan 1 + 243 ≡ 5 → Tue), so 00:00
+    // does not exist that day and `dateFromLocalISO` relies on the engine
+    // rolling a gap FORWARD (to 01:00, still Sept 6). A roll BACKWARD would
+    // read September 5 — same month here, but the same gap on the 1st of a
+    // month would read the previous month and move the close a month early.
+    // The close is the last business day of August: Aug 1 2026 = Jan 1 + 212
+    // ≡ 2 → Sat, Aug 31 = +30 ≡ 2 → Mon, a business day.
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Santiago';
+    try {
+      await seedSampleProfile(db, { todayISO: '2026-09-06' });
+      const rows = await db.select<{ d: string }>(
+        'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+      );
+      expect(rows.map((r) => r.d)).toEqual(['2026-08-31', '2026-09-06']);
+    } finally {
+      if (prevTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = prevTZ;
+    }
+  });
 
   it('the seed reads the real clock exactly once — the app-wide acceptance INSTANT (D-R2-6)', () => {
     const src = readFileSync(

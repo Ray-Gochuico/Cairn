@@ -178,6 +178,23 @@ describe('TransactionEditDialog', () => {
       expect(screen.queryByTestId('edit-reimbursement-status')).toBeNull();
     });
 
+    it('the checkbox is DESCRIBED by the status line (review MINOR 0) — tabbing to it announces the state, not just "Reimbursable, checked"', () => {
+      // The house trio (HouseholdForm's aria-invalid + aria-describedby +
+      // FieldError): visual adjacency alone leaves the line unreachable for
+      // anyone who does not read the dialog linearly.
+      renderDialog(settled);
+      expect(screen.getByLabelText('Reimbursable')).toHaveAccessibleDescription(
+        'Reimbursed $132.40 on Jun 25, 2026.',
+      );
+    });
+
+    it('a row with no status line leaves the checkbox undescribed — no dangling aria-describedby', () => {
+      renderDialog(transaction);
+      const checkbox = screen.getByLabelText('Reimbursable');
+      expect(checkbox).not.toHaveAttribute('aria-describedby');
+      expect(checkbox).not.toHaveAccessibleDescription();
+    });
+
     it('a partial reimbursement states the REIMBURSED amount, never the charge', () => {
       renderDialog({ ...settled, id: 903, reimbursedAmount: 100 });
       expect(screen.getByTestId('edit-reimbursement-status')).toHaveTextContent('Reimbursed $100.00 on Jun 25, 2026.');
