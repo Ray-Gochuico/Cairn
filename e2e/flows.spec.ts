@@ -138,6 +138,16 @@ test('calculators: the page scope honors ?view= — scoped FI figures + caption,
     .getByRole('button', { name: 'Household' })
     .click();
   await expect(portfolio).toHaveValue('935000');
+  // R2: the seed household files JOINTLY. The identity chips read the
+  // PERSISTED filing status (the seed's guarded backfill over 0001's SINGLE
+  // — Appendix A.1 of the R2 plan); `— app defaults` never appends here
+  // (two real persons). The Paycheck card's household headline is the MFJ
+  // figure: $202,179.46 / 12 = $16,848 a month (Appendix A.2 — SINGLE read
+  // $14,958). Both at Household scope, which the click above restored.
+  await expect(page.getByTestId('scenario-chips')).toContainText(
+    'Married filing jointly · CA · 2026 tax year · $325,000 salary',
+  );
+  await expect(page.getByTestId('paycheck-takehome')).toContainText('$16,848');
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
 
