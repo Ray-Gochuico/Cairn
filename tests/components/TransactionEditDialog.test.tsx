@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
+import { TransactionEditDialog, reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { setDatabase } from '@/db/db';
 import { runMigrations } from '@/db/migrations';
@@ -149,5 +149,53 @@ describe('TransactionEditDialog', () => {
         onClose={vi.fn()} onSaved={vi.fn()} />,
     );
     expect(screen.queryByLabelText('Person')).not.toBeInTheDocument();
+  });
+
+  describe('R2 — reimbursement state in the editor (chip task_32707759)', () => {
+    const settled: Transaction = {
+      ...baseTransaction, id: 901, merchant: 'Skyline Bistro', amount: 132.4,
+      reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 132.4,
+    };
+    const renderDialog = (t: Transaction) =>
+      render(
+        <TransactionEditDialog transaction={t} categories={categories}
+          properties={[]} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
+      );
+
+    it('a settled reimbursement states its amount and date (CR-R2-1) — the only place it showed before was its absence from the Awaiting list', () => {
+      renderDialog(settled);
+      expect(screen.getByLabelText('Reimbursable')).toBeChecked();
+      expect(screen.getByTestId('edit-reimbursement-status')).toHaveTextContent('Reimbursed $132.40 on Jun 25, 2026.');
+    });
+
+    it('a pending reimbursable states that it is awaiting (CR-R2-2)', () => {
+      renderDialog({ ...settled, id: 902, merchant: 'Harbor Cab Co', amount: 46, reimbursedAt: null, reimbursedAmount: null });
+      expect(screen.getByTestId('edit-reimbursement-status')).toHaveTextContent('Awaiting reimbursement.');
+    });
+
+    it('a non-reimbursable row renders no status line at all', () => {
+      renderDialog(transaction);
+      expect(screen.queryByTestId('edit-reimbursement-status')).toBeNull();
+    });
+
+    it('a partial reimbursement states the REIMBURSED amount, never the charge', () => {
+      renderDialog({ ...settled, id: 903, reimbursedAmount: 100 });
+      expect(screen.getByTestId('edit-reimbursement-status')).toHaveTextContent('Reimbursed $100.00 on Jun 25, 2026.');
+    });
+
+    it('the line reads the SAVED row — unchecking Reimbursable in the dialog does not erase a recorded reimbursement (D-R2-9)', async () => {
+      const user = userEvent.setup();
+      renderDialog(settled);
+      await user.click(screen.getByLabelText('Reimbursable'));
+      expect(screen.getByLabelText('Reimbursable')).not.toBeChecked();
+      expect(screen.getByTestId('edit-reimbursement-status')).toHaveTextContent('Reimbursed $132.40 on Jun 25, 2026.');
+    });
+
+    it('reimbursementStatusLine: the three forms and the null form', () => {
+      expect(reimbursementStatusLine({ reimbursable: false, reimbursedAt: '2026-06-25', reimbursedAmount: 5 })).toBeNull();
+      expect(reimbursementStatusLine({ reimbursable: true, reimbursedAt: null, reimbursedAmount: null })).toBe('Awaiting reimbursement.');
+      expect(reimbursementStatusLine({ reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: null })).toBe('Reimbursed on Jun 25, 2026.');
+      expect(reimbursementStatusLine({ reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 1234.5 })).toBe('Reimbursed $1,234.50 on Jun 25, 2026.');
+    });
   });
 });
