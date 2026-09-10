@@ -594,7 +594,12 @@ describe('R1 historical anchors — the shipped seed through the production mapp
   // rows ($179.01 real) clamped to the 1st. Under the complete-month rule the
   // figure is $5,911.12 on EVERY day of July; the recorded bug read
   // (3 × 5,911.12 + 179.01) / 4 = $4,478.09 on every one of them.
-  it.each(['2026-07-01', '2026-07-08', '2026-07-31'])('seed 2026-07-08, as of %s → $5,911.12 from 3 months, cash $30,000', async (asOf) => {
+  // Review MINOR 10: the dollar SIGNS are out of this title on purpose. Vitest
+  // reads a bare `$5` / `$3` in an it.each title as object-path interpolation
+  // and printed `undefined,911.12` / `undefined,000` in the reporter (and `$$`
+  // is not unescaped here either — it prints two dollar signs). The figures are
+  // unchanged and the assertions below carry them with their `$`.
+  it.each(['2026-07-01', '2026-07-08', '2026-07-31'])('seed 2026-07-08, as of %s → 5,911.12 from 3 months, cash 30,000', async (asOf) => {
     await seedAt('2026-07-08');
     const ctx = await seededCtx(db, asOf);
     const ef = efContext(ctx);

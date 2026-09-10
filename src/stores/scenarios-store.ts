@@ -307,6 +307,13 @@ function realFingerprint(real: RealState): string {
     // Wave 2 §5: physical-asset seed must invalidate cached projections when
     // a property/vehicle value changes, or the chart survives the edit stale.
     Math.round(real.initialPhysicalAssets ?? 0),
+    // R1 review (MINOR 5): the transaction-derived expense bases are engine
+    // inputs at the expense seam, so an import that moves the complete-month
+    // average (or its count) must invalidate the chart — without these three
+    // the popover's stated base moves while the projection beside it stays.
+    Math.round(real.expenseBasis?.rolling12m ?? 0),
+    real.expenseBasis?.rolling12mMonths ?? 0,
+    Math.round(real.expenseBasis?.latestMonth ?? 0),
     tb?.federal?.length ?? 0,
     tb?.state?.length ?? 0,
     tb?.city?.length ?? 0,

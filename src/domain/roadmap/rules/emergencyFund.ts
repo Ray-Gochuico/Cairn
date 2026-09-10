@@ -99,6 +99,11 @@ export function efContext(ctx: RoadmapContext): EfContext {
   // 3-month history averages over 3, not 12) and the count comes back with it.
   const detail = rolling12mBaselineDetail(ctx.transactions, ctx.categories ?? [], todayISO);
   const cash = totalCashReserve(ctx.accounts, ctx.snapshots);
+  // Review MINOR 12: at MIN_COMPLETE_MONTHS = 1 the count half of this gate is
+  // INERT — `average > 0` already implies at least one observed month — so a
+  // mutant that drops it is equivalent, not uncovered (the threshold VALUE is
+  // pinned: 1 → 2 reddens eight tests). It becomes the live branch under the
+  // ⚑ R1-F2 override (N = 2/3); keep both halves.
   if (detail.monthsObserved >= MIN_COMPLETE_MONTHS && detail.average > 0) {
     return { baseline: detail.average, cash, baselineSource: 'transactions', monthsObserved: detail.monthsObserved };
   }

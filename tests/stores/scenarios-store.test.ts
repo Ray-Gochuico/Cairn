@@ -407,6 +407,48 @@ describe('useScenariosStore.projectedScenarios — RealState fingerprint (NEW-W7
     expect(after).not.toBe(before);
   });
 
+  // R1 review (MINOR 5): the Feature-B expense bases are engine inputs at the
+  // expense seam, but the fingerprint hashed nothing transaction-derived — a
+  // mid-month import that moved the complete-month average (or its count) left
+  // the popover stating a new base beside a chart still projecting the old one.
+  const withBasis = (latestMonth: number, rolling12m: number, rolling12mMonths: number): RealState => ({
+    ...sampleRealState(),
+    expenseBasis: { latestMonth, rolling12m, rolling12mMonths },
+  });
+
+  it('invalidates cached projection when expenseBasis.rolling12m changes', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const before = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 3)).get(baselineId)!;
+    const after = useScenariosStore.getState().projectedScenarios(withBasis(5200, 5100, 3)).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when expenseBasis.rolling12mMonths changes (the stated count)', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const before = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 3)).get(baselineId)!;
+    const after = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 4)).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when expenseBasis.latestMonth changes', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const before = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 3)).get(baselineId)!;
+    const after = useScenariosStore.getState().projectedScenarios(withBasis(5900, 4800, 3)).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('an identical expenseBasis still hits the cache (the fingerprint stays structural)', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const a = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 3)).get(baselineId)!;
+    const b = useScenariosStore.getState().projectedScenarios(withBasis(5200, 4800, 3)).get(baselineId)!;
+    expect(b).toBe(a);
+  });
+
+  it('a RealState with NO expenseBasis fingerprints without throwing (back-compat contract)', () => {
+    const legacy = sampleRealState(); // sampleRealState omits expenseBasis by design
+    expect(() => useScenariosStore.getState().projectedScenarios(legacy)).not.toThrow();
+  });
+
   it('still returns cached references when RealState is unchanged', () => {
     const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
     const real = sampleRealState();

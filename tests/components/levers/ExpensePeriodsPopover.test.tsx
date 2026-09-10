@@ -276,22 +276,6 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
     expect(screen.getByRole('tab', { name: /custom monthly expense/i })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('both data modes show the complete-month empty state when only in-progress rows exist (CR-R1-7a)', () => {
-    for (const mode of ['rolling12m', 'latestMonth'] as const) {
-      seedAllStores({
-        transactions: [{
-          id: 1, householdId: 1, date: `${todayMonth}-09`, amount: 3000,
-          merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1,
-        }] as any,
-        expenseSource: mode,
-        householdBaseline: 4500,
-      });
-      const { unmount } = render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-      expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
-      unmount();
-    }
-  });
-
   it('Apply writes expenseSource + customMonthly to the lever', async () => {
     seedAllStores({
       transactions: [{
@@ -326,6 +310,20 @@ describe('ExpensePeriodsPopover — R1 count-stated base label (fake Date: local
   const row = (id: number, date: string, amount: number) =>
     ({ id, householdId: 1, date, amount, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 });
   const IN_PROGRESS = row(99, '2026-05-09', 9999);
+
+  // Moved into this describe by the R1 review (MINOR 11): it was authored in the
+  // real-clock describe above, where its in-progress row was built from a
+  // `new Date()`-derived month. Under the pinned clock the literal 2026-05-09
+  // row IS the in-progress month, so the test is now clock-injected like every
+  // other R1-authored case in this file.
+  it('both data modes show the complete-month empty state when only in-progress rows exist (CR-R1-7a)', () => {
+    for (const mode of ['rolling12m', 'latestMonth'] as const) {
+      seedAllStores({ transactions: [IN_PROGRESS] as any, expenseSource: mode, householdBaseline: 4500 });
+      const { unmount } = render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+      unmount();
+    }
+  });
 
   it('n = 3: Base (average of 3 complete months): $3,000 — the in-progress row is invisible', () => {
     seedAllStores({ transactions: [row(1, '2026-02-05', 3000), row(2, '2026-03-05', 3000), row(3, '2026-04-05', 3000), IN_PROGRESS] as any, expenseSource: 'rolling12m' });

@@ -67,16 +67,19 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
     [draft, monthISO],
   );
   // Resolve the data-driven base from expenseBasis (precomputed on RealState at
-  // capture). Falls back to 0 when RealState is not yet available.
+  // capture). Every read is optional-chained THROUGH expenseBasis: a RealState
+  // without it is a supported state (the Feature-B back-compat contract — hand-
+  // built fixtures and legacy callers), so a missing basis must read 0, never
+  // throw. R1 review (MINOR 6): the two data-mode reads below used to
+  // dereference `expenseBasis` directly.
   const dataBase =
     source === 'latestMonth'
-      ? (real?.expenseBasis.latestMonth ?? 0)
+      ? (real?.expenseBasis?.latestMonth ?? 0)
       : source === 'rolling12m'
-        ? (real?.expenseBasis.rolling12m ?? 0)
+        ? (real?.expenseBasis?.rolling12m ?? 0)
         : 0;
-  // Optional-chained THROUGH expenseBasis: unlike the two branches above it is
-  // evaluated on every render (including custom mode), and a RealState without
-  // expenseBasis is a supported state (the Feature-B back-compat contract).
+  // Evaluated on EVERY render (including custom mode), unlike the two branches
+  // above, which are gated on the selected source.
   const rollingMonths = real?.expenseBasis?.rolling12mMonths ?? 0;
 
   // For custom mode, `customMonthly` drives the base; null (blank field) reads as 0.
