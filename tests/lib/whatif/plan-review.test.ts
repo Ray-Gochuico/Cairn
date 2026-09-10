@@ -3,8 +3,10 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   emptyLeverPayload, effectiveBaselineInflation,
-  type Milestones, type MonthlyState,
+  type LeverPayload, type Milestones, type MonthlyState,
 } from '@/lib/scenarios';
+import { toDisplayMilestones, type BasedMilestones } from '@/lib/calculators/basis-view';
+import type { DollarBasis } from '@/lib/calculators/dollar-basis';
 import { NET_WORTH_FLOOR_ABS } from '@/lib/briefing';
 import { formatCurrency } from '@/lib/format';
 import {
@@ -34,15 +36,44 @@ const EMPTY_DIFF: LeverDiff = { onlyInA: [], onlyInB: [], changed: [], isEmpty: 
  *  BL-5 canonical-equality rung (which sits ABOVE BL-6 in the ladder). */
 const variant = () => ({ ...emptyLeverPayload(), annualLongTermGains: 1 });
 
-const side = (name: string, over: Partial<CompareSide> = {}): CompareSide => ({
+/**
+ * W5.1: a side as the ENGINE produces it — raw `Milestones`, no basis brand.
+ * `input()` routes both sides through the boundary's ONE 30-year recipe
+ * (`toDisplayMilestones`) at the input's basis + deflator rate, so every
+ * fixture below still states ENGINE numbers and every expectation still reads
+ * DISPLAY numbers — the recipe simply no longer lives in this lib (D-W51-2).
+ * A test that needs a deliberately mis-branded side builds the CompareSide by
+ * hand (the mixed-basis guard).
+ */
+interface RawSide {
+  name: string;
+  payload: LeverPayload;
+  states: MonthlyState[];
+  milestones: Milestones;
+}
+const side = (name: string, over: Partial<RawSide> = {}): RawSide => ({
   name, payload: emptyLeverPayload(), states: [st('2026-09')], milestones: {} as Milestones, ...over,
 });
-const input = (over: Partial<PlanReviewInput> = {}): PlanReviewInput => ({
-  a: side('Baseline'), b: side('Aggressive payoff'),
-  dollarMode: 'nominal', horizonMonths: 360,
-  deflator: { rate: 0.03, sourceLabel: 'your household setting' },
-  parity: EQ_PARITY, leverDiff: EMPTY_DIFF, ...over,
+const based = (raw: RawSide, basis: DollarBasis, rate: number): CompareSide => ({
+  ...raw,
+  milestones: toDisplayMilestones(new Map([[1, raw.milestones]]), basis, rate).get(1)!,
 });
+type InputOverrides = Partial<Omit<PlanReviewInput, 'a' | 'b'>> & { a?: RawSide; b?: RawSide };
+const input = (over: InputOverrides = {}): PlanReviewInput => {
+  const { a: rawA, b: rawB, ...rest } = over;
+  const basis: DollarBasis = rest.basis ?? 'future';
+  const deflator = rest.deflator ?? { rate: 0.03, sourceLabel: 'your household setting' };
+  return {
+    a: based(rawA ?? side('Baseline'), basis, deflator.rate),
+    b: based(rawB ?? side('Aggressive payoff'), basis, deflator.rate),
+    basis,
+    horizonMonths: 360,
+    deflator,
+    parity: EQ_PARITY,
+    leverDiff: EMPTY_DIFF,
+    ...rest,
+  };
+};
 const bl = (i: PlanReviewInput): string => lineText(buildPlanReview(i).bottomLine);
 
 describe('bottom-line ladder (§1.3) — every rung straddled', () => {
@@ -76,25 +107,25 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
       leverDiff: { onlyInA: [], onlyInB: ['Lump sum 2026-09: +$1 (investments)'], changed: [], isEmpty: false },
     });
     // floor = max(500, 0.005 × 103,000) = 515; Δ = 3,000 ≥ 515 → BL-3.
-    expect(bl(at)).toBe('Aggressive payoff ends $3,000 higher at the 30-year mark.');
+    expect(bl(at)).toBe('Aggressive payoff ends $3,000 higher at the 30-year mark (future $).');
     const under = input({
       a: side('Baseline', { milestones: { netWorth30y: 100_000 } as Milestones }),
       b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 100_400 } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['Lump sum 2026-09: +$1 (investments)'], changed: [], isEmpty: false },
     });
     // floor = max(500, 0.005 × 100,400) = 502; Δ = 400 < 502 → BL-6 with the floor.
-    expect(bl(under)).toBe('These plans end within $502 of each other over this horizon.');
+    expect(bl(under)).toBe('These plans end within $502 of each other over this horizon (future $).');
   });
 
-  it('BL-3 real mode: deflated by the fmtNetWorth30y recipe + basis suffix', () => {
+  it('BL-3 today: the lib receives display-basis milestones (the recipe lives in the boundary) + basis suffix', () => {
     const f = Math.pow(1.03, 30);
     const i = input({
-      dollarMode: 'real',
+      basis: 'today',
       a: side('Baseline', { milestones: { netWorth30y: 100_000 * f } as Milestones }),
       b: side('Aggressive payoff', { milestones: { netWorth30y: 103_000 * f } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
-    expect(bl(i)).toBe("Aggressive payoff ends $3,000 higher at the 30-year mark (today's dollars).");
+    expect(bl(i)).toBe("Aggressive payoff ends $3,000 higher at the 30-year mark (today's $).");
   });
 
   it('BL-3h: horizon under 30 years names the horizon end', () => {
@@ -104,7 +135,7 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
       b: side('Aggressive payoff', { milestones: { netWorth30y: 103_000 } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
-    expect(bl(i)).toBe('Aggressive payoff ends $3,000 higher at the end of your 20-year horizon.');
+    expect(bl(i)).toBe('Aggressive payoff ends $3,000 higher at the end of your 20-year horizon (future $).');
   });
 
   it('BL-3 fires AT the floor, not only above it (CR-BL3 says ≥)', () => {
@@ -114,23 +145,23 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
     // floor = max(500, 0.005 × 500) = 500; Δ = 500 — exactly the boundary.
-    expect(bl(i)).toBe('Aggressive payoff ends $500 higher at the 30-year mark.');
+    expect(bl(i)).toBe('Aggressive payoff ends $500 higher at the 30-year mark (future $).');
   });
 
   // D-W3-P7: the fmtNetWorth30y mirror keeps its FIXED 30-year exponent even
   // when netWorth30y is the horizon-end fallback — parity with the
   // Manage-scenarios column outranks local correction (D-W3-4).
-  it('BL-3h real mode deflates by (1+i)^30, never by horizonMonths/12', () => {
+  it('BL-3h today: the boundary recipe used (1+i)^30, never horizonMonths/12 — the lib deflates nothing', () => {
     const f = Math.pow(1.03, 30);
     const i = input({
-      dollarMode: 'real', horizonMonths: 240,
+      basis: 'today', horizonMonths: 240,
       a: side('Baseline', { milestones: { netWorth30y: 100_000 * f } as Milestones }),
       b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 103_000 * f } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
     // Fixed 30 → disp 100,000 vs 103,000 → Δ $3,000. An exponent of 240/12
     // would leave 1.03^10 in both figures and render $4,032.
-    expect(bl(i)).toBe("Aggressive payoff ends $3,000 higher at the end of your 20-year horizon (today's dollars).");
+    expect(bl(i)).toBe("Aggressive payoff ends $3,000 higher at the end of your 20-year horizon (today's $).");
   });
 
   it('BL-3h: a horizon that is not a whole number of years names months', () => {
@@ -140,7 +171,7 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
       b: side('Aggressive payoff', { milestones: { netWorth30y: 103_000 } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
-    expect(bl(i)).toBe('Aggressive payoff ends $3,000 higher at the end of your 250-month horizon.');
+    expect(bl(i)).toBe('Aggressive payoff ends $3,000 higher at the end of your 250-month horizon (future $).');
   });
 
   // Smoke M1 (2026-09-02): the card read $3,822,730 while the Manage-scenarios
@@ -160,18 +191,18 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
     // gives 500,000.1 → $500,000, the $1 the smoke caught.
     expect(formatCurrency(1_000_000.5)).toBe('$1,000,001');
     expect(formatCurrency(500_000.4)).toBe('$500,000');
-    expect(bl(i)).toBe('Baseline ends $500,001 higher at the 30-year mark.');
+    expect(bl(i)).toBe('Baseline ends $500,001 higher at the 30-year mark (future $).');
   });
 
   it('M1: real mode rounds the DEFLATED sides, matching the modal column it mirrors', () => {
     const f = Math.pow(1.03, 30);
     const i = input({
-      dollarMode: 'real',
+      basis: 'today',
       a: side('Baseline', { milestones: { netWorth30y: 1_000_000.5 * f } as Milestones }),
       b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 500_000.4 * f } as Milestones }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
-    expect(bl(i)).toBe("Baseline ends $500,001 higher at the 30-year mark (today's dollars).");
+    expect(bl(i)).toBe("Baseline ends $500,001 higher at the 30-year mark (today's $).");
   });
 
   it('BL-4: both debt-free, differ (FI silent, NW under floor)', () => {
@@ -206,7 +237,7 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
     });
     const model = buildPlanReview(i);
     // floor = max(500, 0.005 × 100,000) = 500; Δ = 0 → BL-6, never BL-5.
-    expect(lineText(model.bottomLine)).toBe('These plans end within $500 of each other over this horizon.');
+    expect(lineText(model.bottomLine)).toBe('These plans end within $500 of each other over this horizon (future $).');
     expect(lineText(model.bottomLine)).not.toContain('identical');
     // The empty diff + equal parity still pairs with the honest MD-4 line.
     expect(model.mainDifference.map(lineText)).toEqual(['No differences — see the bottom line.']);
@@ -218,7 +249,39 @@ describe('bottom-line ladder (§1.3) — every rung straddled', () => {
       b: side('Aggressive payoff', { payload: variant() }),
       leverDiff: { onlyInA: [], onlyInB: ['x'], changed: [], isEmpty: false },
     });
-    expect(bl(i)).toBe(`These plans end within $${NET_WORTH_FLOOR_ABS} of each other over this horizon.`);
+    expect(bl(i)).toBe(`These plans end within $${NET_WORTH_FLOOR_ABS} of each other over this horizon (future $).`);
+  });
+
+  it('W5.1 structural guard (D-T5): a side branded for the other basis is refused, never blended', () => {
+    const i = input({
+      basis: 'today',
+      a: side('Baseline', { milestones: { netWorth30y: 900_000 } as Milestones }),
+      b: side('Aggressive payoff', { milestones: { netWorth30y: 400_000 } as Milestones }),
+    });
+    // A's milestones re-branded 'future' while the page basis stays 'today' —
+    // the nominal-on-real blend, made unrepresentable at the lib boundary.
+    const blended: PlanReviewInput = {
+      ...i,
+      a: { ...i.a, milestones: { basis: 'future', netWorth30y: 900_000 } as BasedMilestones },
+    };
+    expect(() => buildPlanReview(blended)).toThrow(/mixed-basis/);
+    expect(() => buildPlanReview(i)).not.toThrow();
+  });
+
+  it('BL-6 carries the basis suffix in BOTH bases (A3): $10,015 future / $4,775 today', () => {
+    // future floor = max(500, 0.005 x 2,003,000) = 10,015 ; delta = 3,000 < floor -> BL-6.
+    // today: 2,003,000 / 1.025^30 = 954,915.6 -> floor = max(500, 4,774.58) -> $4,775 ;
+    //        2,000,000 / 1.025^30 = 953,484.7 ; delta = 1,431 < floor -> BL-6.
+    const payloadB = { ...emptyLeverPayload(), extraLoanPayments: [{ loanId: 1, extraMonthly: 200 }] };
+    const deflator = { rate: 0.025, sourceLabel: 'your household setting' };
+    const sides = {
+      a: side('A', { milestones: { netWorth30y: 2_000_000 } as Milestones }),
+      b: side('B', { payload: payloadB, milestones: { netWorth30y: 2_003_000 } as Milestones }),
+    };
+    expect(bl(input({ ...sides, deflator })))
+      .toBe('These plans end within $10,015 of each other over this horizon (future $).');
+    expect(bl(input({ ...sides, basis: 'today', deflator })))
+      .toBe("These plans end within $4,775 of each other over this horizon (today's $).");
   });
 
   it('FI-scan-disabled pair (no FI on either side) never renders an FI sentence', () => {
@@ -345,7 +408,7 @@ describe('bottom-line ladder PRECEDENCE (FI → 30y NW → debt-free)', () => {
     }));
     expect(lineText(m.bottomLine)).toBe('Baseline reaches the FI mark 36 months earlier — June 2040 vs June 2043.');
     // …and the 30-year figure reappears as the CR-TR-NW bullet, never lost.
-    expect(m.tradeoffs.map(lineText)).toEqual(['Baseline ends $500,000 higher at the 30-year mark.']);
+    expect(m.tradeoffs.map(lineText)).toEqual(['Baseline ends $500,000 higher at the 30-year mark (future $).']);
   });
 
   it('the 30-year gap outranks debt-free when no FI date exists', () => {
@@ -354,7 +417,7 @@ describe('bottom-line ladder PRECEDENCE (FI → 30y NW → debt-free)', () => {
       b: side('Aggressive payoff', { payload: variant(), milestones: { debtFreeISO: '2030-03', netWorth30y: 400_000 } as Milestones }),
       leverDiff: NON_EMPTY,
     }));
-    expect(lineText(m.bottomLine)).toBe('Baseline ends $500,000 higher at the 30-year mark.');
+    expect(lineText(m.bottomLine)).toBe('Baseline ends $500,000 higher at the 30-year mark (future $).');
     expect(m.tradeoffs.map(lineText)).toEqual(['Baseline is debt-free 24 months earlier — March 2028 vs March 2030.']);
   });
 });
@@ -429,7 +492,7 @@ describe('tradeoffs (§1.4)', () => {
     expect(lineText(m.bottomLine)).toBe('Baseline reaches the FI mark 36 months earlier — June 2040 vs June 2043.');
     expect(m.tradeoffs.map(lineText)).toEqual([
       'Baseline is debt-free 24 months earlier — March 2028 vs March 2030.',
-      'Baseline ends $500,000 higher at the 30-year mark.',
+      'Baseline ends $500,000 higher at the 30-year mark (future $).',
       'Baseline starts drawing from investments in May 2044; Aggressive payoff in November 2046.',
       'Salary income ends January 2044 in Baseline and January 2046 in Aggressive payoff.',
     ]);
@@ -441,13 +504,13 @@ describe('same-yardstick block (§1.2)', () => {
     const m = buildPlanReview(input());
     expect(m.yardstick.map(lineText)).toEqual([
       'Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets.',
-      'Same yardstick: dollars are nominal and the horizon is 30 years — for every line on this chart.',
+      'Same yardstick: dollars are nominal (future dollars) and the horizon is 30 years — for every line on this chart.',
       'Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers.',
     ]);
   });
 
   it('real mode adds the one-deflator clause with its source label', () => {
-    const m = buildPlanReview(input({ dollarMode: 'real' }));
+    const m = buildPlanReview(input({ basis: 'today' }));
     expect(lineText(m.yardstick[1])).toBe(
       "Same yardstick: dollars are real (today's dollars) and the horizon is 30 years — for every line on this chart.");
     expect(lineText(m.yardstick[2])).toBe(
@@ -456,7 +519,7 @@ describe('same-yardstick block (§1.2)', () => {
 
   it('deflator mismatch appendix names the side and both rates', () => {
     const m = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       parity: { ...EQ_PARITY, inflation: { aEffective: 0.03, bEffective: 0.04, aHasOverrides: false, bHasOverrides: false } },
     }));
     expect(lineText(m.yardstick[2])).toBe(
@@ -466,7 +529,7 @@ describe('same-yardstick block (§1.2)', () => {
 
   it('override appendix wins over the mismatch appendix for that side', () => {
     const m = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       parity: { ...EQ_PARITY, inflation: { aEffective: 0.03, bEffective: 0.04, aHasOverrides: false, bHasOverrides: true } },
     }));
     expect(lineText(m.yardstick[2])).toBe(
@@ -476,7 +539,7 @@ describe('same-yardstick block (§1.2)', () => {
 
   it('A is appended before B when both sides diverge from the deflator', () => {
     const m = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       parity: { ...EQ_PARITY, inflation: { aEffective: 0.02, bEffective: 0.04, aHasOverrides: false, bHasOverrides: false } },
     }));
     expect(lineText(m.yardstick[2])).toBe(
@@ -489,14 +552,14 @@ describe('same-yardstick block (§1.2)', () => {
   // horizonClause covered non-12-divisible horizons.
   it('CR-Y2 names months when the horizon is not a whole number of years', () => {
     expect(lineText(buildPlanReview(input({ horizonMonths: 250 })).yardstick[1])).toBe(
-      'Same yardstick: dollars are nominal and the horizon is 250 months — for every line on this chart.');
+      'Same yardstick: dollars are nominal (future dollars) and the horizon is 250 months — for every line on this chart.');
   });
 
   // Review MINOR 18: pct is toFixed(2) trimmed in BOTH copies — toFixed(1)
   // would round a 2.75% deflator to 2.8% inside an honesty clause.
   it('the deflator rate keeps two decimals (2.75%, never 2.8%)', () => {
     const m = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       deflator: { rate: 0.0275, sourceLabel: 'your Settings default' },
     }));
     expect(lineText(m.yardstick[2])).toBe(
@@ -511,14 +574,14 @@ describe('same-yardstick block (§1.2)', () => {
   // its engine-effective baseline equals it by construction (D-W3-6).
   it('CR-Y3b fires on overrides alone, with the side effective == the deflator', () => {
     const bOnly = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       parity: { ...EQ_PARITY, inflation: { aEffective: 0.03, bEffective: 0.03, aHasOverrides: false, bHasOverrides: true } },
     }));
     expect(lineText(bOnly.yardstick[2])).toBe(
       "One deflator: today's-dollar conversion uses one inflation rate — 3%, your household setting — applied to every line."
       + ' Aggressive payoff carries year-specific inflation overrides but is deflated at a flat 3% here.');
     const aOnly = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       parity: { ...EQ_PARITY, inflation: { aEffective: 0.03, bEffective: 0.03, aHasOverrides: true, bHasOverrides: false } },
     }));
     expect(lineText(aOnly.yardstick[2])).toBe(
@@ -595,7 +658,7 @@ describe('advice-lexicon + reserved phrases (D-W3-10/11) — over EVERY template
   const models: PlanReviewModel[] = [
     buildPlanReview(input()),
     buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       a: side('Baseline', { milestones: { financialIndependenceISO: '2040-06', netWorth30y: 900_000 } as Milestones }),
       b: side('Aggressive payoff', { milestones: { debtFreeISO: '2031-01', netWorth30y: 400_000 } as Milestones }),
       parity: { ...EQ_PARITY, equal: false, differences: ['return 7% vs 5.5%'] },
@@ -616,10 +679,10 @@ describe('advice-lexicon + reserved phrases (D-W3-10/11) — over EVERY template
     Y4_DIFFER: { list: 'return 7% vs 5.5%; withdrawal strategy proportional vs sequential' },
     BL1: { earlierName: 'Baseline', months: 36, earlierLabel: 'June 2040', laterLabel: 'June 2043' },
     BL2: { yesName: 'Baseline', monthLabel: 'February 2041', noName: 'Aggressive payoff' },
-    BL3: { higherName: 'Baseline', delta: '$205,993', horizonClause: 'at the 30-year mark', basisSuffix: " (today's dollars)" },
+    BL3: { higherName: 'Baseline', delta: '$205,993', horizonClause: 'at the 30-year mark', basisSuffix: " (today's $)" },
     BL4: { earlierName: 'Baseline', months: 24, earlierLabel: 'March 2028', laterLabel: 'March 2030' },
     BL5: undefined,
-    BL6: { floor: '$500' },
+    BL6: { floor: '$500', basisSuffix: " (today's $)" },
     TR_DEBT1: { yesName: 'Baseline', monthLabel: 'January 2030', noName: 'Aggressive payoff' },
     TR_DRAW2: { firstName: 'Baseline', firstLabel: 'May 2044', secondName: 'Aggressive payoff', secondLabel: 'November 2046' },
     TR_DRAW1: { name: 'Baseline', monthLabel: 'January 2045', otherName: 'Aggressive payoff' },
@@ -717,7 +780,7 @@ describe('golden byte pins (D-W3-P14) — reviewed against the copy contract, th
 
   it('assumptions-diverge, real mode', () => {
     const m = buildPlanReview(input({
-      dollarMode: 'real',
+      basis: 'today',
       a: side('Baseline', { milestones: { netWorth30y: 900_000 } as Milestones }),
       b: side('Aggressive payoff', { payload: variant(), milestones: { netWorth30y: 400_000 } as Milestones }),
       parity: {
@@ -870,17 +933,17 @@ describe('resolveComparePair (D-W3-3 lens)', () => {
 // Materialized from a reviewed first run (D-W3-P14): each string below was
 // printed once, checked line by line against the W3 copy contract, then locked.
 //
-// GOLDEN_ASSUMPTIONS_REAL's BL-3 figure, derived by hand against the
-// fmtNetWorth30y recipe (ManageScenariosModal.tsx:39-44) rather than trusted:
+// GOLDEN_ASSUMPTIONS_REAL's BL-3 figure, derived by hand against the ONE
+// 30-year recipe (basis-view.ts toDisplayMilestones, W5.1) rather than trusted:
 //   1.03^30                       = 2.427262471189662
 //   disp(900,000) = 900,000/1.03^30 = 370,788.08356431575  (higher → "Baseline")
 //   disp(400,000) = 400,000/1.03^30 = 164,794.70380636255
 //   |Δ|                            = 205,993.3797579532 → formatCurrency → $205,993
 //   floor = max(500, 0.005 × 370,788.08) = 1,853.94 → Δ ≥ floor, so BL-3 fires.
-const GOLDEN_BOTH_FI = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"Baseline reaches the FI mark "},{"text":"36 months","emphasis":true},{"text":" earlier — "},{"text":"June 2040","emphasis":true},{"text":" vs "},{"text":"June 2043","emphasis":true},{"text":"."}]},"tradeoffs":[{"parts":[{"text":"Baseline is debt-free "},{"text":"24 months","emphasis":true},{"text":" earlier — "},{"text":"March 2028","emphasis":true},{"text":" vs "},{"text":"March 2030","emphasis":true},{"text":"."}]}],"mainDifference":[{"parts":[{"text":"Only in Aggressive payoff: "},{"text":"Lump sum 2026-09: +$10,000 (investments)","emphasis":true}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
+const GOLDEN_BOTH_FI = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal (future dollars)","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"Baseline reaches the FI mark "},{"text":"36 months","emphasis":true},{"text":" earlier — "},{"text":"June 2040","emphasis":true},{"text":" vs "},{"text":"June 2043","emphasis":true},{"text":"."}]},"tradeoffs":[{"parts":[{"text":"Baseline is debt-free "},{"text":"24 months","emphasis":true},{"text":" earlier — "},{"text":"March 2028","emphasis":true},{"text":" vs "},{"text":"March 2030","emphasis":true},{"text":"."}]}],"mainDifference":[{"parts":[{"text":"Only in Aggressive payoff: "},{"text":"Lump sum 2026-09: +$10,000 (investments)","emphasis":true}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
 
-const GOLDEN_ONE_FI = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"Aggressive payoff reaches the FI mark within the horizon ("},{"text":"February 2041","emphasis":true},{"text":"); Baseline doesn\'t."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"Only in Baseline: "},{"text":"+$200/mo on Car loan (Always)","emphasis":true}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
+const GOLDEN_ONE_FI = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal (future dollars)","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"Aggressive payoff reaches the FI mark within the horizon ("},{"text":"February 2041","emphasis":true},{"text":"); Baseline doesn\'t."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"Only in Baseline: "},{"text":"+$200/mo on Car loan (Always)","emphasis":true}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
 
-const GOLDEN_ASSUMPTIONS_REAL = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"real (today\'s dollars)","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"One deflator: today\'s-dollar conversion uses one inflation rate — "},{"text":"3%","emphasis":true},{"text":", your household setting — applied to every line."},{"text":" Aggressive payoff is projected at "},{"text":"4%","emphasis":true},{"text":" inflation but deflated at "},{"text":"3%","emphasis":true},{"text":" here."}]},{"parts":[{"text":"These plans differ in assumptions, not just moves: "},{"text":"return 7% vs 5.5%","emphasis":true},{"text":"."}]}],"bottomLine":{"parts":[{"text":"Baseline ends "},{"text":"$205,993","emphasis":true},{"text":" higher at the 30-year mark (today\'s dollars)."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"Annual raises: 3% vs 2%","emphasis":true}]},{"parts":[{"text":"Assumption differences are listed under Same yardstick above."}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
+const GOLDEN_ASSUMPTIONS_REAL = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"real (today\'s dollars)","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"One deflator: today\'s-dollar conversion uses one inflation rate — "},{"text":"3%","emphasis":true},{"text":", your household setting — applied to every line."},{"text":" Aggressive payoff is projected at "},{"text":"4%","emphasis":true},{"text":" inflation but deflated at "},{"text":"3%","emphasis":true},{"text":" here."}]},{"parts":[{"text":"These plans differ in assumptions, not just moves: "},{"text":"return 7% vs 5.5%","emphasis":true},{"text":"."}]}],"bottomLine":{"parts":[{"text":"Baseline ends "},{"text":"$205,993","emphasis":true},{"text":" higher at the 30-year mark (today\'s $)."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"Annual raises: 3% vs 2%","emphasis":true}]},{"parts":[{"text":"Assumption differences are listed under Same yardstick above."}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
 
-const GOLDEN_IDENTICAL = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"These two scenarios are identical — their lines overlap."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"No differences — see the bottom line."}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';
+const GOLDEN_IDENTICAL = '{"yardstick":[{"parts":[{"text":"Same data: both lines start from one capture of your data — the same accounts, balances, loans, incomes, and tax brackets."}]},{"parts":[{"text":"Same yardstick: dollars are "},{"text":"nominal (future dollars)","emphasis":true},{"text":" and the horizon is "},{"text":"30 years","emphasis":true},{"text":" — for every line on this chart."}]},{"parts":[{"text":"Return, inflation, withdrawal, and tax assumptions are identical — the differences below come only from the plan levers."}]}],"bottomLine":{"parts":[{"text":"These two scenarios are identical — their lines overlap."}]},"tradeoffs":[],"mainDifference":[{"parts":[{"text":"No differences — see the bottom line."}]}],"footer":"A mechanical comparison of two scenarios you built — not advice, not a recommendation."}';

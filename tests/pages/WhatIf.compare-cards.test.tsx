@@ -12,6 +12,11 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { localTodayISO } from '@/lib/dates';
 import { seedWhatIfRealStores } from './whatif-store-seed';
+import {
+  WHATIF_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 import type { Account, AccountSnapshot, Household, Person } from '@/types/schema';
 
 // Harness preamble copied from WhatIf.test.tsx (same stubs, same fixtures),
@@ -132,7 +137,6 @@ const h = vi.hoisted(() => ({
   defaultCashApy: null as number | null,
   scenarios: [] as unknown[],
   projections: new Map<number, unknown[]>(),
-  dollarMode: 'nominal' as 'nominal' | 'real',
   roadmapCtx: null as unknown,
   roadmapResults: new Map<string, { status: string }>(),
   evaluateCalls: [] as unknown[],
@@ -146,7 +150,6 @@ vi.mock('@/stores/scenarios-store', () => ({
       visibleScenarioIds: () => h.scenarios.map((s) => (s as { id: number }).id),
       load: vi.fn(),
       projectedScenarios: () => h.projections,
-      dollarMode: h.dollarMode,
       inflation: 0.025,
       horizonMonths: 360,
       toggleVisibility: vi.fn(),
@@ -230,7 +233,8 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
     setSettings();
     h.cashAccounts = [];
     h.defaultCashApy = null;
-    h.dollarMode = 'nominal';
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
@@ -267,10 +271,10 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
     expect(screen.getByText('Save a second scenario to compare plans side by side.')).toBeInTheDocument();
   });
 
-  it('W3 scoreboard parity: the BL-3 delta equals the fmtNetWorth30y recipe over both sides', () => {
-    h.dollarMode = 'real';
+  it('W3 scoreboard parity: the BL-3 delta equals the ONE 30-year recipe over both sides', () => {
+    useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'today');
     renderWhatIf();
-    // The modal's recipe (ManageScenariosModal.tsx:39-44): disp = n / 1.025^30
+    // The ONE recipe (basis-view.ts toDisplayMilestones, W5.1): disp = n / 1.025^30
     // — displayInflation resolves to household.inflationAssumption here.
     const dispA = 900_000 / Math.pow(1.025, 30);
     const dispB = 400_000 / Math.pow(1.025, 30);
@@ -278,16 +282,25 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
     expect(delta).toBe('$238,371'); // hand-derived: 500,000 / 2.097567579081786
     expect(
       screen.getByText((_t, el) => el?.tagName === 'P'
-        && el.textContent === `Baseline ends ${delta} higher at the 30-year mark (today's dollars).`),
+        && el.textContent === `Baseline ends ${delta} higher at the 30-year mark (today's $).`),
     ).toBeInTheDocument();
   });
 
-  it('W3 nominal mode: no deflator clause and no today\'s-dollars suffix', () => {
+  it('W3/W5.1 Future $: no deflator clause, no today mark, the A1 yardstick and the A2 suffix', () => {
+    useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'future');
     renderWhatIf();
     const card = screen.getByTestId('whatif-compare-card');
     expect(card.textContent).not.toContain('One deflator');
+    expect(card.textContent).not.toContain("today's $");
     expect(card.textContent).not.toContain("today's dollars");
-    expect(card.textContent).toContain('Same yardstick: dollars are nominal and the horizon is 30 years');
+    expect(card.textContent).toContain('Same yardstick: dollars are nominal (future dollars) and the horizon is 30 years');
+    expect(lineOf('Baseline ends $500,000 higher at the 30-year mark (future $).')).toBeInTheDocument();
+  });
+
+  it("W5.1 D-T3: a fresh session opens the Compare card in today's dollars (the deliberate flip)", () => {
+    renderWhatIf();
+    expect(screen.getByTestId('whatif-compare-card').textContent).toContain('One deflator');
+    expect(lineOf("Baseline ends $238,371 higher at the 30-year mark (today's $).")).toBeInTheDocument();
   });
 
   it('W3: cards absent without projection data (page empty state owns the moment)', () => {
@@ -323,7 +336,8 @@ describe('WhatIf — W3 store wiring (loads + latched gate)', () => {
     setSettings();
     h.cashAccounts = [];
     h.defaultCashApy = null;
-    h.dollarMode = 'nominal';
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
@@ -367,7 +381,8 @@ describe('WhatIf — W3 page plumbing', () => {
     setSettings();
     h.cashAccounts = [];
     h.defaultCashApy = null;
-    h.dollarMode = 'nominal';
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
@@ -495,7 +510,7 @@ describe('WhatIf — W3 page plumbing', () => {
   // Review REFUTED-3 residual: CR-DL1 — the label must resolve from the SAME
   // active scenario effectiveBaselineInflation reads.
   it('the deflator clause names the ACTIVE scenario\'s inflation lever', () => {
-    h.dollarMode = 'real';
+    useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'today');
     const levered = { ...payload(), inflation: { defaultRate: 0.04, overrides: {} } };
     h.scenarios = [scenario(1, 'Baseline', { leverPayload: levered }), scenario(2, 'Aggressive payoff')];
     renderWhatIf();
@@ -509,7 +524,7 @@ describe('WhatIf — W3 page plumbing', () => {
   // deflator — substituting the latter makes engine ≡ deflator for every
   // household and silently truncates the CR-Y3a honesty appendix.
   it('the CR-Y3a appendix uses RealState.defaults, not the display deflator', () => {
-    h.dollarMode = 'real';
+    useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'today');
     renderWhatIf();
     expect(lineOf(
       "One deflator: today's-dollar conversion uses one inflation rate — 2.5%, your household setting — applied to every line."

@@ -44,6 +44,7 @@ import {
   resolveDeflatorSourceLabel,
   type ComparePairSelection,
 } from '@/lib/whatif/plan-review';
+import { useWhatIfBasisView } from '@/lib/calculators/basis-view';
 import type { ModelGapsInput } from '@/lib/model-gaps';
 import {
   detectMilestones,
@@ -160,6 +161,32 @@ export default function WhatIf() {
   // "Rendered more hooks than during the previous render".
   const settingsForDisplay = useSettingsStore((s) => s.settings) ?? null;
 
+  // Resolve the "headline" inflation rate used for the nominal → real
+  // display conversion. Task #15 (v1) chooses the simple baseline-rate
+  // approach over computing per-year deflators — see
+  // effectiveBaselineInflation() for the precedence chain. The active
+  // scenario wins; otherwise we fall back to household / settings.
+  // TODO(task15/v2): if the active scenario has per-year inflation
+  // overrides, the display path could compute per-year deflators in
+  // toReal() for a more accurate real-dollar view. Picked (a) baseline
+  // for v1 per spec §6.
+  const activeScenario =
+    scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline) ?? null;
+  const displayInflation = effectiveBaselineInflation(
+    activeScenario,
+    household ?? null,
+    settingsForDisplay,
+  );
+  // W3 CR-Y3: the deflator clause names WHERE that rate came from, branch for
+  // branch with the resolver above (D-W3-P9).
+  const deflatorSourceLabel = resolveDeflatorSourceLabel(
+    activeScenario,
+    household ?? null,
+    settingsForDisplay,
+  );
+  // (RM-1 / W5.1 P3: these are pure expressions and they feed the basis
+  // boundary's hook below, so they MUST sit above every early return.)
+
   const reload = useCallback(() => {
     load();
     loadLoans();
@@ -237,6 +264,16 @@ export default function WhatIf() {
     }
     return { projections: projs, milestones: ms };
   }, [real, scenarios, projectedScenarios, horizonMonths, household]);
+
+  // W5.1 (D-W51-1): the page's ONLY basis reader — ONE bundle carries the
+  // already-based chart map, the branded milestones, the scoreboard strings
+  // and the caption. RM-1: above every early return.
+  const basisView = useWhatIfBasisView({
+    projections,
+    milestones,
+    inflation: displayInflation,
+    startISO: real?.startISO ?? null,
+  });
 
   // Empty-state guard: if there are no projection rows (no visible
   // scenarios, no accounts with holdings, or persons.length === 0 so
@@ -406,30 +443,6 @@ export default function WhatIf() {
       </div>
     ) : null;
 
-  // Resolve the "headline" inflation rate used for the nominal → real
-  // display conversion. Task #15 (v1) chooses the simple baseline-rate
-  // approach over computing per-year deflators — see
-  // effectiveBaselineInflation() for the precedence chain. The active
-  // scenario wins; otherwise we fall back to household / settings.
-  // TODO(task15/v2): if the active scenario has per-year inflation
-  // overrides, the display path could compute per-year deflators in
-  // toReal() for a more accurate real-dollar view. Picked (a) baseline
-  // for v1 per spec §6.
-  const activeScenario =
-    scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline) ?? null;
-  const displayInflation = effectiveBaselineInflation(
-    activeScenario,
-    household ?? null,
-    settingsForDisplay,
-  );
-  // W3 CR-Y3: the deflator clause names WHERE that rate came from, branch for
-  // branch with the resolver above (D-W3-P9).
-  const deflatorSourceLabel = resolveDeflatorSourceLabel(
-    activeScenario,
-    household ?? null,
-    settingsForDisplay,
-  );
-
   const projectionChart = (
     <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
       <CardHeader className="pb-2">
@@ -518,7 +531,7 @@ export default function WhatIf() {
           <CompareScenariosCard
             scenarios={scenarios}
             projections={projections}
-            milestones={milestones}
+            displayMilestones={basisView.displayMilestones}
             household={household ?? null}
             engineContext={{
               inflation: real.defaults?.inflation,
@@ -530,7 +543,7 @@ export default function WhatIf() {
               cashAccountsWithBalances: real.cashAccountsWithBalances ?? [],
               persons: real.persons,
             }}
-            dollarMode={dollarMode}
+            basis={basisView.basis}
             horizonMonths={horizonMonths}
             displayInflation={displayInflation}
             deflatorSourceLabel={deflatorSourceLabel}

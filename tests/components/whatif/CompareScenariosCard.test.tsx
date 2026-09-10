@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CompareScenariosCard } from '@/components/whatif/CompareScenariosCard';
 import { emptyLeverPayload, type Milestones, type MonthlyState } from '@/lib/scenarios';
+import { toDisplayMilestones, type BasedMilestones } from '@/lib/calculators/basis-view';
 import {
   buildPlanReview, lineText, resolveComparePair,
   COMPARE_FOOTER, SECOND_SCENARIO_PROMPT, SEND_POINTER,
@@ -38,10 +39,13 @@ const HH = makeHousehold({ withdrawalRate: 0.04, inflationAssumption: 0.03 });
 const baseProps = {
   scenarios: [baseline, other],
   projections: new Map([[1, [st('2026-09')]], [2, [st('2026-09')]]]),
-  milestones: new Map<number, Milestones>([[1, {} as Milestones], [2, {} as Milestones]]),
+  displayMilestones: new Map<number, BasedMilestones>([
+    [1, { basis: 'future' } as BasedMilestones],
+    [2, { basis: 'future' } as BasedMilestones],
+  ]),
   household: HH,
   engineContext: { inflation: 0.03, cashAccountsWithBalances: [], persons: [] },
-  dollarMode: 'nominal' as const,
+  basis: 'future' as const,
   horizonMonths: 360,
   displayInflation: 0.03,
   deflatorSourceLabel: 'your household setting',
@@ -66,9 +70,9 @@ describe('CompareScenariosCard', () => {
   it('renders the model VERBATIM — no copy composed in TSX', () => {
     const { container } = renderCard();
     const expected = buildPlanReview({
-      a: { name: 'Baseline', payload: baseline.leverPayload, states: [st('2026-09')], milestones: {} as Milestones },
-      b: { name: 'Aggressive payoff', payload: other.leverPayload, states: [st('2026-09')], milestones: {} as Milestones },
-      dollarMode: 'nominal', horizonMonths: 360,
+      a: { name: 'Baseline', payload: baseline.leverPayload, states: [st('2026-09')], milestones: { basis: 'future' } as BasedMilestones },
+      b: { name: 'Aggressive payoff', payload: other.leverPayload, states: [st('2026-09')], milestones: { basis: 'future' } as BasedMilestones },
+      basis: 'future', horizonMonths: 360,
       deflator: { rate: 0.03, sourceLabel: 'your household setting' },
       parity: computeAssumptionParity(baseline.leverPayload, other.leverPayload, HH, { inflation: 0.03, cashAccountsWithBalances: [], persons: [] }),
       leverDiff: buildLeverDiff(baseline.leverPayload, other.leverPayload, { loanNames: {}, personCount: 0 }),
@@ -82,7 +86,11 @@ describe('CompareScenariosCard', () => {
 
   it('real mode renders the deflator clause the model built', () => {
     const { container } = renderCard({
-      dollarMode: 'real',
+      basis: 'today',
+      displayMilestones: new Map<number, BasedMilestones>([
+        [1, { basis: 'today' } as BasedMilestones],
+        [2, { basis: 'today' } as BasedMilestones],
+      ]),
       scenarios: [baseline, sc(2, { name: 'Aggressive payoff', leverPayload: { ...emptyLeverPayload(), inflation: { defaultRate: 0.04, overrides: {} } } })],
       pair: { a: baseline, b: sc(2, { name: 'Aggressive payoff', leverPayload: { ...emptyLeverPayload(), inflation: { defaultRate: 0.04, overrides: {} } } }) },
     });
@@ -205,11 +213,15 @@ describe('CompareScenariosCard', () => {
   // out of the scan without a bespoke carve-out.
   it('no prescriptive lexeme in any rendered narrative line', () => {
     const rich = renderCard({
-      dollarMode: 'real',
-      milestones: new Map<number, Milestones>([
-        [1, { financialIndependenceISO: '2040-06', debtFreeISO: '2028-03', netWorth30y: 900_000 } as Milestones],
-        [2, { financialIndependenceISO: '2043-06', debtFreeISO: '2030-03', netWorth30y: 400_000 } as Milestones],
-      ]),
+      basis: 'today',
+      displayMilestones: toDisplayMilestones(
+        new Map<number, Milestones>([
+          [1, { financialIndependenceISO: '2040-06', debtFreeISO: '2028-03', netWorth30y: 900_000 } as Milestones],
+          [2, { financialIndependenceISO: '2043-06', debtFreeISO: '2030-03', netWorth30y: 400_000 } as Milestones],
+        ]),
+        'today',
+        0.03,
+      ),
     });
     const lines = cardLines(rich.container);
     expect(lines.length).toBeGreaterThanOrEqual(5);
