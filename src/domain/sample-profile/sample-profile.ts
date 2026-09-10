@@ -150,27 +150,46 @@ async function personPresent(db: Database, current: string, legacy: string): Pro
 }
 
 async function seedPrimarySlice(db: Database, today: string): Promise<void> {
-  // 1. Household singleton (id = 1). OR IGNORE: a real household may already
-  //    exist; we don't clobber it — the donuts only need accounts/snapshots.
+  // 1. Household singleton (id = 1). Migration 0001 ALWAYS inserts it before
+  //    this seed runs (runMigrations precedes seedSampleProfile on both
+  //    consumer paths) with its own defaults: name NULL, filing_status
+  //    'SINGLE', state 'CA', city NULL, monthly_expense_baseline 0. An
+  //    `INSERT OR IGNORE INTO household …` here therefore never lands — the
+  //    same fallout three times (round-3 M2 baseline, W4 smoke D2 name,
+  //    v1.7.0 R2 filing status) — so there is no INSERT: each intended value
+  //    is a guarded backfill over the migration default, never over a value
+  //    someone typed. ORDER MATTERS: the filing-status guard reads the name
+  //    and baseline columns BEFORE their own backfills run.
+  //
+  //    filing_status (R2, chip task_32707759 — D-R2-1): a two-earner
+  //    household with a dependent, a joint account, a joint mortgage and a
+  //    shared surname ran every W-2 surface (Paycheck card, What-If engine,
+  //    the Roadmap's IRA band) through SINGLE brackets. 'SINGLE' is also a
+  //    value a person can type, so the guard is the whole migration-default
+  //    tuple: the row exactly as 0001 wrote it.
   await db.execute(
-    `INSERT OR IGNORE INTO household (id, name, filing_status, state, city, monthly_expense_baseline)
-     VALUES (1, 'Sample Household', 'MFJ', 'CA', 'San Francisco', 6000)`,
+    `UPDATE household SET filing_status = 'MFJ'
+     WHERE id = 1 AND filing_status = 'SINGLE' AND name IS NULL AND monthly_expense_baseline = 0`,
   );
-  // Round-3 M2 fallout: the 0001 migration inserts the household singleton
-  // (baseline 0) BEFORE this seed runs, so the OR IGNORE above never lands
-  // and the demo household kept a $0 expense baseline — which the What-If
-  // page now honestly reports as a missing input instead of rendering
-  // $0-target FI cards. Fill in the intended demo baseline, but only over
-  // the migration default — never clobber a user-set value.
+  //    city: deliberately NOT backfilled (D-R2-2). The column holds a CITY
+  //    tax-jurisdiction code ('AL_BIRMINGHAM'-shaped — HouseholdForm's
+  //    "City (only if it has local income tax)" select over the seeded CITY
+  //    rules). No California city levies an income tax and no 'CA_*' rule
+  //    exists, so a display string here would look up NULL for tax, render
+  //    an EMPTY ScenarioBar chip (prettifyCityCode drops everything before
+  //    the first '_') and be cleared by the wizard's `${state}_` check.
+  //    NULL is the honest value.
+  //
+  //    Round-3 M2 fallout: the demo household kept a $0 expense baseline,
+  //    which the What-If page honestly reports as a missing input instead of
+  //    rendering $0-target FI cards. Migration default only.
   await db.execute(
     `UPDATE household SET monthly_expense_baseline = 6000
      WHERE id = 1 AND monthly_expense_baseline = 0`,
   );
-  // W4 smoke D2: the SAME fallout hit the name (SE-N4). 0001 omits the name
-  // column ⇒ NULL, so the INSERT's 'Sample Household' never landed and the
-  // sample tour showed an EMPTY "Household name (optional)" on Inputs →
-  // Household. Same shape as the baseline backfill: migration default only
-  // (NULL), never over a name someone typed.
+  //    W4 smoke D2 (SE-N4): 0001 omits the name column ⇒ NULL, so the sample
+  //    tour showed an EMPTY "Household name (optional)" on Inputs →
+  //    Household. Migration default only (NULL), never over a typed name.
   await db.execute(
     `UPDATE household SET name = 'Sample Household' WHERE id = 1 AND name IS NULL`,
   );

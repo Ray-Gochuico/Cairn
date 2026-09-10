@@ -85,6 +85,48 @@ describe('seedSampleProfile', () => {
     expect(rows[0].name).toBe('The Riveras');
   });
 
+  it('R2: backfills filing_status = MFJ over the 0001 default (the INSERT never landed — the name/baseline fallout a third time)', async () => {
+    // 0001 inserts the singleton with filing_status 'SINGLE' (NOT NULL, no
+    // column default) BEFORE the seed runs, so the seed's 'MFJ' never landed:
+    // Avery + Jordan Sample (joint checking, joint mortgage, one dependent)
+    // ran every W-2 surface through SINGLE brackets. Appendix A.1.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string }>(
+      'SELECT filing_status AS fs FROM household WHERE id = 1',
+    );
+    expect(rows[0].fs).toBe('MFJ');
+  });
+
+  it('R2: never clobbers a typed filing status', async () => {
+    await db.execute("UPDATE household SET filing_status = 'HOH' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string }>(
+      'SELECT filing_status AS fs FROM household WHERE id = 1',
+    );
+    expect(rows[0].fs).toBe('HOH');
+  });
+
+  it('R2: a typed SINGLE is indistinguishable from the default — the guard is the migration-default TUPLE (D-R2-1)', async () => {
+    // Someone named the household and left SINGLE: the row is no longer as
+    // 0001 wrote it, so the filing status is theirs. (The name backfill's own
+    // guard keeps the typed name too.)
+    await db.execute("UPDATE household SET name = 'The Riveras' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; name: string | null }>(
+      'SELECT filing_status AS fs, name FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', name: 'The Riveras' });
+  });
+
+  it('R2: a typed expense baseline alone also holds the filing-status guard closed', async () => {
+    await db.execute('UPDATE household SET monthly_expense_baseline = 4321 WHERE id = 1');
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; b: number }>(
+      'SELECT filing_status AS fs, monthly_expense_baseline AS b FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', b: 4321 });
+  });
+
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
     await seedSampleProfile(db);
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(
