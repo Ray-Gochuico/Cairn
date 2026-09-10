@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -163,15 +163,18 @@ describe('seedSampleProfile', () => {
   });
 
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
-    await seedSampleProfile(db);
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(
       'SELECT account_id, total_value, snapshot_date FROM account_snapshots',
     );
     expect(rows.length).toBe(SAMPLE_PROFILE.accountCount * 2);
     for (const r of rows) expect(r.total_value).toBeGreaterThan(0);
-    // All snapshots dated <= today so latestSnapshotForAccount picks them up.
-    const today = new Date().toISOString().slice(0, 10);
-    for (const r of rows) expect(r.snapshot_date <= today).toBe(true);
+    // All snapshots dated <= the seed day so latestSnapshotForAccount picks
+    // them up. R2 (D-R2-11): compared against the INJECTED local day, not
+    // `new Date().toISOString()` — the UTC day, which is YESTERDAY's local
+    // day east of UTC each morning (the seed suite's TZ=Pacific/Kiritimati
+    // failure the R1 review recorded).
+    for (const r of rows) expect(r.snapshot_date <= '2026-07-08').toBe(true);
   });
 
   it('writes loans with positive balances (drives LiabilitiesDonut)', async () => {
@@ -293,13 +296,11 @@ describe('seedSampleProfile', () => {
   });
 
   it('seeds an AUTO_DERIVED last-month-close snapshot per account (Monthly confirm has work)', async () => {
-    await seedSampleProfile(db);
-    const { lastBusinessDayOfMonth } = await import('@/lib/business-days');
-    const { lastMonthYyyymm } = await import('@/lib/input-pending');
-    const close = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    // R2 (D-R2-11): the close is the last business day of the month before
+    // the SEED day — June 30, 2026 (a Tuesday) — not the run date's.
     const rows = await db.select<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = ? AND source = 'AUTO_DERIVED'`,
-      [close],
+      `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = '2026-06-30' AND source = 'AUTO_DERIVED'`,
     );
     // T3: the 529's close snapshot is MANUAL by design (the college slice
     // stays out of the Monthly confirm flow), so it is accountCount − 1.
@@ -723,22 +724,15 @@ describe('R1 historical anchors — the shipped seed through the production mapp
   beforeEach(async () => {
     db = await freshDb();
   });
-  afterEach(() => { vi.useRealTimers(); });
 
-  /** The seed's `lastMonthClose` reads the REAL clock
-   *  (`lastBusinessDayOfMonth(lastMonthYyyymm(new Date()))`,
-   *  sample-profile.ts) rather than its own `todayISO` option, so seeding a
-   *  PAST day writes close-dated snapshots AFTER it and `latestSnapshotValue`
-   *  picks those instead of the seed-day rows (cash $29,400, not $30,000) —
-   *  run-date-dependent. Pinning Date to the seed day keeps the close row
-   *  behind it, which is what D-R1-P9 assumes ("run-date-stable"). The seed is
-   *  R2's file; this is a harness pin, not a fix. (Same fake-timer idiom this
-   *  file already uses for the local-vs-UTC snapshot pin.) */
+  /** R2 made the seed pure over `todayISO` (sample-profile.ts `priorMonthClose`,
+   *  D-R2-5), so no clock pin is needed: seeding 2026-07-08 writes close rows
+   *  on 2026-06-30 on ANY run date. If a real-clock read ever returns to a
+   *  close site these anchors go RED on cash ($29,400 from the close rows
+   *  instead of $30,000) — that is the point; do not re-add
+   *  `vi.useFakeTimers` here (D-R2-4). */
   async function seedAt(todayISO: string): Promise<void> {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(`${todayISO}T12:00:00`));
     await seedSampleProfile(db, { todayISO });
-    vi.useRealTimers();
   }
 
   // Seed month July 2026: complete months Apr/May/Jun at $5,911.12; four July
@@ -771,6 +765,7 @@ describe('R1 historical anchors — the shipped seed through the production mapp
     // this state is reachable only by holding one session across a local
     // month-end. It is the R1-F6 class on the LAST month, which the guard does
     // not cover (the seed's first real row is on the 1st).
+    // R2 made the close date follow todayISO; the seed's MONTHS are unchanged (m−3 … m−1 + the current-month stubs), so this pin stands as written — the stub-month class itself remains a chip (R2 plan Task 9 Step 6).
     await seedAt('2026-07-08');
     const ctx = await seededCtx(db, '2026-08-01');
     expect(efContext(ctx).baseline).toBeCloseTo(4478.09, 2); // (3 × 5,911.12 + 179.01) / 4
