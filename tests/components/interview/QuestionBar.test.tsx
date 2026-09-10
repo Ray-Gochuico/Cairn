@@ -75,6 +75,45 @@ describe('QuestionBar', () => {
     expect(useInterviewBarStore.getState().submitted).toBeNull();
   });
 
+  /* R3 review (MINOR 4): C8 — the interview gate's "What changed" box is fixed
+     by construction (QuestionBar hands the modal `gate.document`, id
+     'interview', diff intact), but nothing in the suite asserted the box AT THE
+     INTERVIEW ID. These two pins do. They go red if QuestionBar ever builds its
+     own document without the diff, or hard-codes another id ('app_wide' would
+     find no prior under the 1.0 seed), or if the modal stops keying the box on
+     a recorded earlier acceptance of the presented document. */
+  describe('the interview gate’s what-changed box (R3, keyed at the interview id)', () => {
+    const openGate = () => {
+      render(<MemoryRouter><QuestionBar ctx={fixtureCtx()} /></MemoryRouter>);
+      fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '10000' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+    };
+
+    it('a household that accepted interview 1.0 is re-gated at 1.1 and reads the interview diff', () => {
+      useAcceptancesStore.setState({ acceptedVersions: { interview: '1.0' } } as never);
+      openGate();
+      expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+      expect(screen.getByText('Version 1.1')).toBeInTheDocument();
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+      // Identity, not copy: the box carries THIS document's diff (the interview
+      // 1.1 text is pinned in tests/legal/disclosures.test.ts, not duplicated).
+      expect(screen.getByText(DISCLOSURES.interview.diffFromPrevious as string)).toBeInTheDocument();
+      expect(useInterviewBarStore.getState().submitted).toBeNull(); // nothing computed pre-accept
+    });
+
+    it('a household that never accepted the interview disclosure reads the body and the attestation, no box (C8)', () => {
+      useAcceptancesStore.setState({ acceptedVersions: { app_wide: '1.5' } } as never);
+      openGate();
+      expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+      expect(screen.queryByText(DISCLOSURES.interview.diffFromPrevious as string)).toBeNull();
+      expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: DISCLOSURES.interview.acceptanceCheckboxLabel }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('CI-11: the no-baseline skip row carries the Open Household → CTA link (review M3)', () => {
     const ctx = fixtureCtx({ household: makeHousehold({ monthlyExpenseBaseline: 0 }) });
     render(<MemoryRouter><QuestionBar ctx={ctx} /></MemoryRouter>);

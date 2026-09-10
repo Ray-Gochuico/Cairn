@@ -184,5 +184,40 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       expect(screen.queryByRole('button', { name: /continue/i })).toBeNull();
       expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     });
+
+    /* R3 review (MINOR 0): app_wide and backtest are both at 1.5, so their two
+       summaries are the SAME string (CR-R3-4 names the version, not the
+       document). Without an accessible name on the wrapping <section> a screen
+       reader reads "What changed in version 1.5, collapsed" twice with nothing
+       between them. Each viewer names itself from its own <h3>, which is what
+       promotes a bare <section> to an announced region — so these pins go red
+       the moment the aria-labelledby (or the h3 id it points at) is dropped. */
+    it('every viewer is an announced region named by its own document title — five distinct names', () => {
+      renderSection();
+      const titles = ['Disclaimer', 'About the Roadmap', 'About the Learning feature', 'About the Historical Backtest', 'About the Frameworks'];
+      expect(new Set(titles).size).toBe(5);
+      const regions = titles.map((name) => screen.getByRole('region', { name }));
+      expect(new Set(regions).size).toBe(5);
+      for (const region of regions) {
+        expect(region.getAttribute('data-testid')).toBe('disclosure-viewer');
+      }
+    });
+
+    it('the two identical "What changed in version 1.5" summaries are told apart by their region names', () => {
+      renderSection();
+      // Byte-identical summary strings — the document context lives in the region name.
+      expect(screen.getAllByText('What changed in version 1.5')).toHaveLength(2);
+      const backtest = screen.getByRole('region', { name: 'About the Historical Backtest' });
+      const appWide = screen.getByRole('region', { name: 'Disclaimer' });
+      expect(backtest).not.toBe(appWide);
+      expect(within(backtest).getByText('What changed in version 1.5')).toBeInTheDocument();
+      expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
+      // The interview note names its own version inside its own region.
+      expect(
+        within(screen.getByRole('region', { name: 'About the Frameworks' })).getByText(
+          'What changed in version 1.1',
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });

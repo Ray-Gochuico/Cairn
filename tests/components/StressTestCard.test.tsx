@@ -357,8 +357,13 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
     expect(screen.getByText('Version 1.5')).toBeInTheDocument();
     expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    // CR-R3-1 as a literal, not DISCLOSURES.backtest.acceptanceCheckboxLabel
+    // (constraint 3): the label is consent copy, so this pin has to trip on the
+    // next bump rather than follow the registry to whatever it becomes.
     expect(
-      screen.getByRole('checkbox', { name: DISCLOSURES.backtest.acceptanceCheckboxLabel }),
+      screen.getByRole('checkbox', {
+        name: 'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
+      }),
     ).toBeInTheDocument();
   });
 });

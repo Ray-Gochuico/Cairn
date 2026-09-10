@@ -442,7 +442,9 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText(`Version ${DISCLOSURES.backtest.version}`)).toBeInTheDocument();
+    // Literal, not DISCLOSURES.backtest.version (constraint 3): every consent
+    // literal in a card test is a drift guard that must trip on the next bump.
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
     expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByTestId('disclosure-modal-body')).toBeNull();

@@ -25,12 +25,28 @@ export function DisclosureViewer({ document }: Props) {
   // title, but keep a fallback so a missing one can't render an empty heading.
   const title = document.title ?? 'Disclosure';
 
+  // R3 review (MINOR 0): two entries can sit at the same version, so their
+  // notes render the same <summary> name ("What changed in version 1.5") twice
+  // on this page with nothing to tell them apart. Naming each <section> from
+  // its own <h3> turns it into an announced region, so assistive tech reads the
+  // note inside "About the Historical Backtest" instead of a second,
+  // indistinguishable summary. The id is derived from the title the heading
+  // already renders, so the viewer stays a pure function of the registry entry;
+  // the visible copy (CR-R3-4) is byte-untouched.
+  const titleId = `disclosure-viewer-${title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')}-title`;
+
   return (
     <section
       data-testid="disclosure-viewer"
+      aria-labelledby={titleId}
       className="rounded-lg border border-border/60 bg-muted/30 p-4"
     >
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <h3 id={titleId} className="text-sm font-semibold text-foreground">
+        {title}
+      </h3>
       <p className="mt-0.5 text-xs text-muted-foreground">Version {document.version}</p>
       {/*
         R3 (v1.7.0): the what-changed note has a permanent, read-only home here

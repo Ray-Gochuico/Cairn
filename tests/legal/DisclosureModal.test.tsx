@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 
@@ -142,6 +142,56 @@ describe('DisclosureModal', () => {
       seed({ app_wide: '1.0' });
       render(<DisclosureModal document={{ ...appWideDoc, version: '1.1' }} onAccept={vi.fn()} />);
       expect(screen.queryByText(/what changed/i)).toBeNull();
+    });
+
+    /* R3 review (MINOR 5): the five cases above all seed 'ready' BEFORE the
+       render, so a refactor that read the projection once at mount, or that
+       keyed the box on `status`, or that cleared `acceptedVersions` inside
+       load(), would survive every one of them. These three pin the decision as
+       a live selector over `acceptedVersions` alone. */
+    it('hydration: no box while the projection is still empty, then the box appears when the prior row lands', () => {
+      useAcceptancesStore.setState({
+        acceptedVersions: {},
+        status: 'loading',
+        isLoading: true,
+        error: null,
+      });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+      act(() => {
+        useAcceptancesStore.setState({
+          acceptedVersions: { app_wide: '1.0' },
+          status: 'ready',
+          isLoading: false,
+          error: null,
+        });
+      });
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+      expect(screen.getByText(/added the pro-rata caveat/i)).toBeInTheDocument();
+    });
+
+    it('a descendant re-load (status back to "loading", rows kept) does not hide the box — status is never read', () => {
+      seed({ app_wide: '1.0' });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+      act(() => {
+        useAcceptancesStore.setState({ status: 'loading', isLoading: true });
+      });
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    });
+
+    it('the modal never calls the acceptances store’s load() (the shared-boot-store re-load gotcha)', () => {
+      const load = vi.fn(() => Promise.resolve());
+      useAcceptancesStore.setState({
+        acceptedVersions: { app_wide: '1.0' },
+        status: 'ready',
+        isLoading: false,
+        error: null,
+        load,
+      });
+      render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
+      expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+      expect(load).not.toHaveBeenCalled();
     });
   });
 
