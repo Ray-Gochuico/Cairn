@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
@@ -125,6 +127,39 @@ describe('seedSampleProfile', () => {
       'SELECT filing_status AS fs, monthly_expense_baseline AS b FROM household WHERE id = 1',
     );
     expect(rows[0]).toEqual({ fs: 'SINGLE', b: 4321 });
+  });
+
+  it('R2: city stays NULL — the column is a CITY tax-jurisdiction code and CA has none (D-R2-2)', async () => {
+    // The chip asked for `city = 'San Francisco'`. HouseholdForm's city
+    // field is a select over the seeded CITY rules ('AL_BIRMINGHAM'-shaped
+    // codes); no 'CA_*' rule exists (no California city levies an income
+    // tax), so a display string would look up NULL for tax, render an EMPTY
+    // ScenarioBar chip (prettifyCityCode drops everything before the first
+    // '_') and be cleared by the wizard's `${state}_` check. NULL is honest.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ city: string | null; state: string }>(
+      'SELECT city, state FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ city: null, state: 'CA' });
+    // The premise, pinned: if a CA city rule ever lands, revisit D-R2-2.
+    const caCity = await db.select<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM tax_rules WHERE jurisdiction_type = 'CITY' AND jurisdiction_code LIKE 'CA\\_%' ESCAPE '\\'",
+    );
+    expect(caCity[0].n).toBe(0);
+  });
+
+  it('R2: the seed never INSERTs the household row — 0001 owns the singleton; every intended value is a guarded backfill (D-R2-3)', () => {
+    // Structural pin (the plugin-sql-close.test.ts idiom): the dead INSERT
+    // OR IGNORE read as if it landed and hid the same fallout three waves
+    // running. No INSERT into household, no display-string city, no stale
+    // "12-mo average" claim anywhere in the seed source.
+    const src = readFileSync(
+      resolve(__dirname, '../../../src/domain/sample-profile/sample-profile.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/INSERT\s+(OR\s+\w+\s+)?INTO\s+household\b/i);
+    expect(src).not.toMatch(/San Francisco/);
+    expect(src).not.toMatch(/12-mo average/);
   });
 
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {

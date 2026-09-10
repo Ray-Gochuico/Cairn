@@ -154,7 +154,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    this seed runs (runMigrations precedes seedSampleProfile on both
   //    consumer paths) with its own defaults: name NULL, filing_status
   //    'SINGLE', state 'CA', city NULL, monthly_expense_baseline 0. An
-  //    `INSERT OR IGNORE INTO household …` here therefore never lands — the
+  //    `INSERT OR IGNORE` into that table here therefore never lands — the
   //    same fallout three times (round-3 M2 baseline, W4 smoke D2 name,
   //    v1.7.0 R2 filing status) — so there is no INSERT: each intended value
   //    is a guarded backfill over the migration default, never over a value
@@ -562,6 +562,8 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
  * May 2034 (2016-05 + 216 months) — the e2e pins that month label, so the
  * date of birth is load-bearing. CA household + MFJ → the deduction hint
  * exercises the CI-C15 null contract ("No state deduction encoded for CA.").
+ * (MFJ is real since R2; the hint is the same under every status because the
+ * table has no CA row.)
  * Orthogonal to the framework-card e2e pins (no cash/savings/loan/holding
  * rows; FI-eligible portfolio excludes 529s per fi-portfolio.ts). BOTH
  * snapshots are MANUAL-source: the Monthly confirm flow keys on
@@ -617,7 +619,8 @@ function recentWithinMonth(iso: string, daysBack: number): string {
  * 13 rows per complete month (m-3, m-2, m-1) + 1 reimbursed work dinner (m-1)
  * + 4 current-month rows = 44. Monthly real-spending total $5,911.12 — calm
  * and coherent with the $6,000 household baseline (the Roadmap EF rule
- * prefers this 12-mo average once transactions exist; deliberate).
+ * averages the COMPLETE months once one exists — R1 — so the tour reads
+ * $5,911 from 3 months of spending; deliberate).
  * Loan payments route through the system-managed P&I categories and sum to
  * the seeded loan payments: Mortgage $1,190.17 + $2,810.83 = $4,001;
  * Car $701.12 + $89.88 = $791.
