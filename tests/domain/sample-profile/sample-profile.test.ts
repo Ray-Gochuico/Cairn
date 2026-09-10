@@ -616,6 +616,80 @@ describe('seedSampleProfile', () => {
   });
 });
 
+describe('R2: the seed is pure over its todayISO option — no real-clock read at the close sites', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+
+  it('close-dated snapshots derive from todayISO: seed 2026-07-08 → every close row is 2026-06-30, every today row 2026-07-08 (Appendix A.4)', async () => {
+    // Before R2 the three close sites read `lastMonthYyyymm(new Date())` —
+    // the real clock — so seeding a PAST day wrote close rows dated AFTER it
+    // (on a September run: 2026-08-31 > 2026-07-08) and `latestSnapshotValue`
+    // read the close values (cash $29,400) instead of the seed-day values
+    // ($30,000). R1's anchors had to pin Date to stay stable (dropped in R2).
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const dates = await db.select<{ d: string; n: number }>(
+      'SELECT snapshot_date AS d, COUNT(*) AS n FROM account_snapshots GROUP BY snapshot_date ORDER BY d',
+    );
+    // 2026-06-30 is a Tuesday — the last business day of June 2026 is June 30 itself.
+    expect(dates).toEqual([
+      { d: '2026-06-30', n: SAMPLE_PROFILE.accountCount },
+      { d: '2026-07-08', n: SAMPLE_PROFILE.accountCount },
+    ]);
+  });
+
+  it.each([
+    ['2026-07-01', '2026-06-30'], // Tue — a seed on the 1st still closes the PRIOR month
+    ['2026-08-01', '2026-07-31'], // Fri
+    ['2026-09-01', '2026-08-31'], // Mon
+    ['2027-01-15', '2026-12-31'], // Thu — the December rollover
+    ['2026-03-01', '2026-02-27'], // Sat Feb 28 → Fri Feb 27
+  ])('seed %s → prior-month close %s (business-day + rollover arithmetic, no clock)', async (todayISO, close) => {
+    await seedSampleProfile(db, { todayISO });
+    const rows = await db.select<{ d: string }>(
+      'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+    );
+    expect(rows.map((r) => r.d)).toEqual([close, todayISO]);
+  });
+
+  it.each(['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago'])(
+    'identical snapshot dates under TZ=%s — string-pure over todayISO on a month boundary (D-R2-5)',
+    async (tz) => {
+      // The discriminating case: a UTC parse of '2026-07-01' (`new Date(iso)`)
+      // is June 30 in Los Angeles and would put the close row in MAY; the
+      // local-midnight inverse (dateFromLocalISO) keeps July → June 30 under
+      // every zone. Same process.env.TZ idiom as the local-vs-UTC pin above.
+      const prevTZ = process.env.TZ;
+      process.env.TZ = tz;
+      try {
+        await seedSampleProfile(db, { todayISO: '2026-07-01' });
+        const rows = await db.select<{ d: string }>(
+          'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+        );
+        expect(rows.map((r) => r.d)).toEqual(['2026-06-30', '2026-07-01']);
+      } finally {
+        if (prevTZ === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTZ;
+      }
+    },
+  );
+
+  it('the seed reads the real clock exactly once — the app-wide acceptance INSTANT (D-R2-6)', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../../../src/domain/sample-profile/sample-profile.ts'),
+      'utf8',
+    );
+    // Strip // line comments and docblock lines so prose never counts.
+    const stripped = src
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, ''))
+      .join('\n');
+    expect(stripped.match(/new Date\(\)/g)).toHaveLength(1);
+    expect(stripped).not.toMatch(/lastMonthYyyymm\(new Date\(\)\)/);
+  });
+});
+
 /** RoadmapContext/InterviewContext from the SEEDED DB through the production
  *  row mappers — never inline SQL semantics (the anchor pins the app's
  *  arithmetic, not the test's).

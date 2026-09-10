@@ -1,7 +1,7 @@
 import type { Database } from '@/db/db';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { lastBusinessDayOfMonth } from '@/lib/business-days';
-import { localTodayISO } from '@/lib/dates';
+import { dateFromLocalISO, localTodayISO } from '@/lib/dates';
 import { lastMonthYyyymm } from '@/lib/input-pending';
 
 /**
@@ -80,6 +80,18 @@ const firstOfMonthMonthsAgo = (iso: string, n: number): string => {
   const d = new Date(Date.UTC(y, m - 1 - n, 1));
   return d.toISOString().slice(0, 10);
 };
+
+/** Last business day of the month BEFORE the reference LOCAL calendar day.
+ * Pure over the seed's own `todayISO` (R2, D-R2-5): the three close-snapshot
+ * sites used to call `lastMonthYyyymm` on the REAL CLOCK instead — so
+ * seeding a past day wrote close rows dated AFTER it and `latestSnapshotValue`
+ * read the close values ($29,400 cash) instead of the seed-day values
+ * ($30,000). `dateFromLocalISO` (local midnight of the day) is the only safe
+ * argument for `lastMonthYyyymm`'s LOCAL getters — never `new Date(iso)`, a
+ * UTC-midnight parse that is the previous local day west of UTC. */
+function priorMonthClose(iso: string): string {
+  return lastBusinessDayOfMonth(lastMonthYyyymm(dateFromLocalISO(iso)));
+}
 
 export async function seedSampleProfile(
   db: Database,
@@ -243,7 +255,8 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    (drives every latest-value donut) and dated LAST MONTH'S CLOSE
   //    (wave-7 W7: the Monthly check-in's Section 1 only shows confirm
   //    cards for accounts with an AUTO_DERIVED snapshot at
-  //    lastBusinessDayOfMonth(last month) — today-only snapshots left the
+  //    lastBusinessDayOfMonth(last month) — "last month" relative to the
+  //    SEED DAY (R2) — today-only snapshots left the
   //    demo/e2e Monthly window with nothing to confirm). Last-month values
   //    sit slightly below today's so the month reads as growth.
   async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
@@ -253,7 +266,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
       [accountId, snapshotDate, totalValue],
     );
   }
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   await addSnapshot(brokerageId, today, 285000);
   await addSnapshot(rothId, today, 92000);
   await addSnapshot(k401Id, today, 410000);
@@ -469,7 +482,7 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'VTI', 60, 12500)`, [partnerBrokerageId]);
   await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'MSFT', 20, 6800)`, [partnerBrokerageId]);
 
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
     await db.execute(
       `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
@@ -585,7 +598,7 @@ async function seedCollegeSlice(db: Database, today: string): Promise<void> {
      VALUES (1, ?, '529 College Fund', 'Vanguard', 'ACCOUNT_529', ?)`,
     [person[0]?.id ?? null, dep.lastInsertId!],
   );
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   await db.execute(
     `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
      VALUES (?, ?, ?, 'MANUAL')`,
