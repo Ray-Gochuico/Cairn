@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { createHash } from 'node:crypto';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { TUITION_BASE_ACADEMIC_YEAR } from '@/data/tuition-reference';
 
@@ -119,10 +120,10 @@ describe('DISCLOSURES', () => {
 });
 
 describe('backtest disclosure', () => {
-  it('is registered at v1.4 with a non-empty body + acceptance label', () => {
+  it('is registered at v1.5 with a non-empty body + acceptance label', () => {
     const d = DISCLOSURES.backtest;
     expect(d).toBeDefined();
-    expect(d.version).toBe('1.4');
+    expect(d.version).toBe('1.5');
     expect(d.body.length).toBeGreaterThan(200);
     expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
   });
@@ -168,6 +169,8 @@ describe('backtest disclosure', () => {
     expect(diff).toContain('re-read and re-accept');
   });
 
+  // v1.5 (R3) bumped for the LABEL; the body is still v1.4's text. The body
+  // pins below keep their v1.4 titles on purpose — they describe the text.
   it('v1.4 covers all THREE surfaces and keeps W1’s scoped bracket line', () => {
     const body = DISCLOSURES.backtest.body;
     expect(body).toContain('Backtest tool');
@@ -189,23 +192,31 @@ describe('backtest disclosure', () => {
     expect(body).toContain('one sequence that happened once');
   });
 
-  it('backtest v1.4 diff describes exactly the History addition against v1.3', () => {
+  it('backtest v1.5 diff describes exactly the label widening against v1.4 — and nothing else', () => {
     const diff = DISCLOSURES.backtest.diffFromPrevious!;
     expect(diff.length).toBeGreaterThan(40);
+    expect(diff).toContain('acceptance checkbox');
+    expect(diff).toContain('Backtest tool');
+    expect(diff).toContain('Stress Test card');
     expect(diff).toContain('History view');
-    expect(diff).toContain('Path to FI');
-    expect(diff).toContain('Compound Interest');
+    expect(diff).toContain('The body is unchanged from v1.4.');
     expect(diff).toMatch(/Please re-read and re-accept\.$/);
-    // References no OTHER change:
-    expect(diff).toContain(
-      'No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing',
-    );
   });
 
-  it('backtest v1.4 keeps the acceptance checkbox label byte-identical to v1.3', () => {
-    expect(DISCLOSURES.backtest.acceptanceCheckboxLabel).toBe(
-      'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
+  it('backtest v1.5 acceptance checkbox label is the contract string (CR-R3-1), byte-exact, naming the body’s three views', () => {
+    const label = DISCLOSURES.backtest.acceptanceCheckboxLabel;
+    expect(label).toBe(
+      'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
     );
+    // The label's nouns are the body's own bold nouns — the label names what the body names.
+    for (const noun of ['Backtest tool', 'Stress Test card', 'History view']) {
+      expect(label).toContain(noun);
+      expect(DISCLOSURES.backtest.body).toContain(`**${noun}**`);
+    }
+    // v1.4's tail is carried byte-identically: the widening added nouns and nothing else.
+    expect(
+      label.endsWith(' report historical outcomes only and are not a prediction of future performance.'),
+    ).toBe(true);
   });
   /* W2 review fix (MINOR 9): the v1.4 edits were byte-exact against the copy
      contract but only CONTAINS-pinned, so one-word mutants in the consent text
@@ -226,9 +237,23 @@ describe('backtest disclosure', () => {
     );
   });
 
-  it('backtest v1.4 diffFromPrevious is the contract string, byte-exact', () => {
+  it('backtest v1.5 diffFromPrevious is the contract string (CR-R3-2), byte-exact', () => {
     expect(DISCLOSURES.backtest.diffFromPrevious).toBe(
-      'Version 1.4 adds the History view on the Path to FI and Compound Interest calculators: the same 1871–2022 dataset now also drives an accumulation-side percentile band (the middle half and median across every full-length historical stretch) plus a reached-the-target count on those two cards. The opening now names those surfaces alongside the surfaces named in v1.3. No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.3. Please re-read and re-accept.',
+      'Version 1.5 changes only the acceptance checkbox: it now names all three views of the 1871–2022 replay that this document covers — the Backtest tool, the Stress Test card, and the History view — where the v1.4 checkbox named only the backtest and stress test. The body is unchanged from v1.4. Please re-read and re-accept.',
+    );
+  });
+
+  /* R3 (v1.7.0): v1.5 bumped for a LABEL change; its diff says "The body is
+     unchanged from v1.4." That sentence is machine-checked here — the body's
+     SHA-256 and length at v1.4 (identical from ed659f7a through 2cde688c).
+     A one-character body edit reds this pin; the protocol answer is a bump +
+     a diff that names the edit + a re-pin here. Recompute:
+       node --input-type=module -e "const m=await import('file://'+process.cwd()+'/src/legal/disclosures.ts');const{createHash}=await import('node:crypto');const b=m.DISCLOSURES.backtest.body;console.log(b.length,createHash('sha256').update(b,'utf8').digest('hex'))" */
+  it('backtest v1.5 body is byte-identical to v1.4 (the diff’s "unchanged" claim, machine-checked)', () => {
+    const body = DISCLOSURES.backtest.body;
+    expect(body.length).toBe(3392);
+    expect(createHash('sha256').update(body, 'utf8').digest('hex')).toBe(
+      'ded82e5e310e0cb4403eafb0dc0014d72a88c6dc525b1badae189e695a765b73',
     );
   });
 });

@@ -88,6 +88,17 @@ describe('useGatedReturnSource (D-UB10 deferred gate + restart-safe demotion)', 
     expect(result.current.source).toBe('ASSUMED');
     expect(result.current.gateDocument?.version).toBe(DISCLOSURES.backtest.version);
   });
+  /* R3 (v1.7.0): the transition v1.5 actually creates is accepted-1.4 ⇒
+     re-gated — the household that exists in the field on the day R3 ships.
+     The v1.3 pin above stays (two versions back). A gate that grandfathered
+     1.4 would survive every other test in this file. */
+  it('an accepted v1.4 is re-gated on first History activation (the v1.5 transition)', () => {
+    useAcceptancesStore.setState({ acceptedVersions: { backtest: '1.4' } });
+    const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));
+    act(() => result.current.requestHistory());
+    expect(result.current.source).toBe('ASSUMED');
+    expect(result.current.gateDocument?.version).toBe('1.5');
+  });
   it('selectAssumed returns to the assumed view and persists it', () => {
     accept();
     const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));

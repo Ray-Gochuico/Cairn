@@ -375,11 +375,20 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   await page.getByTestId('stress-test-trigger').click();
   await expect(page.getByTestId('stress-test-meaning')).toContainText('Accept the Historical Backtest disclosure');
   await page.getByRole('button', { name: 'Read and accept the Backtest disclosure' }).click();
-  // exact:true — the diff box's first sentence ('Version 1.4 adds the
-  // History view…') would otherwise substring-match too (strict mode).
-  await expect(page.getByText('Version 1.4', { exact: true })).toBeVisible();
-  await expect(page.getByText('What changed since you last accepted:')).toBeVisible();
-  await page.getByRole('checkbox', { name: /historical outcomes only/ }).check();
+  // exact:true — a diff box's first sentence ('Version 1.5 changes only…')
+  // would otherwise substring-match too (strict mode).
+  await expect(page.getByText('Version 1.5', { exact: true })).toBeVisible();
+  // R3 (D-R3-2): the seeded household has NO backtest acceptance row (the seed
+  // writes app_wide only), so this is a FIRST acceptance — the "What changed"
+  // box is re-prompt copy and must not render.
+  await expect(page.getByText('What changed since you last accepted:')).toHaveCount(0);
+  // CR-R3-1, exact — the v1.5 label names all three views the document covers.
+  await page
+    .getByRole('checkbox', {
+      name: 'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
+      exact: true,
+    })
+    .check();
   // DisclosureModal's continueLabel default is 'Continue' (verified at execution).
   await page.getByRole('button', { name: 'Continue' }).click();
   // Chips render; pick 2008 (the chip is a <label> wrapping a sr-only radio);
@@ -395,5 +404,23 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   await expect(page.getByText(/Holds means: the projected portfolio/)).toBeVisible();
   await expect(page.getByTestId('retirement-age-probes').getByRole('listitem').first()).toBeVisible();
   await expect(page.getByTestId('retirement-age-verdict')).toContainText('Earliest:');
+  // R3 item 3: the what-changed note has a permanent home in Settings →
+  // Disclosures, collapsed. Client-side navigation via the sidebar — the
+  // acceptance write above is still inside the sql.js shim's ~250 ms
+  // IndexedDB debounce (a page.goto here would reload a pre-write DB).
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Settings' }).click();
+  const backtestDoc = page
+    .getByTestId('disclosure-viewer')
+    .filter({ has: page.getByRole('heading', { name: 'About the Historical Backtest' }) });
+  await expect(backtestDoc.getByText('Version 1.5', { exact: true })).toBeVisible({ timeout: 30_000 });
+  const note = backtestDoc.getByText('What changed in version 1.5');
+  await expect(note).toBeVisible();
+  const noteText = backtestDoc.getByText('Version 1.5 changes only the acceptance checkbox', { exact: false });
+  await expect(noteText).toBeHidden(); // collapsed by default
+  await note.click();
+  await expect(noteText).toBeVisible();
+  // Read-only: no attestation in the Disclosures section (Notifications has a
+  // real checkbox elsewhere on the page — scope to the section's id).
+  await expect(page.locator('#disclosures').getByRole('checkbox')).toHaveCount(0);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });

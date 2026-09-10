@@ -5,7 +5,7 @@
  * Priming block copied from PathToFiCard.test.tsx (the house fixture):
  * pinned date 2026-05-14, Alice dob 1990-01-01. Default bar: portfolio
  * $100k (snapshot), $12k/yr contributions (12 × $1,000/mo), Moderate 6%,
- * SWR 4%, inflation 3%. Acceptance seeded at backtest '1.4' so most tests
+ * SWR 4%, inflation 3%. Acceptance seeded at backtest '1.5' so most tests
  * render ungated.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -280,7 +280,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(PINNED_DATE);
   primeStores();
-  seedAcceptance('backtest', '1.4');
+  seedAcceptance('backtest', '1.5');
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -320,15 +320,15 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByTestId('stress-window-picker')).toBeInTheDocument();
-    expect(accept).toHaveBeenCalledWith('backtest', '1.4');
+    expect(accept).toHaveBeenCalledWith('backtest', '1.5');
   });
 
-  it('the button mounts DisclosureModal (v1.4 + diff box); Escape cancels without accepting', () => {
+  it('the button mounts DisclosureModal (v1.5 + diff box); Escape cancels without accepting', () => {
     seedAcceptance('backtest', '1.2');
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.4')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('disclosure-modal-body')).not.toBeInTheDocument();
@@ -336,9 +336,35 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     expect(screen.getByTestId('stress-test-meaning')).toHaveTextContent('Accept the Historical Backtest disclosure');
   });
 
-  it('accepted at exactly 1.4 → the chips render', () => {
-    renderCard(); // default seed: '1.4'
+  it('accepted at exactly 1.5 → the chips render', () => {
+    renderCard(); // default seed: '1.5'
     expect(screen.getByTestId('stress-window-picker')).toBeInTheDocument();
+  });
+
+  it('an accepted v1.4 is re-gated (the v1.5 transition — the field household on the day R3 ships)', () => {
+    seedAcceptance('backtest', '1.4');
+    renderCard();
+    expect(screen.queryByTestId('stress-window-picker')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    // A prior acceptance is recorded → the re-prompt box renders (Task 3 keeps this true).
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+  });
+
+  it('R3: a NEVER-accepted household opens the modal without the what-changed box', () => {
+    seedAcceptance('app_wide', DISCLOSURES.app_wide.version); // another document accepted; backtest never
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
+    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    // CR-R3-1 as a literal, not DISCLOSURES.backtest.acceptanceCheckboxLabel
+    // (constraint 3): the label is consent copy, so this pin has to trip on the
+    // next bump rather than follow the registry to whatever it becomes.
+    expect(
+      screen.getByRole('checkbox', {
+        name: 'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
+      }),
+    ).toBeInTheDocument();
   });
 });
 

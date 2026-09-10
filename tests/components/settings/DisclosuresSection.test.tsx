@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DisclosuresSection } from '@/components/settings/DisclosuresSection';
 import { DISCLOSURES } from '@/legal/disclosures';
@@ -47,14 +47,16 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     expect(Object.keys(DISCLOSURES)).toHaveLength(5);
   });
 
-  it('shows each document version', () => {
+  it('shows each document version (exact text — the R3 what-changed notes also begin "Version x.y …")', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.4, interview=1.1 —
-    // versions are surfaced so a user can see which revision they are reading.
-    expect(screen.getByText(/Version 1\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/Version 1\.4/)).toBeInTheDocument(); // backtest, W2
-    expect(screen.getByText(/Version 1\.1/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Version 1\.0/).length).toBeGreaterThanOrEqual(2);
+    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.5, interview=1.1.
+    // Exact-string matches on purpose: two documents are now 1.5, and each
+    // note's first sentence ("Version 1.5 adds…", "Version 1.5 changes only…",
+    // "Version 1.1 adds…") would substring-match a regex.
+    expect(screen.getAllByText('Version 1.5')).toHaveLength(2); // app_wide + backtest (R3 bump)
+    expect(screen.getAllByText('Version 1.1')).toHaveLength(1); // interview
+    expect(screen.getAllByText('Version 1.0')).toHaveLength(2); // roadmap + learning
+    expect(screen.queryByText('Version 1.4')).toBeNull(); // the backtest bump landed
   });
 
   it('renders each document body as Markdown (bold → <strong>, no literal asterisks)', () => {
@@ -115,6 +117,107 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       '[data-testid="disclosure-viewer"]',
     );
     expect(appWide).not.toBeNull();
-    expect(within(appWide as HTMLElement).getByText(/Version 1\.5/)).toBeInTheDocument();
+    expect(within(appWide as HTMLElement).getByText('Version 1.5')).toBeInTheDocument();
+  });
+
+  describe('what-changed notes (R3, v1.7.0 — the diff has a permanent, read-only home)', () => {
+    const viewerOf = (title: string) => {
+      const viewer = screen
+        .getAllByTestId('disclosure-viewer')
+        .find((v) => within(v).queryByRole('heading', { name: title }) !== null);
+      expect(viewer, `viewer for "${title}"`).toBeDefined();
+      return viewer as HTMLElement;
+    };
+
+    it('renders one collapsed note per document that ships a diffFromPrevious — exactly three today — and none for the others', () => {
+      renderSection();
+      const withDiff = Object.values(DISCLOSURES).filter((d) => d.diffFromPrevious);
+      expect(withDiff.map((d) => d.title)).toEqual([
+        DISCLOSURES.app_wide.title,
+        DISCLOSURES.backtest.title,
+        DISCLOSURES.interview.title,
+      ]);
+      const notes = screen.getAllByTestId('disclosure-viewer-diff');
+      expect(notes).toHaveLength(3);
+      for (const note of notes) expect((note as HTMLDetailsElement).open).toBe(false);
+      for (const id of ['roadmap', 'learning'] as const) {
+        expect(within(viewerOf(DISCLOSURES[id].title)).queryByTestId('disclosure-viewer-diff')).toBeNull();
+      }
+    });
+
+    it('the backtest note: summary names the version, the text is hidden until toggled, then reads CR-R3-2 byte-exact', () => {
+      renderSection();
+      const viewer = viewerOf(DISCLOSURES.backtest.title);
+      const summary = within(viewer).getByText('What changed in version 1.5');
+      const body = within(viewer).getByTestId('disclosure-viewer-diff-body');
+      expect(body).not.toBeVisible();
+      fireEvent.click(summary);
+      expect(body).toBeVisible();
+      expect(body.textContent?.trim()).toBe(
+        'Version 1.5 changes only the acceptance checkbox: it now names all three views of the 1871–2022 replay that this document covers — the Backtest tool, the Stress Test card, and the History view — where the v1.4 checkbox named only the backtest and stress test. The body is unchanged from v1.4. Please re-read and re-accept.',
+      );
+      // The note sits between the version line and the body (the modal's order).
+      const version = within(viewer).getByText('Version 1.5');
+      const docBody = within(viewer).getByTestId('disclosure-viewer-body');
+      const note = within(viewer).getByTestId('disclosure-viewer-diff');
+      expect(version.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(note.compareDocumentPosition(docBody) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('every note names its own document’s version and carries that document’s diff (app_wide 1.5, interview 1.1)', () => {
+      renderSection();
+      const appWide = viewerOf(DISCLOSURES.app_wide.title);
+      expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
+      expect(within(appWide).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
+        DISCLOSURES.app_wide.diffFromPrevious,
+      );
+      const interview = viewerOf(DISCLOSURES.interview.title);
+      expect(within(interview).getByText('What changed in version 1.1')).toBeInTheDocument();
+      expect(within(interview).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
+        DISCLOSURES.interview.diffFromPrevious,
+      );
+    });
+
+    it('the notes are read-only chrome: still no checkbox, no Continue, no "since you last accepted" heading', () => {
+      renderSection();
+      expect(screen.queryByRole('checkbox')).toBeNull();
+      expect(screen.queryByRole('button', { name: /continue/i })).toBeNull();
+      expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    });
+
+    /* R3 review (MINOR 0): app_wide and backtest are both at 1.5, so their two
+       summaries are the SAME string (CR-R3-4 names the version, not the
+       document). Without an accessible name on the wrapping <section> a screen
+       reader reads "What changed in version 1.5, collapsed" twice with nothing
+       between them. Each viewer names itself from its own <h3>, which is what
+       promotes a bare <section> to an announced region — so these pins go red
+       the moment the aria-labelledby (or the h3 id it points at) is dropped. */
+    it('every viewer is an announced region named by its own document title — five distinct names', () => {
+      renderSection();
+      const titles = ['Disclaimer', 'About the Roadmap', 'About the Learning feature', 'About the Historical Backtest', 'About the Frameworks'];
+      expect(new Set(titles).size).toBe(5);
+      const regions = titles.map((name) => screen.getByRole('region', { name }));
+      expect(new Set(regions).size).toBe(5);
+      for (const region of regions) {
+        expect(region.getAttribute('data-testid')).toBe('disclosure-viewer');
+      }
+    });
+
+    it('the two identical "What changed in version 1.5" summaries are told apart by their region names', () => {
+      renderSection();
+      // Byte-identical summary strings — the document context lives in the region name.
+      expect(screen.getAllByText('What changed in version 1.5')).toHaveLength(2);
+      const backtest = screen.getByRole('region', { name: 'About the Historical Backtest' });
+      const appWide = screen.getByRole('region', { name: 'Disclaimer' });
+      expect(backtest).not.toBe(appWide);
+      expect(within(backtest).getByText('What changed in version 1.5')).toBeInTheDocument();
+      expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
+      // The interview note names its own version inside its own region.
+      expect(
+        within(screen.getByRole('region', { name: 'About the Frameworks' })).getByText(
+          'What changed in version 1.1',
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });
