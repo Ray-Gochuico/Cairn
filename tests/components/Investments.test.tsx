@@ -373,7 +373,7 @@ describe('Investments page — 529 section', () => {
     const section = screen.getByTestId('529-section');
     // The "at 18" label appears for the beneficiaried plan only — so exactly
     // one occurrence in the section.
-    expect(within(section).getAllByText(/^at 18$/)).toHaveLength(1);
+    expect(within(section).getAllByText(/^at 18 \(future \$\)$/)).toHaveLength(1);
     // Subtitle should mention the Moderate scenario rate (default 6.0%).
     expect(within(section).getByText(/6\.0%/)).toBeInTheDocument();
   });

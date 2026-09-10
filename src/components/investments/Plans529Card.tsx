@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Account, AccountSnapshot, Contribution, Dependent } from '@/types/schema';
 import { formatCurrency } from '@/lib/format';
+import type { RegisteredFigure } from '@/lib/calculators/basis-view';
 
 /**
  * 529 Plans card body — extracted 1:1 from the Investments page cardRegistry
@@ -68,6 +69,9 @@ function Plans529CardImpl({
           {' '}Projection stops at the 18th birthday — real 529s keep
           compounding (and can keep receiving contributions) through the
           college years, so this is a floor.
+          {/* W5.1 (F8, D-W51-8): the projection uses no inflation at all —
+              name the basis it IS in rather than leaving it silent. */}
+          {' '}Projected values are in future dollars — not adjusted for inflation.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -119,18 +123,19 @@ function Plans529CardImpl({
                   </div>
                 </div>
                 <div className="text-right shrink-0 text-sm space-y-0.5">
-                  <div className="font-mono tabular-nums">
+                  <div className="font-mono tabular-nums" data-testid="plan529-now">
                     {formatCurrency(currentValue)}{' '}
                     <span className="text-muted-foreground">now</span>
                   </div>
-                  <div className="font-mono tabular-nums">
+                  <div className="font-mono tabular-nums" data-testid="plan529-ytd">
                     {formatCurrency(ytdContribs)}{' '}
                     <span className="text-muted-foreground">YTD</span>
                   </div>
                   {dep != null && (
-                    <div className="font-mono tabular-nums">
+                    // W5.1 (F8, D-W51-8): a nominal FV — PINNED future dollars, phrased on the row.
+                    <div className="font-mono tabular-nums" data-testid="plan529-at-18">
                       {formatCurrency(projected)}{' '}
-                      <span className="text-muted-foreground">at 18</span>
+                      <span className="text-muted-foreground">at 18 (future $)</span>
                     </div>
                   )}
                 </div>
@@ -142,6 +147,13 @@ function Plans529CardImpl({
     </Card>
   );
 }
+
+/** W5.1 test-only registration (F8). `plan529-*` repeat per plan row. */
+export const PLANS_529_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'plan529-now', cls: 'invariant' },
+  { testId: 'plan529-ytd', cls: 'invariant' },
+  { testId: 'plan529-at-18', cls: 'pinned', pinnedBasis: 'future' },
+];
 
 const Plans529Card = memo(Plans529CardImpl);
 Plans529Card.displayName = 'Plans529Card';
