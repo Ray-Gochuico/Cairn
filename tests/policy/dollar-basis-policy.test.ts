@@ -46,9 +46,6 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
   'src/lib/financial-independence.ts',
   // Real-only by plan law (interview CI-33; anchor $13,538 / anti $18,194).
   'src/lib/interview/effects.ts',
-  // LEGACY: What-If's private basis. W5.1 migrates What-If and DELETES this
-  // entry (the shrink-only rule) — see the W5.1 chip.
-  'src/components/whatif/FiCards.tsx',
   // LEGACY (2026-09-01, coordinator ruling A): W1 landed before this ratchet;
   // uses realRateOfUnfloored for rate arithmetic only (no $ converter);
   // migrate onto the basis boundary then shrink by one — chip.
@@ -66,7 +63,8 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
  * shrink-only: LOWER this number when you prune; never raise it.
  */
 // W5.1 Task 5: ProjectionChart + the scenarios barrel came off — 9 → 7.
-const CONVERTER_ALLOWLIST_CEILING = 7;
+// W5.1 Task 6: FiCards came off — 7 → 6. Remaining LEGACY: the two W1 cards (ruling A chip).
+const CONVERTER_ALLOWLIST_CEILING = 6;
 
 async function converterOffenders(): Promise<string[]> {
   const files = await collectSourceFiles(SRC_DIR);
@@ -114,7 +112,7 @@ describe('dollar-basis policy — converter imports are boundary-only', () => {
     const stale = [...CONVERTER_ALLOWLIST].filter((f) => !offenders.has(f));
     expect(
       stale,
-      'prune these from CONVERTER_ALLOWLIST in the same PR (W5.1 prunes FiCards.tsx)',
+      'prune these from CONVERTER_ALLOWLIST in the same PR (shrink-only)',
     ).toEqual([]);
   });
 });
