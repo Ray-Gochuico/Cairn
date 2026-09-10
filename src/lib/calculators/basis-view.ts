@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { DollarBasis } from './dollar-basis';
-import { CALCULATORS_PAGE_ID, useDollarBasis } from './dollar-basis';
+import { CALCULATORS_PAGE_ID, WHATIF_PAGE_ID, useDollarBasis } from './dollar-basis';
 import { pctFromFraction } from './scenario-assumptions';
 import { useScenarioAssumptions } from './use-scenario-assumptions';
 import { toRealSeries } from './real-mode';
@@ -12,33 +12,23 @@ import {
   type CompoundInterestSeries,
 } from '@/lib/compound-interest';
 import { coastFi } from '@/lib/coast-fi';
+import { toReal } from '@/lib/scenarios/real';
 import { formatCurrency, formatSignedCurrency } from '@/lib/format';
 import type { ChartDisplayMode } from './real-mode';
 import type { HistoryFanResult } from '@/lib/history-fan';
+import type { Milestones, MonthlyState } from '@/lib/scenarios';
 
-/* ── D-T4 vocabulary — the ONLY place basis phrases are authored ────────── */
-
-/** Long register (headline-adjacent). */
-export const TODAY_PHRASE = "in today's dollars";
-export function futurePhrase(inflation: number): string {
-  const pct = pctFromFraction(inflation);
-  if (pct === 0) {
-    // F11 edge: with 0% inflation both bases are numerically identical — say so.
-    return "in future dollars — at your 0% inflation assumption these equal today's dollars";
-  }
-  return `in future dollars, at your ${pct}% inflation assumption`;
-}
-
-/** Short register (tile labels / chart captions). */
-export const TODAY_SUFFIX = "(today's $)";
-export const FUTURE_SUFFIX = '(future $)';
-
-export function basisPhrase(basis: DollarBasis, inflation: number): string {
-  return basis === 'today' ? TODAY_PHRASE : futurePhrase(inflation);
-}
-export function basisSuffix(basis: DollarBasis): string {
-  return basis === 'today' ? TODAY_SUFFIX : FUTURE_SUFFIX;
-}
+/* ── D-T4 vocabulary lives in basis-vocabulary.ts (W5.1 D-W51-10) and is
+      re-exported here so every landed import site is unchanged. ─────────── */
+export {
+  TODAY_PHRASE,
+  futurePhrase,
+  TODAY_SUFFIX,
+  FUTURE_SUFFIX,
+  basisPhrase,
+  basisSuffix,
+} from './basis-vocabulary';
+import { TODAY_PHRASE, TODAY_SUFFIX, basisPhrase, basisSuffix } from './basis-vocabulary';
 
 /** D-T10: the boundary owns the single mapping into the untouched engines. */
 export function chartModeFor(basis: DollarBasis): ChartDisplayMode {
@@ -312,5 +302,124 @@ export function buildHistoryFanView(
     chartData,
     holds: result.holds,
     crossing,
+  };
+}
+
+/* ── W5.1 What-If arm (D-W51-1) — the page's ONLY basis reader. ─────────────
+      One deflator (the page's displayInflation) feeds the chart's per-month
+      toReal, the 30-year milestone recipe, AND the caption's {i}%, so a
+      phrase/math mismatch is unrepresentable. Future mode passes the engine
+      maps through BY REFERENCE (no copy, no residue — P4). ─────────────── */
+
+/** Milestones carrying a runtime basis brand: value + basis travel together
+ *  (D-T5). plan-review.ts refuses a side whose brand differs from the page's. */
+export interface BasedMilestones extends Milestones {
+  readonly basis: DollarBasis;
+}
+
+/**
+ * THE 30-year net-worth recipe — ex-ManageScenariosModal.fmtNetWorth30y and
+ * plan-review.ts's inline mirror (D-W3-P7), now in ONE place (D-W51-2).
+ * Deliberately keeps the FIXED 30-year exponent even when netWorth30y is the
+ * horizon-end fallback on horizons < 360 months — parity with every shipped
+ * scoreboard figure outranks local correction; chipped for a horizon-aware fix.
+ */
+export function toDisplayMilestones(
+  milestones: Map<number, Milestones>,
+  basis: DollarBasis,
+  inflation: number,
+): Map<number, BasedMilestones> {
+  const out = new Map<number, BasedMilestones>();
+  for (const [id, m] of milestones) {
+    const nw = m.netWorth30y;
+    out.set(id, {
+      ...m,
+      basis,
+      netWorth30y: nw == null ? undefined : basis === 'today' ? nw / Math.pow(1 + inflation, 30) : nw,
+    });
+  }
+  return out;
+}
+
+/** WI-3 (D-W51-4): NO rate on the Future register — the engine's inflation
+ *  slice ignores household.inflationAssumption (engine.ts:196-201) and
+ *  scenarios carry their own levers, so a page-level {i}% would be false. */
+export const WHATIF_FUTURE_CAPTION = 'All lines in future dollars — not adjusted for inflation.';
+/** WI-2: Today's register names the ONE deflator actually applied (the CR-Y3 register). */
+export function whatIfChartCaption(basis: DollarBasis, inflation: number): string {
+  return basis === 'today'
+    ? `All lines in today's dollars — one deflator, ${pctFromFraction(inflation)}% inflation.`
+    : WHATIF_FUTURE_CAPTION;
+}
+
+export interface WhatIfBasisView {
+  basis: DollarBasis;
+  /** Short register (WI-4) — scoreboard cells. */
+  suffix: string;
+  /** WI-2 / WI-3 — the projection chart's registered caption. */
+  chartCaption: string;
+  /** Already-based MonthlyState maps for the chart + tooltip. */
+  displayProjections: Map<number, MonthlyState[]>;
+  /** Already-based, basis-branded milestones for the Compare card. */
+  displayMilestones: Map<number, BasedMilestones>;
+  /** Already-formatted 30y NW per scenario id (absent when the milestone is). */
+  netWorth30yFmt: Map<number, string>;
+}
+
+export function useWhatIfBasisView(args: {
+  projections: Map<number, MonthlyState[]>;
+  milestones: Map<number, Milestones>;
+  /** The page's display deflator (effectiveBaselineInflation) — the SAME number the caption names. */
+  inflation: number;
+  /** RealState.startISO ('YYYY-MM'); null before the page has a RealState. */
+  startISO: string | null;
+}): WhatIfBasisView {
+  const [basis] = useDollarBasis(WHATIF_PAGE_ID);
+  const { projections, milestones, inflation, startISO } = args;
+  return useMemo(() => {
+    let displayProjections = projections;
+    if (basis === 'today' && startISO) {
+      displayProjections = new Map<number, MonthlyState[]>();
+      for (const [id, states] of projections) {
+        displayProjections.set(id, toReal(states, inflation, startISO));
+      }
+    }
+    const displayMilestones = toDisplayMilestones(milestones, basis, inflation);
+    const netWorth30yFmt = new Map<number, string>();
+    for (const [id, m] of displayMilestones) {
+      if (m.netWorth30y != null) netWorth30yFmt.set(id, formatCurrency(m.netWorth30y));
+    }
+    return {
+      basis,
+      suffix: basisSuffix(basis),
+      chartCaption: whatIfChartCaption(basis, inflation),
+      displayProjections,
+      displayMilestones,
+      netWorth30yFmt,
+    };
+  }, [projections, milestones, inflation, startISO, basis]);
+}
+
+/**
+ * FiCards' Coast FI leg (inventory #11): a PINNED today's-dollar figure
+ * (fiTarget is today's expenses ÷ SWR; discounting at the FLOORED real rate is
+ * the W7-Finance / N1 discipline). Pure — no basis read; FiCards imports no
+ * converter after W5.1 (CONVERTER_ALLOWLIST pruned).
+ */
+export function buildWhatIfCoastLeg(args: {
+  fiTarget: number;
+  rate: number;
+  inflation: number;
+  yearsUntilRetirement: number;
+}): { coastFiTarget: number; coastFmt: string; realRateUnfloored: number } {
+  const coastFiTarget = coastFi({
+    requiredAtRetirement: args.fiTarget,
+    annualRate: realRateOf(args.rate, args.inflation), // FLOORED (coast edge semantics)
+    yearsUntilRetirement: args.yearsUntilRetirement,
+  });
+  return {
+    coastFiTarget,
+    coastFmt: formatCurrency(coastFiTarget),
+    realRateUnfloored: realRateOfUnfloored(args.rate, args.inflation), // the T17 explainer's "≈x% real"
   };
 }
