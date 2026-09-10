@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
@@ -15,6 +17,18 @@ import { efContext, evaluateSmallEmergencyFund } from '@/domain/roadmap/rules/em
 import { splitAmount } from '@/lib/interview/waterfall';
 import { dateFromLocalISO } from '@/lib/dates';
 import type { InterviewContext } from '@/types/interview';
+import { TaxRulesRepo } from '@/domain/tax-rules';
+import { JurisdictionType } from '@/types/enums';
+import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
+import { computePaycheck } from '@/lib/calculators/paycheck';
+import {
+  evaluateBackdoorRoth,
+  evaluateIraBand,
+  evaluateRothIra,
+  evaluateTraditionalIra,
+} from '@/domain/roadmap/rules/iraBranch';
+import { formatCurrency } from '@/lib/format';
+import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -85,16 +99,119 @@ describe('seedSampleProfile', () => {
     expect(rows[0].name).toBe('The Riveras');
   });
 
+  it('R2: backfills filing_status = MFJ over the 0001 default (the INSERT never landed — the name/baseline fallout a third time)', async () => {
+    // 0001 inserts the singleton with filing_status 'SINGLE' (NOT NULL, no
+    // column default) BEFORE the seed runs, so the seed's 'MFJ' never landed:
+    // Avery + Jordan Sample (joint checking, joint mortgage, one dependent)
+    // ran every W-2 surface through SINGLE brackets. Appendix A.1.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string }>(
+      'SELECT filing_status AS fs FROM household WHERE id = 1',
+    );
+    expect(rows[0].fs).toBe('MFJ');
+  });
+
+  it('R2: never clobbers a typed filing status', async () => {
+    await db.execute("UPDATE household SET filing_status = 'HOH' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string }>(
+      'SELECT filing_status AS fs FROM household WHERE id = 1',
+    );
+    expect(rows[0].fs).toBe('HOH');
+  });
+
+  it('R2: a typed SINGLE is indistinguishable from the default — the guard is the migration-default TUPLE (D-R2-1)', async () => {
+    // Someone named the household and left SINGLE: the row is no longer as
+    // 0001 wrote it, so the filing status is theirs. (The name backfill's own
+    // guard keeps the typed name too.)
+    await db.execute("UPDATE household SET name = 'The Riveras' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; name: string | null }>(
+      'SELECT filing_status AS fs, name FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', name: 'The Riveras' });
+  });
+
+  it('R2: a typed expense baseline alone also holds the filing-status guard closed', async () => {
+    await db.execute('UPDATE household SET monthly_expense_baseline = 4321 WHERE id = 1');
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; b: number }>(
+      'SELECT filing_status AS fs, monthly_expense_baseline AS b FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', b: 4321 });
+  });
+
+  it('R2 (review MINOR 3): a typed STATE holds the filing-status guard closed — the tuple is the COMPLETE 0001 row', async () => {
+    // 0001 writes the singleton as (name NULL, filing_status 'SINGLE',
+    // state 'CA', city NULL, monthly_expense_baseline 0). A household in New
+    // York that left the filing status on SINGLE is no longer that row, so
+    // the status is theirs: the guard names all five columns, not three.
+    await db.execute("UPDATE household SET state = 'NY' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; state: string }>(
+      'SELECT filing_status AS fs, state FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', state: 'NY' });
+  });
+
+  it('R2 (review MINOR 3): a typed CITY holds it closed too — the fifth column of the tuple', async () => {
+    // Unreachable through the shipped CA form today (no 'CA_*' CITY rule —
+    // D-R2-2), which is exactly why it is pinned: if a CA city rule ever
+    // lands, the guard already refuses to flip a row someone touched.
+    await db.execute("UPDATE household SET city = 'NY_NYC' WHERE id = 1");
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ fs: string; city: string | null }>(
+      'SELECT filing_status AS fs, city FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ fs: 'SINGLE', city: 'NY_NYC' });
+  });
+
+  it('R2: city stays NULL — the column is a CITY tax-jurisdiction code and CA has none (D-R2-2)', async () => {
+    // The chip asked for `city = 'San Francisco'`. HouseholdForm's city
+    // field is a select over the seeded CITY rules ('AL_BIRMINGHAM'-shaped
+    // codes); no 'CA_*' rule exists (no California city levies an income
+    // tax), so a display string would look up NULL for tax, render an EMPTY
+    // ScenarioBar chip (prettifyCityCode drops everything before the first
+    // '_') and be cleared by the wizard's `${state}_` check. NULL is honest.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await db.select<{ city: string | null; state: string }>(
+      'SELECT city, state FROM household WHERE id = 1',
+    );
+    expect(rows[0]).toEqual({ city: null, state: 'CA' });
+    // The premise, pinned: if a CA city rule ever lands, revisit D-R2-2.
+    const caCity = await db.select<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM tax_rules WHERE jurisdiction_type = 'CITY' AND jurisdiction_code LIKE 'CA\\_%' ESCAPE '\\'",
+    );
+    expect(caCity[0].n).toBe(0);
+  });
+
+  it('R2: the seed never INSERTs the household row — 0001 owns the singleton; every intended value is a guarded backfill (D-R2-3)', () => {
+    // Structural pin (the plugin-sql-close.test.ts idiom): the dead INSERT
+    // OR IGNORE read as if it landed and hid the same fallout three waves
+    // running. No INSERT into household, no display-string city, no stale
+    // "12-mo average" claim anywhere in the seed source.
+    const src = readFileSync(
+      resolve(__dirname, '../../../src/domain/sample-profile/sample-profile.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/INSERT\s+(OR\s+\w+\s+)?INTO\s+household\b/i);
+    expect(src).not.toMatch(/San Francisco/);
+    expect(src).not.toMatch(/12-mo average/);
+  });
+
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
-    await seedSampleProfile(db);
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(
       'SELECT account_id, total_value, snapshot_date FROM account_snapshots',
     );
     expect(rows.length).toBe(SAMPLE_PROFILE.accountCount * 2);
     for (const r of rows) expect(r.total_value).toBeGreaterThan(0);
-    // All snapshots dated <= today so latestSnapshotForAccount picks them up.
-    const today = new Date().toISOString().slice(0, 10);
-    for (const r of rows) expect(r.snapshot_date <= today).toBe(true);
+    // All snapshots dated <= the seed day so latestSnapshotForAccount picks
+    // them up. R2 (D-R2-11): compared against the INJECTED local day, not
+    // `new Date().toISOString()` — the UTC day, which is YESTERDAY's local
+    // day east of UTC each morning (the seed suite's TZ=Pacific/Kiritimati
+    // failure the R1 review recorded).
+    for (const r of rows) expect(r.snapshot_date <= '2026-07-08').toBe(true);
   });
 
   it('writes loans with positive balances (drives LiabilitiesDonut)', async () => {
@@ -216,13 +333,11 @@ describe('seedSampleProfile', () => {
   });
 
   it('seeds an AUTO_DERIVED last-month-close snapshot per account (Monthly confirm has work)', async () => {
-    await seedSampleProfile(db);
-    const { lastBusinessDayOfMonth } = await import('@/lib/business-days');
-    const { lastMonthYyyymm } = await import('@/lib/input-pending');
-    const close = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    // R2 (D-R2-11): the close is the last business day of the month before
+    // the SEED day — June 30, 2026 (a Tuesday) — not the run date's.
     const rows = await db.select<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = ? AND source = 'AUTO_DERIVED'`,
-      [close],
+      `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = '2026-06-30' AND source = 'AUTO_DERIVED'`,
     );
     // T3: the 529's close snapshot is MANUAL by design (the college slice
     // stays out of the Monthly confirm flow), so it is accountCount − 1.
@@ -487,6 +602,23 @@ describe('seedSampleProfile', () => {
     expect(pending).toEqual([{ reimbursed_at: null }]);
   });
 
+  it('R2 (review MINOR 1): the SEEDED rows render the editor status line — Appendix A.5 through the production mapper', async () => {
+    // A.5 says the tour's Skyline row reads 'Reimbursed $132.40 on Jun 25,
+    // 2026.' at todayISO 2026-07-08, but only a hand-typed dialog fixture
+    // proved it: a drift in the seed's `monthDay(today, 1, 25)` or in its
+    // reimbursed amount would leave every other R2 test green while the line
+    // the tour actually shows moved. This joins the seed to the shipped
+    // helper the way the tax anchors join it to computePaycheck.
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const rows = await new TransactionsRepo(db).list();
+    const skyline = rows.find((t) => t.merchant === 'Skyline Bistro');
+    const harborCab = rows.find((t) => t.merchant === 'Harbor Cab Co');
+    expect(skyline).toBeDefined();
+    expect(harborCab).toBeDefined();
+    expect(reimbursementStatusLine(skyline!)).toBe('Reimbursed $132.40 on Jun 25, 2026.');
+    expect(reimbursementStatusLine(harborCab!)).toBe('Awaiting reimbursement.');
+  });
+
   it('W4: real-spending months are deterministic — $5,911.12 per complete month, $179.01 partial', async () => {
     await seedSampleProfile(db, { todayISO: '2026-07-08' });
     // Net real spending per month, Spending-page semantics expressed in SQL:
@@ -539,6 +671,115 @@ describe('seedSampleProfile', () => {
   });
 });
 
+describe('R2: the seed is pure over its todayISO option — no real-clock read at the close sites', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+
+  it('close-dated snapshots derive from todayISO: seed 2026-07-08 → every close row is 2026-06-30, every today row 2026-07-08 (Appendix A.4)', async () => {
+    // Before R2 the three close sites read `lastMonthYyyymm(new Date())` —
+    // the real clock — so seeding a PAST day wrote close rows dated AFTER it
+    // (on a September run: 2026-08-31 > 2026-07-08) and `latestSnapshotValue`
+    // read the close values (cash $29,400) instead of the seed-day values
+    // ($30,000). R1's anchors had to pin Date to stay stable (dropped in R2).
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const dates = await db.select<{ d: string; n: number }>(
+      'SELECT snapshot_date AS d, COUNT(*) AS n FROM account_snapshots GROUP BY snapshot_date ORDER BY d',
+    );
+    // 2026-06-30 is a Tuesday — the last business day of June 2026 is June 30 itself.
+    expect(dates).toEqual([
+      { d: '2026-06-30', n: SAMPLE_PROFILE.accountCount },
+      { d: '2026-07-08', n: SAMPLE_PROFILE.accountCount },
+    ]);
+  });
+
+  it.each([
+    ['2026-07-01', '2026-06-30'], // Tue — a seed on the 1st still closes the PRIOR month
+    ['2026-08-01', '2026-07-31'], // Fri
+    ['2026-09-01', '2026-08-31'], // Mon
+    ['2027-01-15', '2026-12-31'], // Thu — the December rollover
+    ['2026-03-01', '2026-02-27'], // Sat Feb 28 → Fri Feb 27
+    // Review MINOR 2/5 — three more discriminating rows (weekdays derived
+    // from Jan 1 2026 = Thursday, Appendix A.4 style):
+    ['2028-03-01', '2028-02-29'], // leap February: Jan 1 2028 = Sat (2026, 2027 are
+                                  // common years, +365 ≡ 1 each); Feb 1 = +31 ≡ 3 → Tue;
+                                  // Feb 29 = +28 ≡ 0 → Tue, a business day and the 29th
+                                  // exists — an off-by-one in `Date.UTC(y, m, 0)` reads
+                                  // Feb 28 or Mar 1 here
+    ['2027-01-31', '2026-12-31'], // a 31st as the SEED day + the December rollover:
+                                  // Dec 1 2026 = +334 ≡ 5 → Tue, Dec 31 = +30 ≡ 2 → Thu
+    ['2026-11-01', '2026-10-30'], // weekend month-end #2 (so the business-day rule keeps a
+                                  // killer in every run month): Oct 1 2026 = +273 ≡ 0 → Thu,
+                                  // Oct 31 = +30 ≡ 2 → Sat → step back to Fri Oct 30
+  ])('seed %s → prior-month close %s (business-day + rollover arithmetic, no clock)', async (todayISO, close) => {
+    await seedSampleProfile(db, { todayISO });
+    const rows = await db.select<{ d: string }>(
+      'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+    );
+    expect(rows.map((r) => r.d)).toEqual([close, todayISO]);
+  });
+
+  it.each(['UTC', 'America/Los_Angeles', 'Pacific/Kiritimati', 'Pacific/Pago_Pago', 'America/Santiago'])(
+    'identical snapshot dates under TZ=%s — string-pure over todayISO on a month boundary (D-R2-5)',
+    async (tz) => {
+      // The discriminating case: a UTC parse of '2026-07-01' (`new Date(iso)`)
+      // is June 30 in Los Angeles and would put the close row in MAY; the
+      // local-midnight inverse (dateFromLocalISO) keeps July → June 30 under
+      // every zone. Same process.env.TZ idiom as the local-vs-UTC pin above.
+      const prevTZ = process.env.TZ;
+      process.env.TZ = tz;
+      try {
+        await seedSampleProfile(db, { todayISO: '2026-07-01' });
+        const rows = await db.select<{ d: string }>(
+          'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+        );
+        expect(rows.map((r) => r.d)).toEqual(['2026-06-30', '2026-07-01']);
+      } finally {
+        if (prevTZ === undefined) delete process.env.TZ;
+        else process.env.TZ = prevTZ;
+      }
+    },
+  );
+
+  it('a seed day whose LOCAL midnight does not exist still closes the prior month — TZ=America/Santiago, 2026-09-06 (review MINOR 2)', async () => {
+    // Chile's DST begins at local midnight on Sunday 2026-09-06 (the first
+    // Sunday of September: Sep 1 2026 = Jan 1 + 243 ≡ 5 → Tue), so 00:00
+    // does not exist that day and `dateFromLocalISO` relies on the engine
+    // rolling a gap FORWARD (to 01:00, still Sept 6). A roll BACKWARD would
+    // read September 5 — same month here, but the same gap on the 1st of a
+    // month would read the previous month and move the close a month early.
+    // The close is the last business day of August: Aug 1 2026 = Jan 1 + 212
+    // ≡ 2 → Sat, Aug 31 = +30 ≡ 2 → Mon, a business day.
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Santiago';
+    try {
+      await seedSampleProfile(db, { todayISO: '2026-09-06' });
+      const rows = await db.select<{ d: string }>(
+        'SELECT DISTINCT snapshot_date AS d FROM account_snapshots ORDER BY d',
+      );
+      expect(rows.map((r) => r.d)).toEqual(['2026-08-31', '2026-09-06']);
+    } finally {
+      if (prevTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = prevTZ;
+    }
+  });
+
+  it('the seed reads the real clock exactly once — the app-wide acceptance INSTANT (D-R2-6)', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../../../src/domain/sample-profile/sample-profile.ts'),
+      'utf8',
+    );
+    // Strip // line comments and docblock lines so prose never counts.
+    const stripped = src
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, '').replace(/^\s*\*.*$/, ''))
+      .join('\n');
+    expect(stripped.match(/new Date\(\)/g)).toHaveLength(1);
+    expect(stripped).not.toMatch(/lastMonthYyyymm\(new Date\(\)\)/);
+  });
+});
+
 /** RoadmapContext/InterviewContext from the SEEDED DB through the production
  *  row mappers — never inline SQL semantics (the anchor pins the app's
  *  arithmetic, not the test's).
@@ -572,22 +813,15 @@ describe('R1 historical anchors — the shipped seed through the production mapp
   beforeEach(async () => {
     db = await freshDb();
   });
-  afterEach(() => { vi.useRealTimers(); });
 
-  /** The seed's `lastMonthClose` reads the REAL clock
-   *  (`lastBusinessDayOfMonth(lastMonthYyyymm(new Date()))`,
-   *  sample-profile.ts) rather than its own `todayISO` option, so seeding a
-   *  PAST day writes close-dated snapshots AFTER it and `latestSnapshotValue`
-   *  picks those instead of the seed-day rows (cash $29,400, not $30,000) —
-   *  run-date-dependent. Pinning Date to the seed day keeps the close row
-   *  behind it, which is what D-R1-P9 assumes ("run-date-stable"). The seed is
-   *  R2's file; this is a harness pin, not a fix. (Same fake-timer idiom this
-   *  file already uses for the local-vs-UTC snapshot pin.) */
+  /** R2 made the seed pure over `todayISO` (sample-profile.ts `priorMonthClose`,
+   *  D-R2-5), so no clock pin is needed: seeding 2026-07-08 writes close rows
+   *  on 2026-06-30 on ANY run date. If a real-clock read ever returns to a
+   *  close site these anchors go RED on cash ($29,400 from the close rows
+   *  instead of $30,000) — that is the point; do not re-add
+   *  `vi.useFakeTimers` here (D-R2-4). */
   async function seedAt(todayISO: string): Promise<void> {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(`${todayISO}T12:00:00`));
     await seedSampleProfile(db, { todayISO });
-    vi.useRealTimers();
   }
 
   // Seed month July 2026: complete months Apr/May/Jun at $5,911.12; four July
@@ -620,6 +854,7 @@ describe('R1 historical anchors — the shipped seed through the production mapp
     // this state is reachable only by holding one session across a local
     // month-end. It is the R1-F6 class on the LAST month, which the guard does
     // not cover (the seed's first real row is on the 1st).
+    // R2 made the close date follow todayISO; the seed's MONTHS are unchanged (m−3 … m−1 + the current-month stubs), so this pin stands as written — the stub-month class itself remains a chip (R2 plan Task 9 Step 6).
     await seedAt('2026-07-08');
     const ctx = await seededCtx(db, '2026-08-01');
     expect(efContext(ctx).baseline).toBeCloseTo(4478.09, 2); // (3 × 5,911.12 + 179.01) / 4
@@ -648,5 +883,83 @@ describe('R1 historical anchors — the shipped seed through the production mapp
       expect(s.skipped.find((k) => k.bucket === 'ef_floor')?.reason).toBe(floorSkip);
     }
     expect(aggressive.skipped.find((k) => k.bucket === 'ef_target')?.reason).toBe(floorSkip);
+  });
+});
+
+/** PaycheckCard.tsx's own `annual` assembly, off the SEEDED rows: FEDERAL/US
+ *  + STATE/CA at the household's filing status, no city (city NULL →
+ *  cityBrackets null, SD 0), the per-return pretax aggregate. The card is a
+ *  summary of exactly this engine call (Wave 15 D1). */
+async function seededPaycheck(db: SqliteAdapter) {
+  const household = (await new HouseholdRepo(db).get())!;
+  const persons = await new PersonsRepo(db).list();
+  const dependents = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM dependents');
+  const rules = new TaxRulesRepo(db);
+  const federal = (await rules.lookup(2026, JurisdictionType.FEDERAL, 'US', household.filingStatus))!;
+  const state = (await rules.lookup(2026, JurisdictionType.STATE, household.state, household.filingStatus))!;
+  const { totalSalary, pretax } = aggregateHouseholdPretax(persons, {
+    filingStatus: household.filingStatus,
+    personCount: persons.length,
+    dependentCount: dependents[0].n,
+  });
+  return computePaycheck({
+    gross: totalSalary,
+    perPersonGross: persons.map((p) => p.annualSalaryPretax),
+    filingStatus: household.filingStatus,
+    federalBrackets: federal.brackets,
+    stateBrackets: state.brackets,
+    cityBrackets: null,
+    standardDeduction: {
+      federal: federal.standardDeduction,
+      state: state.standardDeduction,
+      city: 0,
+    },
+    pretax,
+  });
+}
+
+describe('R2 tax anchors — the MFJ seed through the production W-2 engine and the IRA-band rule (Appendix A.2 / A.3)', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = await freshDb();
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+  });
+
+  it('Paycheck (household, annual): $202,179.46 take-home under MFJ — SINGLE read $179,492.63', async () => {
+    const r = await seededPaycheck(db);
+    expect(r.gross).toBe(325_000);                        // 180,000 + 145,000
+    expect(r.pretax401k).toBe(29_600);                    // 18,000 (10%) + 11,600 (8%), both under the $24,500 cap
+    expect(r.pretaxTotal).toBe(29_600);                   // health / DCFSA / HSA are 0001 defaults (0)
+    expect(r.federal).toBeCloseTo(48_364, 2);             // taxable 263,200 through the 2026 MFJ schedule (0031)
+    expect(r.ss).toBeCloseTo(20_150, 2);                  // 11,160 + 8,990 — per-earner bases, both under $184,500
+    expect(r.medicare).toBeCloseTo(4_712.5, 2);           // 325,000 × 1.45%
+    expect(r.additionalMedicare).toBeCloseTo(675, 2);     // (325,000 − 250,000) × 0.9% — SINGLE's $200k threshold read 1,125
+    expect(r.fica).toBeCloseTo(25_537.5, 2);
+    expect(r.stateTax).toBeCloseTo(19_319.036, 2);        // CA MFJ (0002), SD 11,080, taxable 284,320
+    expect(r.cityTax).toBe(0);
+    expect(r.hasCity).toBe(false);
+    expect(r.hasStateTax).toBe(true);
+    expect(r.takeHome).toBeCloseTo(202_179.464, 2);       // 325,000 − 29,600 − (48,364 + 25,537.5 + 19,319.036)
+    // The card's Monthly strings (formatCurrency, whole dollars, halfExpand):
+    expect(formatCurrency(r.takeHome / 12)).toBe('$16,848');
+    expect(formatCurrency(r.federal / 12)).toBe('$4,030');
+    expect(formatCurrency(r.fica / 12)).toBe('$2,128');
+    expect(formatCurrency(r.stateTax / 12)).toBe('$1,610');
+  });
+
+  it('IRA band on the seed: MAGI $325,000 sits above the MFJ Roth phase-out start ($242,000) — every node states the MFJ band', async () => {
+    // The seed writes no contributions rows, so MAGI = salary (computeMagi).
+    const contributions = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM contributions');
+    expect(contributions[0].n).toBe(0);
+    const ctx = await seededCtx(db, '2026-07-08');
+    expect(evaluateIraBand(ctx).evidence).toBe(
+      'MAGI $325,000 is above the Roth phase-out start ($242,000). Backdoor Roth applies.',
+    );
+    expect(evaluateBackdoorRoth(ctx)).toMatchObject({
+      status: 'active',
+      evidence: 'MAGI $325,000 ≥ $242,000 (Roth phase-out start) — direct Roth contribution restricted. Be aware of the IRS pro-rata rule on any pre-tax IRA balance.',
+    });
+    expect(evaluateRothIra(ctx).evidence).toBe('MAGI $325,000 above $242,000 — backdoor Roth path instead.');
+    expect(evaluateTraditionalIra(ctx).evidence).toBe('MAGI $325,000 above $129,000 — Roth or backdoor path applies instead.');
   });
 });

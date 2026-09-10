@@ -1,7 +1,7 @@
 import type { Database } from '@/db/db';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { lastBusinessDayOfMonth } from '@/lib/business-days';
-import { localTodayISO } from '@/lib/dates';
+import { dateFromLocalISO, localTodayISO } from '@/lib/dates';
 import { lastMonthYyyymm } from '@/lib/input-pending';
 
 /**
@@ -81,6 +81,18 @@ const firstOfMonthMonthsAgo = (iso: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** Last business day of the month BEFORE the reference LOCAL calendar day.
+ * Pure over the seed's own `todayISO` (R2, D-R2-5): the three close-snapshot
+ * sites used to call `lastMonthYyyymm` on the REAL CLOCK instead — so
+ * seeding a past day wrote close rows dated AFTER it and `latestSnapshotValue`
+ * read the close values ($29,400 cash) instead of the seed-day values
+ * ($30,000). `dateFromLocalISO` (local midnight of the day) is the only safe
+ * argument for `lastMonthYyyymm`'s LOCAL getters — never `new Date(iso)`, a
+ * UTC-midnight parse that is the previous local day west of UTC. */
+function priorMonthClose(iso: string): string {
+  return lastBusinessDayOfMonth(lastMonthYyyymm(dateFromLocalISO(iso)));
+}
+
 export async function seedSampleProfile(
   db: Database,
   opts?: { todayISO?: string },
@@ -150,27 +162,52 @@ async function personPresent(db: Database, current: string, legacy: string): Pro
 }
 
 async function seedPrimarySlice(db: Database, today: string): Promise<void> {
-  // 1. Household singleton (id = 1). OR IGNORE: a real household may already
-  //    exist; we don't clobber it — the donuts only need accounts/snapshots.
+  // 1. Household singleton (id = 1). Migration 0001 ALWAYS inserts it before
+  //    this seed runs (runMigrations precedes seedSampleProfile on both
+  //    consumer paths) with its own defaults: name NULL, filing_status
+  //    'SINGLE', state 'CA', city NULL, monthly_expense_baseline 0. An
+  //    `INSERT OR IGNORE` into that table here therefore never lands — the
+  //    same fallout three times (round-3 M2 baseline, W4 smoke D2 name,
+  //    v1.7.0 R2 filing status) — so there is no INSERT: each intended value
+  //    is a guarded backfill over the migration default, never over a value
+  //    someone typed. ORDER MATTERS: the filing-status guard reads the name
+  //    and baseline columns BEFORE their own backfills run.
+  //
+  //    filing_status (R2, chip task_32707759 — D-R2-1): a two-earner
+  //    household with a dependent, a joint account, a joint mortgage and a
+  //    shared surname ran every W-2 surface (Paycheck card, What-If engine,
+  //    the Roadmap's IRA band) through SINGLE brackets. 'SINGLE' is also a
+  //    value a person can type, so the guard is the COMPLETE migration-
+  //    default tuple — all five columns 0001 writes (name NULL,
+  //    filing_status 'SINGLE', state 'CA', city NULL, baseline 0): the row
+  //    exactly as 0001 wrote it. Residual, accepted (R2 review MINOR 3): a
+  //    row on which someone typed SINGLE and changed NOTHING else still
+  //    reads MFJ after a seed — reachable only on the VITE_SEED_DEMO dev
+  //    path, since explore always seeds a fresh database.
   await db.execute(
-    `INSERT OR IGNORE INTO household (id, name, filing_status, state, city, monthly_expense_baseline)
-     VALUES (1, 'Sample Household', 'MFJ', 'CA', 'San Francisco', 6000)`,
+    `UPDATE household SET filing_status = 'MFJ'
+     WHERE id = 1 AND filing_status = 'SINGLE' AND name IS NULL AND monthly_expense_baseline = 0
+       AND state = 'CA' AND city IS NULL`,
   );
-  // Round-3 M2 fallout: the 0001 migration inserts the household singleton
-  // (baseline 0) BEFORE this seed runs, so the OR IGNORE above never lands
-  // and the demo household kept a $0 expense baseline — which the What-If
-  // page now honestly reports as a missing input instead of rendering
-  // $0-target FI cards. Fill in the intended demo baseline, but only over
-  // the migration default — never clobber a user-set value.
+  //    city: deliberately NOT backfilled (D-R2-2). The column holds a CITY
+  //    tax-jurisdiction code ('AL_BIRMINGHAM'-shaped — HouseholdForm's
+  //    "City (only if it has local income tax)" select over the seeded CITY
+  //    rules). No California city levies an income tax and no 'CA_*' rule
+  //    exists, so a display string here would look up NULL for tax, render
+  //    an EMPTY ScenarioBar chip (prettifyCityCode drops everything before
+  //    the first '_') and be cleared by the wizard's `${state}_` check.
+  //    NULL is the honest value.
+  //
+  //    Round-3 M2 fallout: the demo household kept a $0 expense baseline,
+  //    which the What-If page honestly reports as a missing input instead of
+  //    rendering $0-target FI cards. Migration default only.
   await db.execute(
     `UPDATE household SET monthly_expense_baseline = 6000
      WHERE id = 1 AND monthly_expense_baseline = 0`,
   );
-  // W4 smoke D2: the SAME fallout hit the name (SE-N4). 0001 omits the name
-  // column ⇒ NULL, so the INSERT's 'Sample Household' never landed and the
-  // sample tour showed an EMPTY "Household name (optional)" on Inputs →
-  // Household. Same shape as the baseline backfill: migration default only
-  // (NULL), never over a name someone typed.
+  //    W4 smoke D2 (SE-N4): 0001 omits the name column ⇒ NULL, so the sample
+  //    tour showed an EMPTY "Household name (optional)" on Inputs →
+  //    Household. Migration default only (NULL), never over a typed name.
   await db.execute(
     `UPDATE household SET name = 'Sample Household' WHERE id = 1 AND name IS NULL`,
   );
@@ -224,7 +261,8 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //    (drives every latest-value donut) and dated LAST MONTH'S CLOSE
   //    (wave-7 W7: the Monthly check-in's Section 1 only shows confirm
   //    cards for accounts with an AUTO_DERIVED snapshot at
-  //    lastBusinessDayOfMonth(last month) — today-only snapshots left the
+  //    lastBusinessDayOfMonth(last month) — "last month" relative to the
+  //    SEED DAY (R2) — today-only snapshots left the
   //    demo/e2e Monthly window with nothing to confirm). Last-month values
   //    sit slightly below today's so the month reads as growth.
   async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
@@ -234,7 +272,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
       [accountId, snapshotDate, totalValue],
     );
   }
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   await addSnapshot(brokerageId, today, 285000);
   await addSnapshot(rothId, today, 92000);
   await addSnapshot(k401Id, today, 410000);
@@ -450,7 +488,7 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'VTI', 60, 12500)`, [partnerBrokerageId]);
   await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'MSFT', 20, 6800)`, [partnerBrokerageId]);
 
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
     await db.execute(
       `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
@@ -543,6 +581,8 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
  * May 2034 (2016-05 + 216 months) — the e2e pins that month label, so the
  * date of birth is load-bearing. CA household + MFJ → the deduction hint
  * exercises the CI-C15 null contract ("No state deduction encoded for CA.").
+ * (MFJ is real since R2; the hint is the same under every status because the
+ * table has no CA row.)
  * Orthogonal to the framework-card e2e pins (no cash/savings/loan/holding
  * rows; FI-eligible portfolio excludes 529s per fi-portfolio.ts). BOTH
  * snapshots are MANUAL-source: the Monthly confirm flow keys on
@@ -564,7 +604,7 @@ async function seedCollegeSlice(db: Database, today: string): Promise<void> {
      VALUES (1, ?, '529 College Fund', 'Vanguard', 'ACCOUNT_529', ?)`,
     [person[0]?.id ?? null, dep.lastInsertId!],
   );
-  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  const lastMonthClose = priorMonthClose(today);
   await db.execute(
     `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
      VALUES (?, ?, ?, 'MANUAL')`,
@@ -598,7 +638,8 @@ function recentWithinMonth(iso: string, daysBack: number): string {
  * 13 rows per complete month (m-3, m-2, m-1) + 1 reimbursed work dinner (m-1)
  * + 4 current-month rows = 44. Monthly real-spending total $5,911.12 — calm
  * and coherent with the $6,000 household baseline (the Roadmap EF rule
- * prefers this 12-mo average once transactions exist; deliberate).
+ * averages the COMPLETE months once one exists — R1 — so the tour reads
+ * $5,911 from 3 months of spending; deliberate).
  * Loan payments route through the system-managed P&I categories and sum to
  * the seeded loan payments: Mortgage $1,190.17 + $2,810.83 = $4,001;
  * Car $701.12 + $89.88 = $791.
