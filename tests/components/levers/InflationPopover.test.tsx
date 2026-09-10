@@ -157,6 +157,56 @@ describe('InflationPopover', () => {
       inflation: expect.objectContaining({ defaultRate: null, overrides: {} }),
     }));
   });
+
+  // C1 (smoke chip, 2026-09-02): "↺ Reset" + Apply did not clear a saved
+  // override — Reset re-loaded the saved lever, which Cancel already does.
+  // Reset now means what the per-year "↺ Default" means for one year: back
+  // to the household / app default for the whole lever (D-C1-4 ⚑).
+  it('"↺ Reset" then Apply clears the scenario default AND every year override', async () => {
+    const user = userEvent.setup();
+    const payload = emptyLeverPayload();
+    const thisYear = String(new Date().getFullYear());
+    payload.inflation = { defaultRate: 0.05, overrides: { [thisYear]: 0.08 } };
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'S1', isBaseline: true, color: '#000', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: payload,
+        createdAt: 't', updatedAt: 't',
+      } as Scenario],
+    });
+    render(<MemoryRouter><InflationPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const input = screen.getByLabelText(/default inflation \(this scenario\)/i) as HTMLInputElement;
+    expect(input.value).toBe('5.00');
+    expect(screen.getByRole('button', { name: `Year ${thisYear} (8.0%)` })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^↺ reset$/i }));
+    expect(input.value).toBe('');                                                   // the draft is cleared…
+    expect(screen.getByRole('button', { name: `Year ${thisYear}` })).toBeInTheDocument(); // …strip untinted
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+    const updateLever = (useScenariosStore.getState() as unknown as { updateLever: ReturnType<typeof vi.fn> }).updateLever;
+    expect(updateLever).toHaveBeenCalledWith(1, { inflation: { defaultRate: null, overrides: {} } });
+  });
+
+  it('Reset is a draft edit — Cancel after Reset persists nothing', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    const payload = emptyLeverPayload();
+    payload.inflation = { defaultRate: 0.05, overrides: {} };
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'S1', isBaseline: true, color: '#000', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: payload,
+        createdAt: 't', updatedAt: 't',
+      } as Scenario],
+    });
+    render(<MemoryRouter><InflationPopover open onOpenChange={onOpenChange} /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /^↺ reset$/i }));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+    const updateLever = (useScenariosStore.getState() as unknown as { updateLever: ReturnType<typeof vi.fn> }).updateLever;
+    expect(updateLever).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('LeverBar — Inflation pill renders + has count badge', () => {

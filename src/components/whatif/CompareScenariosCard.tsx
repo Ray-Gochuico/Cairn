@@ -23,7 +23,7 @@ import {
   type PlanReviewModel, type ResolvedComparePair, type ReviewLine,
 } from '@/lib/whatif/plan-review';
 import {
-  buildLeverDiff, computeAssumptionParity, type EngineDefaults,
+  buildLeverDiff, computeAssumptionParity, type EngineContext,
 } from '@/lib/whatif/lever-diff';
 import type { Milestones, MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
@@ -35,7 +35,7 @@ interface CompareScenariosCardProps {
   projections: Map<number, MonthlyState[]>;
   milestones: Map<number, Milestones>;
   household: Household | null;
-  engineDefaults: EngineDefaults;
+  engineContext: EngineContext;
   dollarMode: DollarMode;
   horizonMonths: number;
   displayInflation: number;
@@ -61,7 +61,7 @@ function ReviewLineText({ line }: { line: ReviewLine }) {
 const SELECT_CLS = 'h-7 rounded-md border border-input bg-background px-1 text-sm';
 
 export function CompareScenariosCard({
-  scenarios, projections, milestones, household, engineDefaults,
+  scenarios, projections, milestones, household, engineContext,
   dollarMode, horizonMonths, displayInflation, deflatorSourceLabel,
   loanNames, pair, onSelectA, onSelectB,
 }: CompareScenariosCardProps) {
@@ -83,10 +83,12 @@ export function CompareScenariosCard({
       dollarMode,
       horizonMonths,
       deflator: { rate: displayInflation, sourceLabel: deflatorSourceLabel },
-      parity: computeAssumptionParity(a.leverPayload, b.leverPayload, household, engineDefaults),
-      leverDiff: buildLeverDiff(a.leverPayload, b.leverPayload, { loanNames }),
+      parity: computeAssumptionParity(a.leverPayload, b.leverPayload, household, engineContext),
+      // C1 (D-C1-5): the diff reads income.perPerson at the ENGINE's width —
+      // one plan per person on file — from the same context the parity uses.
+      leverDiff: buildLeverDiff(a.leverPayload, b.leverPayload, { loanNames, personCount: engineContext.persons.length }),
     });
-  }, [scenarios.length, a, b, projections, milestones, dollarMode, horizonMonths, displayInflation, deflatorSourceLabel, household, engineDefaults, loanNames]);
+  }, [scenarios.length, a, b, projections, milestones, dollarMode, horizonMonths, displayInflation, deflatorSourceLabel, household, engineContext, loanNames]);
 
   if (scenarios.length === 0) return null;
 

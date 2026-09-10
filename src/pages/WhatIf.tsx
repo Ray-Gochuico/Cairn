@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
@@ -62,6 +62,19 @@ export default function WhatIf() {
   // navigation state only, so a reload clears it (no persistence, no motion).
   const createdScenarioId =
     (location.state as { createdScenarioId?: number } | null)?.createdScenarioId ?? null;
+  // Review MINOR 2: the arrival is consumed ONCE per visit, here — the page
+  // owns the navigation state the id arrived on. ScenariosPanel's scroll was
+  // keyed on its own mount, and the pills-position toggle below swaps the
+  // FI-cards row and the projection Card in fragment order, which re-parents
+  // the Card and REMOUNTS the panel: the ringed row was then centered again
+  // after a click that had nothing to do with the arrival. The latch is the
+  // CalculatorsLayout.tsx:344 consumedInitialHash shape, and it holds a
+  // boolean, not the id: a NEW arrival always comes from ScenarioBar.tsx:333
+  // navigating to /what-if from another route, which mounts a fresh page and
+  // a fresh latch, so keying on the id would be a clause that never fires.
+  // The RING is not consumed — it stays on the row for the whole visit.
+  const arrivalScrolledRef = useRef(false);
+  const onArrivalScrolled = useCallback(() => { arrivalScrolledRef.current = true; }, []);
   const scenarios          = useScenariosStore((s) => s.scenarios);
   const load               = useScenariosStore((s) => s.load);
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
@@ -427,6 +440,8 @@ export default function WhatIf() {
             onOpenManage={() => setManageOpen(true)}
             onEditLevers={openLeversFor}
             highlightId={createdScenarioId}
+            scrollOnArrival={!arrivalScrolledRef.current}
+            onArrivalScrolled={onArrivalScrolled}
           />
         </div>
       </CardHeader>
@@ -505,9 +520,15 @@ export default function WhatIf() {
             projections={projections}
             milestones={milestones}
             household={household ?? null}
-            engineDefaults={{
+            engineContext={{
               inflation: real.defaults?.inflation,
               defaultDrawdownTaxRate: real.defaults?.defaultDrawdownTaxRate,
+              // C1: the cash-rate + retirement-age mirrors read the ENGINE's
+              // own inputs (engine.ts:158-173 / :517) — the same RealState the
+              // projections above were run from, never the stores' slices.
+              defaultCashApy: real.defaults?.defaultCashApy,
+              cashAccountsWithBalances: real.cashAccountsWithBalances ?? [],
+              persons: real.persons,
             }}
             dollarMode={dollarMode}
             horizonMonths={horizonMonths}

@@ -24,7 +24,7 @@ import type { LeverPayload } from '@/lib/scenarios';
 import type { Account, AccountSnapshot, AppSettings, Contribution, Household, Person } from '@/types/schema';
 
 export interface ModelGapRow {
-  /** 'G1'…'G10'; G8 rows are 'G8:{personId}'. */
+  /** 'G1'…'G10'; G8 rows are 'G8:{personId}', hourly persons 'G8h:{personId}'. */
   id: string;
   text: string;
   cta: { label: string; to: string };
@@ -65,6 +65,23 @@ export interface ModelGapsInput {
 
 const OPEN_HOUSEHOLD = { label: 'Open Household →', to: '/inputs/household' } as const;
 const OPEN_SETTINGS = { label: 'Open Settings →', to: '/settings' } as const;
+const OPEN_PERSONS = { label: 'Open Persons →', to: '/inputs/persons' } as const;
+
+/**
+ * Does either compared scenario model an income event for the person at this
+ * index? The engine reads `income.perPerson[idx] ?? income.perPerson[0]`
+ * (engine.ts:515) and applies every event it finds to that person's salary —
+ * from a $0 base a raise / promotion / job change / sabbatical CAN produce
+ * income (apply-real.ts:429-449). Any event at all is enough to make "carries
+ * no income for them" a claim this register cannot stand behind.
+ */
+function anySideModelsIncomeEventFor(sides: ModelGapsSide[], idx: number): boolean {
+  return sides.some((s) => {
+    const perPerson = s.payload.income?.perPerson ?? [];
+    const plan = perPerson[idx] ?? perPerson[0];
+    return (plan?.events?.length ?? 0) > 0;
+  });
+}
 
 export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   const rows: ModelGapRow[] = [];
@@ -97,13 +114,48 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   if (provenance.swrPct === 'app default 4%') {
     rows.push({ id: 'G6', text: 'Withdrawal rate: app default 4% — not set in Inputs.', cta: OPEN_HOUSEHOLD });
   }
-  // D-W3-P5: a zero salary alone is legitimate for HOURLY employees — the
-  // employment test guards on both fields, mirroring Section1_WhoYouAre.
+  // D-W3-P5 SUPERSEDED (C1, D-C1-6 ⚑): the engine reads ONLY annualSalaryPretax
+  // (engine.ts:516) and the employment contract persists 0 for HOURLY
+  // (employment-fields.ts:10), so an hourly person's income is $0 in every
+  // projection — staying silent for them was a false silence. Two sentences,
+  // one fact each: no pay entered at all (G8) vs hourly pay the model does
+  // not read (G8h). One loop, person-id order, one home (Persons — where the
+  // figure lives).
+  //
+  // Review MAJOR 0: HOURLY is read from employmentType, never from the rate
+  // alone (the PaycheckCard.tsx:199-202 precedent — "hourly is detected by
+  // employmentType"). employment-fields.ts zeroes salary FOR hourly persons
+  // but forbids a $0 salary for NO type, and employmentPatchFromDraft keeps
+  // hourlyRate for every type — so a SALARY_WITH_OT person at $0 salary, and
+  // a SALARY_NO_OT person carrying a stale rate after an HOURLY → salaried
+  // switch, both persist. PersonsTab (this row's own CTA destination) labels
+  // them 'Salary $0 + OT' / 'Salary $0'; they fall to G8, which is true.
+  //
+  // Review MINOR 0: the hourly row also stays SILENT when either compared
+  // scenario models an income event at that person's index. The engine seeds
+  // currentSalary from the $0 base and then APPLIES the payload's events
+  // (engine.ts:514-526 → apply-real.ts:429-449), so a raise / promotion /
+  // job change / sabbatical there can make the projection pay them — and
+  // "carries no income for them" would be false. Suppression over
+  // fabrication: no row rather than re-worded copy (CR-G8h is byte-frozen).
+  // The index is the person's position in the SAME persons list the engine
+  // walks (useRealState.ts:70 feeds both), read at the engine's own width
+  // (engine.ts:515: perPerson[idx] ?? perPerson[0] — a one-entry payload is
+  // read for every person). CR-G8 keeps its shipped reach (chip).
   const noIncome = i.persons
-    .filter((p) => (p.annualSalaryPretax ?? 0) <= 0 && (p.hourlyRate ?? 0) <= 0)
-    .sort((x, y) => (x.id ?? 0) - (y.id ?? 0));
-  for (const p of noIncome) {
-    rows.push({ id: `G8:${p.id ?? p.name}`, text: `${p.name} has no salary entered — the projection carries no income for them.`, cta: { label: 'Open Persons →', to: '/inputs/persons' } });
+    .map((p, idx) => ({ p, idx }))
+    .filter(({ p }) => (p.annualSalaryPretax ?? 0) <= 0)
+    .sort((x, y) => (x.p.id ?? 0) - (y.p.id ?? 0));
+  for (const { p, idx } of noIncome) {
+    const hourly = p.employmentType === 'HOURLY' && (p.hourlyRate ?? 0) > 0;
+    if (hourly && anySideModelsIncomeEventFor(i.sides, idx)) continue;
+    rows.push({
+      id: `${hourly ? 'G8h' : 'G8'}:${p.id ?? p.name}`,
+      text: hourly
+        ? `${p.name} is paid hourly — the projection doesn't model hourly pay, so it carries no income for them.`
+        : `${p.name} has no salary entered — the projection carries no income for them.`,
+      cta: OPEN_PERSONS,
+    });
   }
   if (i.roadmapHasUnanswered) {
     rows.push({ id: 'G9', text: "The roadmap has questions you haven't answered — its checklist and frameworks assume less until you do.", cta: { label: 'Open Roadmap →', to: '/roadmap' } });
