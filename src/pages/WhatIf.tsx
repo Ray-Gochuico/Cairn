@@ -79,7 +79,6 @@ export default function WhatIf() {
   const scenarios          = useScenariosStore((s) => s.scenarios);
   const load               = useScenariosStore((s) => s.load);
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
-  const dollarMode         = useScenariosStore((s) => s.dollarMode);
   const horizonMonths      = useScenariosStore((s) => s.horizonMonths);
 
   const loadLoans          = useLoansStore((s) => s.load);
@@ -462,11 +461,9 @@ export default function WhatIf() {
         {hasProjectionData ? (
           <ProjectionChart
             scenarios={scenarios}
-            projections={projections}
+            displayProjections={basisView.displayProjections}
+            basisCaption={basisView.chartCaption}
             milestones={milestones}
-            dollarMode={dollarMode}
-            inflation={displayInflation}
-            startISO={real.startISO}
             detailLevel={detailLevel}
             accounts={accounts}
           />

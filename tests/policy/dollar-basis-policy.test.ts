@@ -57,12 +57,6 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
   // uses realRateOfUnfloored for rate arithmetic only (no $ converter);
   // migrate onto the basis boundary then shrink by one — chip.
   'src/pages/calculators/EarliestRetirementCard.tsx',
-  // LEGACY (2026-09-02, ruling A reasoning — the snapshot at the commit that
-  // WIDENS the pattern is the true offender set; shrink-only binds forward):
-  // What-If's own deflator consumers, brought under the ratchet by adding
-  // `toReal`. W5.1 migrates What-If onto the basis boundary and DELETES both.
-  'src/components/whatif/ProjectionChart.tsx',
-  'src/lib/scenarios/index.ts', // the scenarios barrel re-exports toReal
 ]);
 
 /**
@@ -71,7 +65,8 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
  * offender-plus-entry drive-by fail CI instead of passing both halves.
  * shrink-only: LOWER this number when you prune; never raise it.
  */
-const CONVERTER_ALLOWLIST_CEILING = 9;
+// W5.1 Task 5: ProjectionChart + the scenarios barrel came off — 9 → 7.
+const CONVERTER_ALLOWLIST_CEILING = 7;
 
 async function converterOffenders(): Promise<string[]> {
   const files = await collectSourceFiles(SRC_DIR);

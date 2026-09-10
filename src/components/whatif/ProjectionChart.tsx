@@ -14,7 +14,8 @@ import React from 'react';
 import type { Scenario } from '@/types/scenario';
 import type { Account } from '@/types/schema';
 import type { MonthlyState, Milestones } from '@/lib/scenarios';
-import { toReal, totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios';
+import { totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios';
+import type { RegisteredChart } from '@/lib/calculators/basis-view';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { ProjectionDetailLevel } from '@/types/enums';
 import { formatCompactCurrency, formatMonth } from '@/lib/format';
@@ -79,11 +80,12 @@ function legendBandsFor(detailLevel: ProjectionDetailLevel, hasBucketData: boole
 
 export interface ProjectionChartProps {
   scenarios: Scenario[];
-  projections: Map<number, MonthlyState[]>;
+  /** W5.1: ALREADY-based MonthlyState maps from the page's WhatIfBasisView —
+   *  this component converts nothing (CONVERTER_ALLOWLIST pruned). */
+  displayProjections: Map<number, MonthlyState[]>;
+  /** WI-2 / WI-3 — the registered basis caption (stated ONCE per chart). */
+  basisCaption: string;
   milestones: Map<number, Milestones>;
-  dollarMode: 'nominal' | 'real';
-  inflation: number;
-  startISO: string;
   detailLevel: ProjectionDetailLevel;
   accounts: Account[];
 }
@@ -91,20 +93,6 @@ export interface ProjectionChartProps {
 interface Row {
   monthISO: string;
   [seriesKey: string]: string | number;
-}
-
-function deriveDisplayProjections(
-  projections: Map<number, MonthlyState[]>,
-  dollarMode: 'nominal' | 'real',
-  inflation: number,
-  startISO: string,
-): Map<number, MonthlyState[]> {
-  if (dollarMode === 'nominal') return projections;
-  const out = new Map<number, MonthlyState[]>();
-  for (const [id, states] of projections) {
-    out.set(id, toReal(states, inflation, startISO));
-  }
-  return out;
 }
 
 function buildUpperPaneRows(
@@ -164,21 +152,16 @@ function buildLowerPaneRows(scenarios: Scenario[], display: Map<number, MonthlyS
 
 export default function ProjectionChart({
   scenarios,
-  projections,
+  displayProjections,
+  basisCaption,
   milestones,
-  dollarMode,
-  inflation,
-  startISO,
   detailLevel,
   accounts,
 }: ProjectionChartProps) {
   const visible = scenarios.filter((s) => s.visible);
   const mode: 'composition' | 'lines' = visible.length === 1 ? 'composition' : 'lines';
 
-  const display = useMemo(
-    () => deriveDisplayProjections(projections, dollarMode, inflation, startISO),
-    [projections, dollarMode, inflation, startISO],
-  );
+  const display = displayProjections;
   const upperRows = useMemo(
     () => buildUpperPaneRows(scenarios, display, accounts, detailLevel),
     [scenarios, display, accounts, detailLevel],
@@ -386,6 +369,12 @@ export default function ProjectionChart({
   return (
     <div data-testid="whatif-projection-chart" className="w-full">
       <span data-testid="whatif-chart-mode" className="sr-only">{mode}</span>
+
+      {/* W5.1: the basis is stated ONCE per chart (spec § chart axes/tooltips);
+          the tooltip + ticks stay plain numbers from the already-based rows. */}
+      <div data-testid="whatif-chart-caption" className="text-xs text-muted-foreground mb-1">
+        {basisCaption}
+      </div>
 
       <div className="w-full" style={{ height: 320 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -643,3 +632,16 @@ export default function ProjectionChart({
     </div>
   );
 }
+
+/** W5.1 test-only registration (frozen W5 contract): both panes live under the
+ *  root testid, so the interiors are sweep-excluded and the caption is the
+ *  mark. `rowsTestId` (v1.7.0 W-I, additive) additionally pins the PLOTTED
+ *  ROWS across the flip — the m4 blind stratum, closed by mechanism. */
+export const WHATIF_BASIS_CHARTS: RegisteredChart[] = [
+  {
+    chartTestId: 'whatif-projection-chart',
+    captionTestId: 'whatif-chart-caption',
+    cls: 'convertible',
+    rowsTestId: 'rc-composed-chart',
+  }, // inventory #1
+];
