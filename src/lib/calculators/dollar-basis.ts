@@ -8,6 +8,10 @@ export type DollarBasis = 'today' | 'future';
 /** The one v1 page instance (D-T7). W5.1 adds 'whatif' without API change. */
 export const CALCULATORS_PAGE_ID = 'calculators';
 
+/** W5.1 (spec F5): the What-If page instance — same store, same key family,
+ *  same prefKey namespacing; nothing else in this module changes. */
+export const WHATIF_PAGE_ID = 'whatif';
+
 /**
  * W4×W5 merge reconciliation (coordinator ruling, 2026-09-02): the basis key
  * is NAMESPACED under W4's explore ratchet

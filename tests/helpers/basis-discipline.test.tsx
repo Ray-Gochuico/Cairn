@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import { createPortal } from 'react-dom';
 import { expectBasisDiscipline, type BasisRegistry } from './basis-discipline';
 import {
   CALCULATORS_PAGE_ID,
+  WHATIF_PAGE_ID,
   useDollarBasis,
   __resetDollarBasisForTests,
 } from '@/lib/calculators/dollar-basis';
@@ -423,5 +425,41 @@ describe('expectBasisDiscipline — the W-I rows hook (chart DATA across bases)'
     expect(() =>
       expectBasisDiscipline(<RowsFlipButUnhooked />, chartRegistry('pinned', 'today')),
     ).not.toThrow();
+  });
+});
+
+/* ── W5.1 (D-W51-9): sweep-helper PLUMBING — opts.pageId and opts.root. The
+   frozen registration types and every per-class assertion above are untouched;
+   each `it` fails if — and only if — its option is missing from
+   tests/helpers/basis-discipline.tsx. ───────────────────────────────────── */
+
+function WhatIfGoodCard() {
+  const [basis] = useDollarBasis(WHATIF_PAGE_ID);
+  return (
+    <span data-testid="fig-conv">{basis === 'today' ? "$100 (today's $)" : '$103 (future $)'}</span>
+  );
+}
+const ONE_CONV: BasisRegistry = { figures: [{ testId: 'fig-conv', cls: 'convertible' }], charts: [] };
+const ONE_INV: BasisRegistry = { figures: [{ testId: 'fig-inv', cls: 'invariant' }], charts: [] };
+
+describe('expectBasisDiscipline — W5.1 options (plumbing, not contract)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
+
+  it('pageId: a whatif consumer flips under WHATIF_PAGE_ID and is caught as frozen under the default', () => {
+    cleanup();
+    expect(() => expectBasisDiscipline(<WhatIfGoodCard />, ONE_CONV, { pageId: WHATIF_PAGE_ID })).not.toThrow();
+    cleanup();
+    expect(() => expectBasisDiscipline(<WhatIfGoodCard />, ONE_CONV)).toThrow(/byte-identical across bases/);
+  });
+
+  it('root: portaled figures (Radix Dialog) are invisible to the container and visible from document.body', () => {
+    const Portaled = () => createPortal(<span data-testid="fig-inv">$50</span>, document.body);
+    cleanup();
+    expect(() => expectBasisDiscipline(<Portaled />, ONE_INV)).toThrow(/not rendered by the fixture/);
+    cleanup();
+    expect(() => expectBasisDiscipline(<Portaled />, ONE_INV, { root: document.body })).not.toThrow();
   });
 });

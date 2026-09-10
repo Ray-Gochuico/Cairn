@@ -2,6 +2,7 @@ import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   CALCULATORS_PAGE_ID,
+  WHATIF_PAGE_ID,
   __readInitialDollarBasisForTests,
   __resetDollarBasisForTests,
   useDollarBasis,
@@ -90,6 +91,12 @@ describe('useDollarBasis (W5 D-T2/D-T3/D-T8)', () => {
     act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
     expect(a.result.current[0]).toBe('future');
     expect(b.result.current[0]).toBe('future');
+  });
+
+  it("W5.1: WHATIF_PAGE_ID is the literal the isolation test already pins", () => {
+    expect(WHATIF_PAGE_ID).toBe('whatif');
+    const { result } = renderHook(() => useDollarBasis(WHATIF_PAGE_ID));
+    expect(result.current[0]).toBe('today'); // D-T3 on this page too — the deliberate flip from Nominal
   });
 });
 
