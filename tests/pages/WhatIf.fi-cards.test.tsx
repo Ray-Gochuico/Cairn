@@ -113,7 +113,6 @@ vi.mock('@/stores/scenarios-store', () => {
     visibleScenarioIds: () => [1],
     load: vi.fn(),
     projectedScenarios: () => new Map([[1, [seedState]]]),
-    dollarMode: 'nominal',
     inflation: 0.025,
     horizonMonths: 360,
     toggleVisibility: vi.fn(),

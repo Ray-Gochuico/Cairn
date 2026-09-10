@@ -55,3 +55,39 @@ test("calculators: Today's $ default; Future $ grows the Compound figures and fl
 
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test("what-if: Today's $ default; pinned FI number; caption flips; the key is page-scoped", async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.goto('/what-if');
+  await expect(page.getByTestId('whatif-projection-chart-wrap')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: "Today's $" })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.getByTestId('whatif-chart-caption')).toContainText(
+    "All lines in today's dollars — one deflator, ",
+  );
+  const fi = page.getByTestId('whatif-fi-number-target');
+  await expect(fi).toContainText("in today's dollars");
+  const fiText = await fi.textContent();
+
+  await page.getByRole('button', { name: 'Future $' }).click();
+  await expect(page.getByTestId('whatif-chart-caption')).toHaveText(
+    'All lines in future dollars — not adjusted for inflation.',
+  );
+  await expect(fi).toHaveText(fiText!); // a PINNED today's-dollar figure never moves
+  expect(await page.evaluate(() => sessionStorage.getItem('calc-basis:whatif'))).toBe('future');
+  expect(await page.evaluate(() => sessionStorage.getItem('calc-basis:calculators'))).toBeNull();
+
+  // One store, keyed per page: /calculators keeps ITS default (client-side nav — shim law).
+  const nav = page.getByRole('navigation', { name: 'Primary' });
+  await nav.getByRole('link', { name: 'Calculators' }).click();
+  await expect(page.getByRole('button', { name: "Today's $" })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+    { timeout: 30_000 },
+  );
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});

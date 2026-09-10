@@ -44,7 +44,7 @@ import {
   resolveDeflatorSourceLabel,
   type ComparePairSelection,
 } from '@/lib/whatif/plan-review';
-import { useWhatIfBasisView } from '@/lib/calculators/basis-view';
+import { useWhatIfBasisView, type RegisteredFigure } from '@/lib/calculators/basis-view';
 import type { ModelGapsInput } from '@/lib/model-gaps';
 import {
   detectMilestones,
@@ -633,3 +633,8 @@ export default function WhatIf() {
     </PageContainer>
   );
 }
+
+/** W5.1 test-only registration: the page's own literal $ prose (inventory #18). */
+export const WHATIF_PAGE_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'whatif-projection-footnote', cls: 'invariant' },
+];

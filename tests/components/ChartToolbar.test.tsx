@@ -5,6 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { ProjectionDetailLevel } from '@/types/enums';
+import {
+  WHATIF_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 
 function resetStore() {
   useScenariosStore.setState({
@@ -12,7 +17,6 @@ function resetStore() {
     isLoading: false,
     error: null,
     horizonMonths: 360,
-    dollarMode: 'nominal',
     inflation: 0.025,
     defaultReturnRate: 0.07,
   });
@@ -21,7 +25,11 @@ function resetStore() {
 const noopChange = () => {};
 
 describe('ChartToolbar', () => {
-  beforeEach(() => { resetStore(); });
+  beforeEach(() => {
+    resetStore();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
 
   it('renders the horizon slider showing the current value in years', () => {
     render(
@@ -44,43 +52,33 @@ describe('ChartToolbar', () => {
     expect(useScenariosStore.getState().horizonMonths).toBe(240);
   });
 
-  it('renders nominal/real toggle with nominal pressed by default', () => {
+  it("W5.1: renders the SHARED Dollar basis control with Today's $ pressed by default (D-T3) and no scope note", () => {
     render(
       <MemoryRouter>
         <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
       </MemoryRouter>,
     );
-    // The toggle Buttons have exact text "Nominal" / "Real"; the
-    // sibling TermTooltip info-buttons added in UX W3-2 use the
-    // accessible name "Definition for ..." which the ^...$ anchors
-    // exclude so each test selects exactly one button.
-    expect(screen.getByRole('button', { name: /^nominal$/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: /^real$/i })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    expect(screen.getByRole('group', { name: 'Dollar basis' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Today's $" })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Future $' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('dollar-basis-scope-note')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^nominal$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^real$/i })).toBeNull();
   });
 
-  it('clicking Real flips dollarMode and aria-pressed state', async () => {
+  it('W5.1: clicking Future $ writes the WHAT-IF basis, never the calculators one', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
       </MemoryRouter>,
     );
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
-    expect(useScenariosStore.getState().dollarMode).toBe('real');
-    expect(screen.getByRole('button', { name: /^real$/i })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: /^nominal$/i })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await user.click(screen.getByRole('button', { name: 'Future $' }));
+    expect(useDollarBasisStore.getState().byPage[WHATIF_PAGE_ID]).toBe('future');
+    expect(sessionStorage.getItem('calc-basis:whatif')).toBe('future');
+    expect(sessionStorage.getItem('calc-basis:calculators')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Future $' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: "Today's $" })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('reflects the store state when horizonMonths changes externally', () => {
@@ -96,7 +94,11 @@ describe('ChartToolbar', () => {
 });
 
 describe('ChartToolbar — projection detail level segmented control', () => {
-  beforeEach(() => { resetStore(); });
+  beforeEach(() => {
+    resetStore();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
 
   it('renders three segments: Single, Tax bucket, Per account', () => {
     render(
@@ -149,14 +151,16 @@ describe('ChartToolbar — projection detail level segmented control', () => {
   // button inside the toggle Button without breaking aria-pressed).
   // The TermTooltip trigger renders an sr-only "Definition for X"
   // label so screen readers reach each term.
-  it('UX W3-2: every dollar-mode + detail-level toggle has a sibling TermTooltip', () => {
+  it('UX W3-2 / W5.1: every basis + detail-level control has its glossary trigger', () => {
     render(
       <MemoryRouter>
         <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('button', { name: /definition for nominal/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /definition for real/i })).toBeInTheDocument();
+    // W5.1 (m7): the shared control carries ONE trigger whose entry
+    // (NOMINAL VS REAL) teaches both vocabularies, in place of the two
+    // per-button "Definition for nominal/real" triggers that died with the group.
+    expect(screen.getByRole('button', { name: /^dollar basis$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /definition for single/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /definition for tax bucket/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /definition for per account/i })).toBeInTheDocument();

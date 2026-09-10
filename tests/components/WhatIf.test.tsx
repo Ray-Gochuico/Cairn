@@ -7,6 +7,11 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { setDatabase } from '@/db/db';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
+import {
+  WHATIF_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -42,6 +47,8 @@ describe('WhatIf page', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
     db = new SqliteAdapter();
     await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
@@ -72,7 +79,7 @@ describe('WhatIf page', () => {
     _resetProjectionCacheForTest();
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360, dollarMode: 'nominal',
+      horizonMonths: 360,
       inflation: 0.025, defaultReturnRate: 0.07,
     });
   });
@@ -142,12 +149,12 @@ describe('WhatIf page', () => {
     });
   });
 
-  it('dollar-mode toggle flips store state', async () => {
+  it('W5.1: the Future $ control writes the page basis store', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
     await waitFor(() => expect(useScenariosStore.getState().scenarios.length).toBe(1));
-    await user.click(screen.getByRole('button', { name: /^real/i }));
-    expect(useScenariosStore.getState().dollarMode).toBe('real');
+    await user.click(screen.getByRole('button', { name: 'Future $' }));
+    expect(useDollarBasisStore.getState().byPage[WHATIF_PAGE_ID]).toBe('future');
   });
 
   it('shows an empty-state message when household has not been set up', async () => {

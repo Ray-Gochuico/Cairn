@@ -155,10 +155,17 @@ describe('dollar-basis policy — one store, pinned readers', () => {
 
 // Split-concat so this file never matches its own hunt patterns.
 const DOOMED_RE = new RegExp(
-  ['useChart' + 'DisplayMode', 'RealNominal' + 'Toggle', 'calc-display' + '-mode'].join('|'),
+  [
+    'useChart' + 'DisplayMode',
+    'RealNominal' + 'Toggle',
+    'calc-display' + '-mode',
+    // W5.1: What-If's private basis is dead too (src AND tests, stripped of comments).
+    'dollar' + 'Mode',
+    'Dollar' + 'Mode',
+  ].join('|'),
 );
 
-describe('dollar-basis policy — the per-card toggle stays dead', () => {
+describe("dollar-basis policy — the per-card toggle and What-If's private basis stay dead", () => {
   it('zero references in src/ and tests/ (stripped of comments)', async () => {
     const files = [
       ...(await collectSourceFiles(SRC_DIR)),
@@ -171,7 +178,8 @@ describe('dollar-basis policy — the per-card toggle stays dead', () => {
     }
     expect(
       offenders,
-      'useChartDisplayMode/RealNominalToggle/calc-display-mode were deleted in W5',
+      'useChartDisplayMode/RealNominalToggle/calc-display-mode were deleted in W5'
+        + '; ' + 'dollar' + 'Mode' + '/' + 'Dollar' + 'Mode' + ' were deleted in W5.1',
     ).toEqual([]);
   });
 });

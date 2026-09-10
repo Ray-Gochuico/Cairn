@@ -3,6 +3,8 @@ import { Label } from '@/components/ui/label';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { ProjectionDetailLevel } from '@/types/enums';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { DollarBasisToggle } from '@/components/calculators/DollarBasisToggle';
+import { WHATIF_PAGE_ID } from '@/lib/calculators/dollar-basis';
 
 interface ChartToolbarProps {
   detailLevel: ProjectionDetailLevel;
@@ -16,7 +18,9 @@ interface ChartToolbarProps {
  * separately-focusable TermTooltip beside it preserves the toggle role,
  * keeps every glossary term hoverable / focus-reachable, and matches
  * the pattern Wave-3 UX W3-2 recommended for closing the jargon-spike
- * on the What-If toolbar.
+ * on the What-If toolbar. (W5.1: the dollar-basis pair moved to the shared
+ * DollarBasisToggle, which carries its own glossary trigger; this helper now
+ * serves the detail-level buttons.)
  */
 function LabelTooltip({ term }: { term: string }) {
   return (
@@ -30,9 +34,7 @@ function LabelTooltip({ term }: { term: string }) {
 
 export default function ChartToolbar({ detailLevel, onDetailLevelChange }: ChartToolbarProps) {
   const horizonMonths     = useScenariosStore((s) => s.horizonMonths);
-  const dollarMode        = useScenariosStore((s) => s.dollarMode);
   const setHorizonMonths  = useScenariosStore((s) => s.setHorizonMonths);
-  const setDollarMode     = useScenariosStore((s) => s.setDollarMode);
 
   const years = Math.round(horizonMonths / 12);
 
@@ -65,29 +67,10 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
         />
       </div>
 
-      <div className="flex items-center gap-1" role="group" aria-label="Dollar mode">
-        <Label className="text-sm">
-          <TermTooltip term="Nominal vs Real">Dollars</TermTooltip>:
-        </Label>
-        <Button
-          variant={dollarMode === 'nominal' ? 'default' : 'outline'}
-          size="sm"
-          aria-pressed={dollarMode === 'nominal'}
-          onClick={() => setDollarMode('nominal')}
-        >
-          Nominal
-        </Button>
-        <LabelTooltip term="Nominal" />
-        <Button
-          variant={dollarMode === 'real' ? 'default' : 'outline'}
-          size="sm"
-          aria-pressed={dollarMode === 'real'}
-          onClick={() => setDollarMode('real')}
-        >
-          Real
-        </Button>
-        <LabelTooltip term="Real" />
-      </div>
+      {/* W5.1 (D-W51-6): the SHARED page-level control — one vocabulary, one
+          store, keyed to this page. Page furniture here (it governs every
+          figure on /what-if), so no m8 scope note. */}
+      <DollarBasisToggle pageId={WHATIF_PAGE_ID} scopeNote={null} />
 
       <div className="flex items-center gap-1" role="group" aria-label="Projection detail level">
         <Label className="text-sm">

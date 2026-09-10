@@ -31,7 +31,7 @@ function resetStores(opts: { expensePeriods?: ExpensePeriod[] } = {}) {
       createdAt: 't', updatedAt: 't',
     } as Scenario],
     isLoading: false, error: null,
-    horizonMonths: 360, dollarMode: 'nominal',
+    horizonMonths: 360,
     inflation: 0.025, defaultReturnRate: 0.07,
     updateLever: vi.fn().mockResolvedValue(undefined) as any,
   });
@@ -213,7 +213,6 @@ function seedAllStores(opts: {
     isLoading: false,
     error: null,
     horizonMonths: 360,
-    dollarMode: 'nominal',
     inflation: 0.025,
     defaultReturnRate: 0.07,
     updateLever: vi.fn().mockResolvedValue(undefined) as any,

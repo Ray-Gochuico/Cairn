@@ -53,7 +53,6 @@ function seed(expenseSource: 'latestMonth' | 'rolling12m' | 'custom') {
     isLoading: false,
     error: null,
     horizonMonths: 360,
-    dollarMode: 'nominal',
     inflation: 0.025,
     defaultReturnRate: 0.07,
     updateLever: vi.fn().mockResolvedValue(undefined) as never,
