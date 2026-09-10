@@ -7,7 +7,7 @@ import { PropertyType, AccountType } from '@/types/enums';
 import { answerKey, type InterviewAnswer, type InterviewContext } from '@/types/interview';
 import { makeHousehold, makePerson, makeProperty, makeAccount } from '../../factories';
 import { fixtureCtx, snap } from '../../lib/interview/fixture';
-import type { HousingPayment } from '@/types/schema';
+import type { HousingPayment, Transaction } from '@/types/schema';
 
 const rent = (): HousingPayment => ({
   id: 1, householdId: 1, ownerPersonId: null, name: 'Rent',
@@ -126,7 +126,7 @@ describe('home_purchase — the plan reply (hand-computed, fixture: reserve $30,
     expect(r.reply.title).toBe('Home down payment');
     expect(r.reply.lines).toEqual([
       'Cash and savings on hand: $30,000 — from your latest account snapshots.',
-      "Of that, $30,000 is also the emergency fund the Moderate framework targets (6× expenses, assumed). The same dollars can't fund both.",
+      "Of that, $30,000 is also the emergency fund the Moderate framework targets (6× expenses — $6,000 a month from Household, assumed). The same dollars can't fund both.",
       'Saving $1,364/mo reaches $60,000 by June 2028; about $1,180/mo if savings grow at 5% (moderate scenario).',
     ]);
     expect(r.reply.assumes).toEqual([
@@ -213,6 +213,77 @@ describe('home_purchase — the plan reply (hand-computed, fixture: reserve $30,
     const r = evaluateThread(HOME_PURCHASE_THREAD, renterCtx(answers), '');
     expect(r.state).toBe('ask');
     if (r.state === 'ask') expect(r.reason).toBe('unanswered');
+  });
+});
+
+// K3 / CR-R1-8 held form (review MINOR 0 + MINOR 8): the shipped plan pin above
+// renders `from Household`, so on this surface neither the count nor its
+// pluralization is exercised anywhere in tests/ — dropping the count or forcing
+// 'months' at n = 1 both survived. These two cases pin the TRANSACTIONS branch
+// of CI-H5 byte-exact at n = 1 and n = 3, the same n = 1 / n = 3 idiom the other
+// three count surfaces (baselineSuffix, effects, framework-cards) already carry.
+describe('home_purchase — CI-H5 over a transactions baseline states its count (K3)', () => {
+  const answeredBoth = () => new Map([
+    row('q_want_house', '"yes-within-5y"'),
+    row('q_target', '{"amountDollars":60000,"targetMonth":"2028-06"}'),
+  ]);
+
+  /** A real-spending row: positive, non-reimbursable, and — with the fixture's
+   *  `categories: []` — no category type to disqualify it, so `isRealSpending`
+   *  accepts it. */
+  const spend = (id: number, date: string, amount: number): Transaction =>
+    ({
+      id, householdId: 1, date, amount, merchant: 'M', merchantRaw: null,
+      categoryId: 1, sourceAccountId: 1,
+      reimbursable: false, reimbursedAt: null, reimbursedAmount: null,
+    } as unknown) as Transaction;
+
+  it('n = 1 — one complete month → "$4,500 a month from 1 month of spending" (singular)', () => {
+    // HAND-DERIVED (re-derive by these formulas before touching the pin; never
+    // paste a run's output):
+    //   fixture today = 2026-08-01T12:00:00Z. Noon UTC lands on 2026-08-01 (or
+    //   -02 at +13/+14) in every zone, so the as-of MONTH is 2026-08 everywhere
+    //   → complete-month window [2025-08 .. 2026-07]; 2026-08 is in progress and
+    //   never counts.
+    //   rows: 2026-07-05 $2,000 + 2026-07-19 $2,500. The earliest real-spending
+    //   row of the whole set is the 5th ≤ MONTHLY_INPUT_GRACE_DAY (7), so the
+    //   ⚑ R1-F6 first-month guard does NOT fire.
+    //   observed months = {2026-07} → n = 1; average = 4,500 / 1 = $4,500 (NOT
+    //   the household's $6,000 — transactions outrank it at monthsObserved ≥
+    //   MIN_COMPLETE_MONTHS = 1).
+    //   jobStability null → Moderate 6×, assumed → EF target = 6 × 4,500 = $27,000.
+    //   reserve = 22,000 savings + 8,000 checking = $30,000
+    //   → overlap = min(30,000, 27,000) = $27,000.
+    const ctx = renterCtx(answeredBoth(), {
+      transactions: [spend(1, '2026-07-05', 2000), spend(2, '2026-07-19', 2500)],
+    });
+    const r = evaluateThread(HOME_PURCHASE_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected plan');
+    expect(r.reply.lines[1]).toBe(
+      "Of that, $27,000 is also the emergency fund the Moderate framework targets (6× expenses — $4,500 a month from 1 month of spending, assumed). The same dollars can't fund both.",
+    );
+  });
+
+  it('n = 3 — three complete months → "$4,200 a month from 3 months of spending" (plural)', () => {
+    // HAND-DERIVED: same 2026-08 as-of month, same [2025-08 .. 2026-07] window.
+    //   rows: 2026-05-05 $3,600 · 2026-06-12 $4,200 · 2026-07-20 $4,800.
+    //   Earliest real row = 2026-05-05, day 5 ≤ 7 → the guard does not fire (the
+    //   later months' days are irrelevant — only the FIRST month is inspected).
+    //   observed months = {2026-05, 2026-06, 2026-07} → n = 3;
+    //   average = (3,600 + 4,200 + 4,800) / 3 = 12,600 / 3 = $4,200.
+    //   EF target = 6 × 4,200 = $25,200 → overlap = min(30,000, 25,200) = $25,200.
+    const ctx = renterCtx(answeredBoth(), {
+      transactions: [
+        spend(1, '2026-05-05', 3600),
+        spend(2, '2026-06-12', 4200),
+        spend(3, '2026-07-20', 4800),
+      ],
+    });
+    const r = evaluateThread(HOME_PURCHASE_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected plan');
+    expect(r.reply.lines[1]).toBe(
+      "Of that, $25,200 is also the emergency fund the Moderate framework targets (6× expenses — $4,200 a month from 3 months of spending, assumed). The same dollars can't fund both.",
+    );
   });
 });
 

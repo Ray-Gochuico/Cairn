@@ -33,6 +33,10 @@ export interface EfOverlap {
   /** True when 6× came from an unanswered jobStability (D-GI5 semantics). */
   assumed: boolean;
   baselineSource: BaselineSource;
+  /** The monthly baseline the target was sized from (R1 — CI-H5 states it). */
+  baselineDollars: number;
+  /** Complete months behind `baselineDollars` when the source is transactions; 0 otherwise. */
+  monthsObserved: number;
 }
 
 /**
@@ -42,7 +46,7 @@ export interface EfOverlap {
  * moderateEfMultiple) — never re-derived. Pure over ctx.
  */
 export function computeEfOverlap(ctx: InterviewContext, reserveDollars: number): EfOverlap {
-  const { baseline, baselineSource } = efContext(ctx);
+  const { baseline, baselineSource, monthsObserved } = efContext(ctx);
   const ef = moderateEfMultiple(ctx.persons);
   const efTargetDollars = baselineSource === 'none' ? 0 : ef.multiple * baseline;
   return {
@@ -51,5 +55,7 @@ export function computeEfOverlap(ctx: InterviewContext, reserveDollars: number):
     multiple: ef.multiple,
     assumed: ef.assumed,
     baselineSource,
+    baselineDollars: baseline,
+    monthsObserved,
   };
 }

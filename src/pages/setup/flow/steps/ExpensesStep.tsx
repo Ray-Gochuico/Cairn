@@ -45,8 +45,8 @@ export default function ExpensesStep({ ctx, asked, onDirtyChange, submitRef }: S
         />
         <p id="flow-expenses-basis" className="text-sm text-muted-foreground mt-1">
           We'll use this as your monthly budget on Spending, your expense assumption for FI
-          and projections, and your emergency-fund target until 12 months of transactions
-          exist.
+          and projections, and your emergency-fund target until the Roadmap has a complete
+          month of your transactions.
         </p>
       </div>
       {saveError && (

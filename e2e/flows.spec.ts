@@ -208,33 +208,48 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(page.getByText('About the Frameworks')).toBeVisible();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue' }).click();
-  // Three cards with the seed-derived split (hand-computed pins).
+  // Three cards with the seed-derived split (hand-computed pins — Appendix D of
+  // the R1 plan).
   //
-  // W4 re-pin: the sample profile now seeds real transactions, so the
-  // emergency-fund rule reads rolling12mBaseline instead of the $6,000
-  // household baseline. That average is (3 × $5,911.12 + $179.01) / 4
-  // observed months = $4,478.09 — rolling12m deliberately INCLUDES the
-  // in-progress month and divides by months observed
-  // (src/lib/expense-baseline.ts). $30,000 of cash / $4,478.09 = 6.7×, above
-  // the 6× target, so the EF leg is skipped and the whole lump goes to the
-  // mid-rate debt band. Every figure here is run-date-stable: the seed always
-  // writes the same amounts across the same 4 month buckets.
+  // R1 re-pin: the emergency-fund rule averages COMPLETE months only. The seed
+  // writes three complete months (m−3 … m−1) at $5,911.12 each and four
+  // current-month rows clamped to the 1st that no longer count, so the
+  // baseline is $5,911.12 on every run date. $30,000 / $5,911.12 = 5.08× →
+  // "5.1×", BELOW the 6× Conservative/Moderate target: 6 × 5,911.12 =
+  // $35,466.72 → gap $5,466.72 (546,672¢) to the reserve, the remaining
+  // $4,533.28 to the 5–8% band (Mortgage 6.25%: $540,000 → $535,466.72).
+  // The EF row is the larger share, so the Conservative headline is the EF
+  // effect line (6.0× after: 35,466.72 / 5,911.12). Moderate: 50/50 of the
+  // post-EF remainder → $2,266.64 each. Aggressive (3× = $17,733.36 ≤ $30,000):
+  // EF covered → all $10,000 invests.
   const conservative = page.getByTestId('framework-conservative');
+  await expect(conservative).toContainText('Emergency fund — to 6× expenses');
+  await expect(conservative).toContainText('$5,467');
   await expect(conservative).toContainText('Debt in the 5–8% band');
-  await expect(conservative).toContainText('$10,000'); // EF skipped → all to debt
+  await expect(conservative).toContainText('$4,533');
+  // Appendix K1 (coordinator ruling 2026-09-06): the effect line's basis phrase
+  // states the count — three complete months on the seed.
   await expect(conservative).toContainText(
-    'Pays Mortgage from $540,000 down to $530,000 — highest rate first (6.25%).',
+    'Your cash reserve would cover 6.0 months of expenses, up from 5.1 — based on $30,000 across cash and savings accounts and your spending over 3 months.',
+  );
+  await expect(conservative).toContainText(
+    'Pays Mortgage from $540,000 down to $535,467 — highest rate first (6.25%).',
   );
   await conservative.getByText('What this assumes').click();
   await expect(conservative).toContainText(
-    'Emergency fund already at 6.7× monthly expenses — skipped.',
+    'Emergency fund already at 5.1× monthly expenses — skipped.',
   );
+  // Appendix K2: the card names the figure the whole split rests on, with its count.
+  await expect(conservative).toContainText('Monthly expenses: $5,911 — from 3 months of spending.');
   const moderate = page.getByTestId('framework-moderate');
-  await expect(moderate).toContainText('$5,000'); // 50/50 of the full $10,000
+  await expect(moderate).toContainText('$5,467'); // EF to 6× (assumed)
+  await expect(moderate).toContainText('$2,267'); // half of the remainder — debt AND invest
   const aggressive = page.getByTestId('framework-aggressive');
   await expect(aggressive).toContainText('$10,000'); // 3× covered → all invest
   await aggressive.getByText('What this assumes').click();
   await expect(aggressive).toContainText('Debt between 5–8% stays at minimum payments in this framework.');
+  await expect(aggressive).toContainText('Emergency fund already at 5.1× monthly expenses — skipped.');
+  await expect(aggressive).toContainText('Monthly expenses: $5,911 — from 3 months of spending.');
   // Fixed footer on every card:
   await expect(page.getByText('One mechanical framework applied to your numbers — not advice, not a recommendation.')).toHaveCount(3);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -310,6 +325,10 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   // 5 — The plan reply (monthly figures vary with run date → pattern pins;
   //     the reserve is a seed literal → exact).
   await expect(card).toContainText('Cash and savings on hand: $30,000');
+  // Appendix K3: CI-H5 states the baseline and its count (was countless).
+  await expect(card).toContainText(
+    'is also the emergency fund the Moderate framework targets (6× expenses — $5,911 a month from 3 months of spending, assumed).',
+  );
   await expect(card).toContainText(new RegExp(`reaches \\$60,000 by June ${year}`));
   await expect(card).toContainText('The target is your number, not a suggestion.');
   // 6 — CTA → a real DOWN_PAYMENT goal; the tracked state reads back from

@@ -41,13 +41,18 @@ export function pickHeadlineBucket(split: FrameworkSplit): BucketId | null {
   return best.bucket;
 }
 
-function baselinePhrase(source: 'transactions' | 'household' | 'none'): string {
-  return source === 'transactions' ? '12-month spending baseline' : 'entered monthly baseline';
+/** R1 (CR-R1-3, ruling 4): a transactions-derived basis names the number of
+ *  complete months behind it. The noun form is "your spending over {n} months";
+ *  phrasing it as an "{n}-month" quantity instead would collide with the
+ *  "{n}-month EF target" in the same card ("1-month" would read as a target). */
+function baselinePhrase(source: 'transactions' | 'household' | 'none', months: number): string {
+  if (source !== 'transactions') return 'entered monthly baseline';
+  return `spending over ${months} ${months === 1 ? 'month' : 'months'}`;
 }
 
 function efLine(split: FrameworkSplit, ctx: InterviewContext, allocCents: number): string | null {
   const g = split.gaps;
-  const basis = `based on ${formatCurrency(g.reserveDollars)} across cash and savings accounts and your ${baselinePhrase(g.baselineSource)}`;
+  const basis = `based on ${formatCurrency(g.reserveDollars)} across cash and savings accounts and your ${baselinePhrase(g.baselineSource, g.baselineMonths)}`;
   if (split.cadence === 'one-time') {
     const before = (g.reserveDollars / g.baselineDollars).toFixed(1);
     const after = ((g.reserveDollars + allocCents / 100) / g.baselineDollars).toFixed(1);

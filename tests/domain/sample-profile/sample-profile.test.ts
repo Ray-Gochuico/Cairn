@@ -1,8 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { seedSampleProfile, SAMPLE_PROFILE } from '@/domain/sample-profile/sample-profile';
+import { TransactionsRepo } from '@/domain/transactions';
+import { CategoriesRepo } from '@/domain/categories';
+import { AccountsRepo } from '@/domain/accounts';
+import { AccountSnapshotsRepo } from '@/domain/snapshots';
+import { HouseholdRepo } from '@/domain/household';
+import { LoansRepo } from '@/domain/loans';
+import { PersonsRepo } from '@/domain/persons';
+import { getInterestThresholds } from '@/domain/roadmap/thresholds';
+import { efContext, evaluateSmallEmergencyFund } from '@/domain/roadmap/rules/emergencyFund';
+import { splitAmount } from '@/lib/interview/waterfall';
+import { dateFromLocalISO } from '@/lib/dates';
+import type { InterviewContext } from '@/types/interview';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -500,10 +512,10 @@ describe('seedSampleProfile', () => {
       { m: '2026-06', total: 5911.12 }, // Skyline Bistro nets $0
       { m: '2026-07', total: 179.01 },  // pending Harbor Cab counts $0
     ]);
-    // Consequence (P-W4-6): with real spending present, the Roadmap EF rule's
-    // efContext prefers the 12-mo average over the household baseline — that
-    // preference is already unit-tested in the roadmap rules suite; the smoke
-    // checklist verifies the visible "from 12-mo avg" suffix on /roadmap.
+    // Consequence (R1): with three complete months of real spending, efContext
+    // prefers the complete-month average — pinned through the production
+    // mappers in 'R1 historical anchors' below; the smoke checklist verifies
+    // the visible "from 3 months of spending" suffix on /roadmap.
   });
 
   it('W4: seeds one EMERGENCY_FUND goal linked to the cash accounts, behind its sentinel', async () => {
@@ -524,5 +536,117 @@ describe('seedSampleProfile', () => {
       `SELECT id FROM accounts WHERE name IN ('Partner Savings', 'Joint Checking') ORDER BY id`,
     );
     expect(linked.sort((a, b) => a - b)).toEqual(cash.map((r) => r.id));
+  });
+});
+
+/** RoadmapContext/InterviewContext from the SEEDED DB through the production
+ *  row mappers — never inline SQL semantics (the anchor pins the app's
+ *  arithmetic, not the test's).
+ *
+ *  Harness note (plan Task 3 Step 1): `useSnapshotsStore.load` reads every
+ *  account_snapshots row via raw SQL; `AccountSnapshotsRepo` exposes no
+ *  `list()`, and `latestSnapshotValue` is max-date-per-account either way, so
+ *  `listLatestPerAccount()` produces an identical `totalCashReserve`. */
+async function seededCtx(db: SqliteAdapter, asOfLocalISO: string): Promise<InterviewContext> {
+  const household = (await new HouseholdRepo(db).get())!;
+  return {
+    household,
+    persons: await new PersonsRepo(db).list(),
+    accounts: await new AccountsRepo(db).list(),
+    loans: await new LoansRepo(db).list(),
+    contributions: [],
+    snapshots: await new AccountSnapshotsRepo(db).listLatestPerAccount(),
+    transactions: await new TransactionsRepo(db).list(),
+    categories: await new CategoriesRepo(db).list(),
+    overrides: new Map(),
+    thresholds: getInterestThresholds(household),
+    taxYear: 2026,
+    today: dateFromLocalISO(asOfLocalISO),
+    vehicles: [], assetValueSnapshots: [], settings: null, holdings: [], tickers: [],
+    dependents: [], properties: [], housingPayments: [], interviewAnswers: new Map(),
+  } as InterviewContext;
+}
+
+describe('R1 historical anchors — the shipped seed through the production mappers', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = await freshDb();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  /** The seed's `lastMonthClose` reads the REAL clock
+   *  (`lastBusinessDayOfMonth(lastMonthYyyymm(new Date()))`,
+   *  sample-profile.ts) rather than its own `todayISO` option, so seeding a
+   *  PAST day writes close-dated snapshots AFTER it and `latestSnapshotValue`
+   *  picks those instead of the seed-day rows (cash $29,400, not $30,000) —
+   *  run-date-dependent. Pinning Date to the seed day keeps the close row
+   *  behind it, which is what D-R1-P9 assumes ("run-date-stable"). The seed is
+   *  R2's file; this is a harness pin, not a fix. (Same fake-timer idiom this
+   *  file already uses for the local-vs-UTC snapshot pin.) */
+  async function seedAt(todayISO: string): Promise<void> {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${todayISO}T12:00:00`));
+    await seedSampleProfile(db, { todayISO });
+    vi.useRealTimers();
+  }
+
+  // Seed month July 2026: complete months Apr/May/Jun at $5,911.12; four July
+  // rows ($179.01 real) clamped to the 1st. Under the complete-month rule the
+  // figure is $5,911.12 on EVERY day of July; the recorded bug read
+  // (3 × 5,911.12 + 179.01) / 4 = $4,478.09 on every one of them.
+  // Review MINOR 10: the dollar SIGNS are out of this title on purpose. Vitest
+  // reads a bare `$5` / `$3` in an it.each title as object-path interpolation
+  // and printed `undefined,911.12` / `undefined,000` in the reporter (and `$$`
+  // is not unescaped here either — it prints two dollar signs). The figures are
+  // unchanged and the assertions below carry them with their `$`.
+  it.each(['2026-07-01', '2026-07-08', '2026-07-31'])('seed 2026-07-08, as of %s → 5,911.12 from 3 months, cash 30,000', async (asOf) => {
+    await seedAt('2026-07-08');
+    const ctx = await seededCtx(db, asOf);
+    const ef = efContext(ctx);
+    expect(ef.baseline).toBeCloseTo(5911.12, 2);
+    expect(ef).toMatchObject({ cash: 30_000, baselineSource: 'transactions', monthsObserved: 3 });
+    expect(evaluateSmallEmergencyFund(ctx).evidence).toBe('$30,000 cash ≥ $5,911 target from 3 months of spending');
+  });
+
+  it('seed on the 1st (rows clamp onto 2026-07-01) reads the same figure', async () => {
+    await seedAt('2026-07-01');
+    const ef = efContext(await seededCtx(db, '2026-07-01'));
+    expect(ef.baseline).toBeCloseTo(5911.12, 2);
+    expect(ef.monthsObserved).toBe(3);
+  });
+
+  it('DOCUMENTATION PIN (D-R1-P9, R2 chip): across a session boundary the July stub becomes a thin complete month', async () => {
+    // The explore DB is rebuilt on every boot (init.ts initExploreDatabase), so
+    // this state is reachable only by holding one session across a local
+    // month-end. It is the R1-F6 class on the LAST month, which the guard does
+    // not cover (the seed's first real row is on the 1st).
+    await seedAt('2026-07-08');
+    const ctx = await seededCtx(db, '2026-08-01');
+    expect(efContext(ctx).baseline).toBeCloseTo(4478.09, 2); // (3 × 5,911.12 + 179.01) / 4
+    expect(evaluateSmallEmergencyFund(ctx).evidence).toBe('$30,000 cash ≥ $4,478 target from 4 months of spending');
+  });
+
+  it('$10,000 one-time on the seed: the three-card split under the complete-month baseline', async () => {
+    await seedAt('2026-07-08');
+    const ctx = await seededCtx(db, '2026-07-08');
+    const input = { amountCents: 1_000_000, cadence: 'one-time' as const };
+    // 6× = $35,466.72 → gap $5,466.72 = 546,672¢; remainder 453,328¢ to the 5–8% band (Mortgage 6.25%).
+    const conservative = splitAmount(input, 'conservative', ctx);
+    expect(conservative.rows).toEqual([{ bucket: 'ef_target', amountCents: 546_672 }, { bucket: 'mid_rate_debt', amountCents: 453_328 }]);
+    // Moderate (6× assumed — no job-stability answer in the seed): 50/50 of the post-B4 remainder.
+    const moderate = splitAmount(input, 'moderate', ctx);
+    expect(moderate.rows).toEqual([
+      { bucket: 'ef_target', amountCents: 546_672 }, { bucket: 'mid_rate_debt', amountCents: 226_664 }, { bucket: 'invest', amountCents: 226_664 },
+    ]);
+    expect(moderate.efAssumed).toBe(true);
+    // Aggressive (3× = $17,733.36 ≤ $30,000): EF covered → everything invests.
+    const aggressive = splitAmount(input, 'aggressive', ctx);
+    expect(aggressive.rows).toEqual([{ bucket: 'invest', amountCents: 1_000_000 }]);
+    // CI-10 is unchanged kernel copy; the multiple is now the honest 5.1× (30,000 / 5,911.12 = 5.075).
+    const floorSkip = 'Emergency fund already at 5.1× monthly expenses — skipped.';
+    for (const s of [conservative, moderate, aggressive]) {
+      expect(s.skipped.find((k) => k.bucket === 'ef_floor')?.reason).toBe(floorSkip);
+    }
+    expect(aggressive.skipped.find((k) => k.bucket === 'ef_target')?.reason).toBe(floorSkip);
   });
 });

@@ -96,7 +96,8 @@ describe('computeAssumptionParity', () => {
       [{ ...base, withdrawalStrategy: 'sequential' }, 'withdrawal strategy proportional vs sequential'],
       // CR-P10 renders ENGINE-effective ages (C1): DEF's one person retires at 65.
       [{ ...base, retirementAgeOverride: 60 }, 'retirement age 65 vs 60'],
-      [{ ...base, expenseSource: 'rolling12m' }, 'expenses base custom vs 12-month average'],
+      // CR-P11 mode rename (R1): the rolling12m mode reads 'spending average'.
+      [{ ...base, expenseSource: 'rolling12m' }, 'expenses base custom vs spending average'],
       [{ ...base, annualLongTermGains: 12_000 }, 'long-term gains $0/yr vs $12,000/yr'],
       [{ ...base, annualQualifiedDividends: 2_500 }, 'qualified dividends $0/yr vs $2,500/yr'],
       [{ ...base, annualNonQualifiedDividends: 900 }, 'non-qualified dividends $0/yr vs $900/yr'],
@@ -156,7 +157,7 @@ describe('computeAssumptionParity', () => {
     const rollingA = { ...base, expenseSource: 'rolling12m' as const };
     const customB = { ...base, expenseSource: 'custom' as const, customMonthly: 5_000 };
     expect(computeAssumptionParity(rollingA, customB, HH, DEF).differences)
-      .toEqual(['expenses base 12-month average vs custom', 'custom expenses $0/mo vs $5,000/mo']);
+      .toEqual(['expenses base spending average vs custom', 'custom expenses $0/mo vs $5,000/mo']);
   });
 
   // Review MINOR 18: pct is toFixed(2) trimmed — toFixed(1) would render 7.3%.

@@ -3,6 +3,8 @@ import { buildFrameworkCards, recordUnallocatableMax } from '@/lib/interview/fra
 import { AccountType, AssetClass } from '@/types/enums';
 import { makeAccount, makeHolding, makeLoan } from '../../factories';
 import { fixtureCtx, snap } from './fixture';
+import { makeHousehold } from '../../factories';
+import { ADVICE_LEXICON } from '../../helpers/advice-lexicon';
 
 describe('buildFrameworkCards', () => {
   const cards = buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, fixtureCtx());
@@ -193,5 +195,50 @@ describe('CI-25 avalanche assume row (review m1)', () => {
     expect(conservative.phases[0].rows.some((r) => r.label.startsWith('Emergency fund'))).toBe(true);
     expect(conservative.assumes.some((a) =>
       a.text === 'Multiple loans pay highest rate first; rate ties go to the smaller balance, then the lower ID.')).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R1 Appendix K2 (CR-R1-5, ⚑ R1-F4): every card's "What this assumes" states
+// the monthly-expense figure AND where it came from, with the count.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('buildFrameworkCards — monthly-expense basis row (R1 K2)', () => {
+  const basisRows = (ctx: Parameters<typeof buildFrameworkCards>[1]) =>
+    buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, ctx)
+      .map((c) => c.assumes.find((a) => a.group === 'constants' && a.text.startsWith('Monthly expenses:'))?.text);
+
+  it('household baseline: all three cards read "from Household"', () => {
+    expect(basisRows(fixtureCtx())).toEqual([
+      'Monthly expenses: $6,000 — from Household.',
+      'Monthly expenses: $6,000 — from Household.',
+      'Monthly expenses: $6,000 — from Household.',
+    ]);
+  });
+
+  it('transactions baseline states the count; n = 1 pluralizes as "month"', () => {
+    // fixtureCtx.today = 2026-08-01 → window 2025-08 … 2026-07; $6,000 a month
+    // holds the arithmetic constant so only the basis row moves.
+    const spend = (id: number, date: string) =>
+      ({ id, householdId: 1, date, amount: 6000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 } as never);
+    const three = fixtureCtx({ transactions: [spend(1, '2026-05-05'), spend(2, '2026-06-05'), spend(3, '2026-07-05')] });
+    expect(basisRows(three)).toEqual([
+      'Monthly expenses: $6,000 — from 3 months of spending.',
+      'Monthly expenses: $6,000 — from 3 months of spending.',
+      'Monthly expenses: $6,000 — from 3 months of spending.',
+    ]);
+    const one = fixtureCtx({ transactions: [spend(1, '2026-07-05')] });
+    expect(basisRows(one)[0]).toBe('Monthly expenses: $6,000 — from 1 month of spending.');
+  });
+
+  it('no baseline at all ⇒ no basis row (the CI-11 skipped reasons carry that state)', () => {
+    const none = fixtureCtx({ household: makeHousehold({ monthlyExpenseBaseline: 0 }) });
+    expect(basisRows(none)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('the basis row is calm (lexicon + no exclamation)', () => {
+    for (const text of basisRows(fixtureCtx())) {
+      expect(text).not.toMatch(ADVICE_LEXICON);
+      expect(text).not.toContain('!');
+    }
   });
 });

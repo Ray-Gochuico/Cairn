@@ -1,7 +1,7 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import type { Account, AccountSnapshot } from '@/types/schema';
-import { rolling12mBaseline } from '@/lib/expense-baseline';
+import { rolling12mBaselineDetail } from '@/lib/expense-baseline';
 import { includedAccountIds } from '@/lib/account-inclusion';
 import { localTodayISO } from '@/lib/dates';
 
@@ -13,14 +13,13 @@ import { localTodayISO } from '@/lib/dates';
  * emergency fund once you accumulate qualified-expense receipts —
  * matches how the source chart treats it.
  *
- * Baseline expense source: the rule prefers the 12-month rolling
- * average computed from real spending (rolling12mBaseline — transfers,
- * income rows, and pending reimbursables excluded; reimbursed charges
- * count at net out-of-pocket). When no transactions are present yet
- * (new user, no imports), we fall back to the household's manually
- * entered `monthlyExpenseBaseline` so the rule still produces a
- * meaningful target. The active source is surfaced in the evidence
- * string so users can see whether the figure is computed or self-set.
+ * Baseline expense source: the rule prefers the average of the COMPLETE
+ * calendar months of real spending (rolling12mBaselineDetail — the
+ * in-progress month never counts; transfers, income rows and pending
+ * reimbursables excluded; reimbursed charges at net) once at least
+ * MIN_COMPLETE_MONTHS complete months carry real spending. Otherwise the
+ * household's entered `monthlyExpenseBaseline`. The active source AND the
+ * number of months behind the figure are stated in the evidence string.
  *
  * Targets:
  *   small  → max($1,000, 1 × baseline)
@@ -69,48 +68,60 @@ function formatUSD(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
 
+/** ⚑ R1-F2: complete months with real spending required before transactions
+ *  outrank the household's entered baseline. CR-R1-9 (the wizard's hand-off
+ *  sentence) is written for 1 — change both together. */
+export const MIN_COMPLETE_MONTHS = 1;
+
 export type BaselineSource = 'transactions' | 'household' | 'none';
 
-export function efContext(
-  ctx: RoadmapContext,
-): { baseline: number; cash: number; baselineSource: BaselineSource } {
+export interface EfContext {
+  baseline: number;
+  cash: number;
+  baselineSource: BaselineSource;
+  /** Complete months behind `baseline` when the source is transactions; 0 otherwise. */
+  monthsObserved: number;
+}
+
+export function efContext(ctx: RoadmapContext): EfContext {
   // W4 review (MINOR 6): LOCAL day, not UTC. `ctx.today` is a local-midnight
   // Date (context.ts: dateFromLocalISO(useLocalToday())), so east of UTC
   // toISOString() reports the PREVIOUS day — and on the 1st of a month that
-  // rolled the as-of month back, dropping every current-month transaction out
-  // of the window below (`month > asOfMonth`) and inflating the baseline.
+  // rolled the as-of month back, dropping the month that JUST COMPLETED out
+  // of the window below and sending the household to its Household fallback.
   // localTodayISO is the exact inverse of dateFromLocalISO (the house rule
   // since the T2 UTC lesson).
   const todayISO = localTodayISO(ctx.today);
-  // Wave 2 §8: real-spending baseline — same isRealSpending/
-  // effectiveSpendingAmount pipeline as the Spending page and the What-If
-  // expense basis, so transfers (CC payments) and pending reimbursables
-  // can't inflate the EF target. Calendar-12-month window, distinct-months
-  // divisor (a 4-month history averages over 4, not 12).
-  const computed = rolling12mBaseline(ctx.transactions, ctx.categories ?? [], todayISO);
-  if (computed > 0) {
-    return {
-      baseline: computed,
-      cash: totalCashReserve(ctx.accounts, ctx.snapshots),
-      baselineSource: 'transactions',
-    };
+  // Wave 2 §8 + R1: real-spending baseline over COMPLETE calendar months —
+  // same isRealSpending/effectiveSpendingAmount pipeline as the Spending page
+  // and the What-If expense basis, so transfers (CC payments) and pending
+  // reimbursables can't inflate the EF target. Distinct-months divisor (a
+  // 3-month history averages over 3, not 12) and the count comes back with it.
+  const detail = rolling12mBaselineDetail(ctx.transactions, ctx.categories ?? [], todayISO);
+  const cash = totalCashReserve(ctx.accounts, ctx.snapshots);
+  // Review MINOR 12: at MIN_COMPLETE_MONTHS = 1 the count half of this gate is
+  // INERT — `average > 0` already implies at least one observed month — so a
+  // mutant that drops it is equivalent, not uncovered (the threshold VALUE is
+  // pinned: 1 → 2 reddens eight tests). It becomes the live branch under the
+  // ⚑ R1-F2 override (N = 2/3); keep both halves.
+  if (detail.monthsObserved >= MIN_COMPLETE_MONTHS && detail.average > 0) {
+    return { baseline: detail.average, cash, baselineSource: 'transactions', monthsObserved: detail.monthsObserved };
   }
   const fallback = ctx.household.monthlyExpenseBaseline;
-  return {
-    baseline: fallback,
-    cash: totalCashReserve(ctx.accounts, ctx.snapshots),
-    baselineSource: fallback > 0 ? 'household' : 'none',
-  };
+  return { baseline: fallback, cash, baselineSource: fallback > 0 ? 'household' : 'none', monthsObserved: 0 };
 }
 
-export function baselineSuffix(source: BaselineSource): string {
-  if (source === 'transactions') return ' from 12-mo avg';
+/** CR-R1-1 / CR-R1-2: the basis with its count. */
+export function baselineSuffix(source: BaselineSource, monthsObserved: number): string {
+  if (source === 'transactions') {
+    return ` from ${monthsObserved} ${monthsObserved === 1 ? 'month' : 'months'} of spending`;
+  }
   if (source === 'household') return ' from Household';
   return '';
 }
 
 export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash, baselineSource } = efContext(ctx);
+  const { baseline, cash, baselineSource, monthsObserved } = efContext(ctx);
   if (baseline <= 0) {
     return {
       status: 'unanswered',
@@ -119,7 +130,7 @@ export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
     };
   }
   const target = Math.max(1000, baseline);
-  const suffix = baselineSuffix(baselineSource);
+  const suffix = baselineSuffix(baselineSource, monthsObserved);
   if (cash >= target) {
     return {
       status: 'done',
@@ -144,7 +155,7 @@ function jobStabilityAnswer(ctx: RoadmapContext): 'stable' | 'unstable' | null {
 }
 
 export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash, baselineSource } = efContext(ctx);
+  const { baseline, cash, baselineSource, monthsObserved } = efContext(ctx);
   if (baseline <= 0) {
     return { status: 'not-started', evidence: 'Set your monthly expense baseline first' };
   }
@@ -160,7 +171,7 @@ export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
     return { status: 'skipped', evidence: 'Unstable income path uses the 6–12-month EF target instead' };
   }
   const target = 3 * baseline;
-  const suffix = baselineSuffix(baselineSource);
+  const suffix = baselineSuffix(baselineSource, monthsObserved);
   if (cash >= target) {
     return { status: 'done', evidence: `${formatUSD(cash)} cash ≥ ${formatUSD(target)} (3-mo target${suffix})` };
   }
@@ -172,7 +183,7 @@ export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
 }
 
 export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash, baselineSource } = efContext(ctx);
+  const { baseline, cash, baselineSource, monthsObserved } = efContext(ctx);
   if (baseline <= 0) {
     return { status: 'not-started', evidence: 'Set your monthly expense baseline first' };
   }
@@ -189,7 +200,7 @@ export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResul
   // For unstable income, 6 months is the floor; 12 months is the ceiling.
   // We report done at 6 months and active in between with progress %.
   const target = 6 * baseline;
-  const suffix = baselineSuffix(baselineSource);
+  const suffix = baselineSuffix(baselineSource, monthsObserved);
   if (cash >= target) {
     const ceiling = 12 * baseline;
     const evidence = cash >= ceiling

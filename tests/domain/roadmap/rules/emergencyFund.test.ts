@@ -4,7 +4,12 @@ import {
   evaluateEmergencyFund3Months,
   evaluateEmergencyFund6To12Months,
   totalCashReserve,
+  efContext,
+  baselineSuffix,
+  MIN_COMPLETE_MONTHS,
 } from '@/domain/roadmap/rules/emergencyFund';
+import { rolling12mBaselineDetail } from '@/lib/expense-baseline';
+import { ADVICE_LEXICON } from '../../../helpers/advice-lexicon';
 import type { RoadmapContext } from '@/types/roadmap';
 import type { Account, AccountSnapshot, Category, Household, Person, Transaction } from '@/types/schema';
 import { AccountType, CategoryType, SnapshotSource } from '@/types/enums';
@@ -267,64 +272,35 @@ describe('evaluateEmergencyFund6To12Months', () => {
   });
 });
 
-describe('emergency-fund rule — real expense baseline from transactions', () => {
-  // Adjusted for the expense-sign fix: purchase amounts are positive per the
-  // Transaction schema convention.
-  it('prefers 12-month rolling avg from transactions over household baseline', () => {
-    // 3 months of $4,000 outflows → baseline = $4,000.
-    // Household baseline says $5,000 (would have made 3-mo target $15k).
-    // With $4,000 real baseline, 3-mo target = $12k → cash $12,500 should mark done.
-    const transactions = [
-      tx(1, '2026-03-10', 4000),
-      tx(2, '2026-04-10', 4000),
-      tx(3, '2026-05-10', 4000),
-    ];
-    const r = evaluateEmergencyFund3Months(
-      makeContext({ baseline: 5000, cash: 12_500, stability: 'stable', transactions }),
-    );
+describe('emergency-fund rule — real expense baseline from COMPLETE months (R1)', () => {
+  it('prefers the complete-month average over the household baseline and states the count', () => {
+    // Mar + Apr complete at $4,000 each; the May row is in-progress and does not count.
+    // 3-mo target = $12,000; cash $12,500 → done. First real row 03-05 (guard inert).
+    const transactions = [tx(1, '2026-03-05', 4000), tx(2, '2026-04-10', 4000), tx(3, '2026-05-10', 4000)];
+    const r = evaluateEmergencyFund3Months(makeContext({ baseline: 5000, cash: 12_500, stability: 'stable', transactions }));
     expect(r.status).toBe('done');
-    expect(r.evidence).toMatch(/from 12-mo avg/);
+    expect(r.evidence).toBe('$12,500 cash ≥ $12,000 (3-mo target from 2 months of spending)');
   });
 
-  it('falls back to household baseline when no transactions exist', () => {
-    const r = evaluateEmergencyFund3Months(
-      makeContext({ baseline: 5000, cash: 15_000, stability: 'stable', transactions: [] }),
-    );
+  it('falls back to the household baseline when no transactions exist', () => {
+    const r = evaluateEmergencyFund3Months(makeContext({ baseline: 5000, cash: 15_000, stability: 'stable', transactions: [] }));
     expect(r.status).toBe('done');
-    expect(r.evidence).toMatch(/from Household/);
+    expect(r.evidence).toBe('$15,000 cash ≥ $15,000 (3-mo target from Household)');
   });
 
-  it('uses monthsObserved as divisor — 4 months of data yields total/4 not total/12', () => {
-    // $3,000 spent in each of Feb, Mar, Apr, May → 4 months observed, $12k total.
-    // Real baseline = $12,000 / 4 = $3,000.
-    // 6-mo unstable target = 6 × $3,000 = $18,000. Cash $18,000 → done.
-    const transactions = [
-      tx(1, '2026-02-15', 3000),
-      tx(2, '2026-03-15', 3000),
-      tx(3, '2026-04-15', 3000),
-      tx(4, '2026-05-15', 3000),
-    ];
-    const r = evaluateEmergencyFund6To12Months(
-      makeContext({ baseline: 0, cash: 18_000, stability: 'unstable', transactions }),
-    );
+  it('divides by months observed — 3 complete months yield total/3, not total/12; the in-progress row is ignored', () => {
+    const transactions = [tx(1, '2026-02-05', 3000), tx(2, '2026-03-15', 3000), tx(3, '2026-04-15', 3000), tx(4, '2026-05-15', 3000)];
+    const r = evaluateEmergencyFund6To12Months(makeContext({ baseline: 0, cash: 18_000, stability: 'unstable', transactions }));
     expect(r.status).toBe('done');
-    expect(r.evidence).toMatch(/6-mo floor/);
-    expect(r.evidence).toMatch(/from 12-mo avg/);
+    expect(r.evidence).toBe('$18,000 cash ≥ $18,000 (6-mo floor from 3 months of spending)');
   });
 
-  it('small EF target picks the transactions-derived baseline floor', () => {
-    // 2 months of $600 → $1,200 / 2 = $600 baseline.
-    // Small target = max($1,000, $600) = $1,000. Cash $900 → active.
-    const transactions = [
-      tx(1, '2026-04-10', 600),
-      tx(2, '2026-05-10', 600),
-    ];
-    const r = evaluateSmallEmergencyFund(
-      makeContext({ baseline: 5000, cash: 900, transactions }),
-    );
+  it('small EF target picks the transactions-derived floor; n = 1 pluralizes as "month"', () => {
+    // April complete at $600 → target max($1,000, $600) = $1,000; cash $900 → active.
+    const transactions = [tx(1, '2026-04-05', 600), tx(2, '2026-05-10', 600)];
+    const r = evaluateSmallEmergencyFund(makeContext({ baseline: 5000, cash: 900, transactions }));
     expect(r.status).toBe('active');
-    expect(r.evidence).toMatch(/\$1,000/);
-    expect(r.evidence).toMatch(/from 12-mo avg/);
+    expect(r.evidence).toBe('$900 / $1,000 (90% from 1 month of spending)');
   });
 });
 
@@ -343,7 +319,7 @@ describe('EF baseline uses REAL spending — transfers and reimbursements exclud
       tx(1, '2026-03-05', 8000, { categoryId: 9 }),
       tx(2, '2026-04-05', 8000, { categoryId: 9 }),
       tx(3, '2026-05-05', 8000, { categoryId: 9 }),
-      tx(4, '2026-03-10', 2000),
+      tx(4, '2026-03-06', 2000),
       tx(5, '2026-04-10', 2000),
       tx(6, '2026-05-10', 2000),
     ];
@@ -353,47 +329,101 @@ describe('EF baseline uses REAL spending — transfers and reimbursements exclud
       categories: [spendCat, transferCat],
     });
     const r = evaluateSmallEmergencyFund(ctx);
-    // Real baseline = $2,000/mo → small-EF target = max($1k, $2k) = $2,000;
+    // Real baseline = $2,000/mo over the two COMPLETE months (Mar + Apr; the May
+    // rows are in-progress) → small-EF target = max($1k, $2k) = $2,000;
     // $2,500 cash meets it. The raw-amount baseline said $10k/mo → active at 25%.
     expect(r.status).toBe('done');
-    expect(r.evidence).toMatch(/\$2,000/);
-    expect(r.evidence).toMatch(/from 12-mo avg/);
+    expect(r.evidence).toBe('$2,500 cash ≥ $2,000 target from 2 months of spending');
   });
 
   it('pending reimbursables are excluded; reimbursed ones count at net out-of-pocket', () => {
+    // R1: sited in APRIL — a COMPLETE month (every row used to sit in the
+    // as-of month, which no longer counts). The pending row is not a
+    // real-spending row, so the history's first real row is 04-03 (guard inert).
     const transactions = [
-      tx(1, '2026-05-02', 3000, { reimbursable: true }),                                   // pending → excluded
-      tx(2, '2026-05-03', 1000, { reimbursable: true, reimbursedAt: '2026-05-20', reimbursedAmount: 800 }), // → $200
-      tx(3, '2026-05-04', 1800),
+      tx(1, '2026-04-02', 3000, { reimbursable: true }),                                   // pending → excluded
+      tx(2, '2026-04-03', 1000, { reimbursable: true, reimbursedAt: '2026-04-20', reimbursedAmount: 800 }), // → $200
+      tx(3, '2026-04-04', 1800),
     ];
     const ctx = makeContext({ cash: 100, transactions, categories: [spendCat] });
     const r = evaluateSmallEmergencyFund(ctx);
     // Baseline = (200 + 1800) / 1 month = $2,000 → target $2,000.
-    expect(r.evidence).toMatch(/\$2,000/);
+    expect(r.evidence).toBe('$100 / $2,000 (5% from 1 month of spending)');
   });
 
   it('all-transfer history falls back to the household baseline (from Household suffix)', () => {
-    const transactions = [tx(1, '2026-05-05', 8000, { categoryId: 9 })];
+    // R1 (review REFUTED 3 residual): sited in APRIL, a COMPLETE month, so the
+    // fixture still tests "transfers only" rather than going vacuous because
+    // its single row sits in the in-progress month.
+    const transactions = [tx(1, '2026-04-05', 8000, { categoryId: 9 })];
     const ctx = makeContext({
       baseline: 5000, cash: 100, transactions, categories: [spendCat, transferCat],
     });
     const r = evaluateSmallEmergencyFund(ctx);
-    expect(r.evidence).toMatch(/\$5,000/);
-    expect(r.evidence).toMatch(/from Household/);
+    expect(r.evidence).toBe('$100 / $5,000 (2% from Household)');
+  });
+});
+
+
+describe('efContext — source gate: MIN_COMPLETE_MONTHS complete months with real spending > 0 (R1)', () => {
+  const spendCat: Category = { id: 1, name: 'Everything', parentCategoryId: null, color: null, icon: null, type: CategoryType.NEED, isCapital: false, systemManaged: false, monthlyBudget: null };
+
+  it('exports N = 1 (⚑ R1-F2 — CR-R1-9 is written for this value)', () => {
+    expect(MIN_COMPLETE_MONTHS).toBe(1);
+  });
+
+  it('rows only in the in-progress month → Household, monthsObserved 0', () => {
+    const ctx = makeContext({ baseline: 6000, cash: 100, transactions: [tx(1, '2026-05-02', 1200)], categories: [spendCat] });
+    expect(efContext(ctx)).toEqual({ baseline: 6000, cash: 100, baselineSource: 'household', monthsObserved: 0 });
+    expect(evaluateSmallEmergencyFund(ctx).evidence).toBe('$100 / $6,000 (2% from Household)');
+  });
+
+  it('one complete month → transactions, monthsObserved 1; three → 3', () => {
+    const one = makeContext({ baseline: 6000, cash: 100, transactions: [tx(1, '2026-04-03', 1200)], categories: [spendCat] });
+    expect(efContext(one)).toMatchObject({ baseline: 1200, baselineSource: 'transactions', monthsObserved: 1 });
+    const three = makeContext({ baseline: 6000, cash: 100, transactions: [tx(1, '2026-02-03', 1000), tx(2, '2026-03-03', 2000), tx(3, '2026-04-03', 3000)], categories: [spendCat] });
+    expect(efContext(three)).toMatchObject({ baseline: 2000, baselineSource: 'transactions', monthsObserved: 3 });
+  });
+
+  it('a complete month whose only real-spending rows are fully reimbursed is observed at $0 → the average > 0 half of the gate sends it to Household', () => {
+    const ctx = makeContext({
+      baseline: 6000, cash: 100, categories: [spendCat],
+      transactions: [tx(1, '2026-04-03', 500, { reimbursable: true, reimbursedAt: '2026-04-10', reimbursedAmount: 500 })],
+    });
+    expect(rolling12mBaselineDetail(ctx.transactions, ctx.categories ?? [], '2026-05-23')).toMatchObject({ average: 0, monthsObserved: 1 });
+    expect(efContext(ctx)).toMatchObject({ baseline: 6000, baselineSource: 'household', monthsObserved: 0 });
+  });
+
+  it('R1-F6 at the consumer: a history beginning on the 20th loses that month and says so in the count', () => {
+    const ctx = makeContext({ baseline: 6000, cash: 100, transactions: [tx(1, '2026-03-20', 1000), tx(2, '2026-04-10', 3000)], categories: [spendCat] });
+    expect(efContext(ctx)).toMatchObject({ baseline: 3000, baselineSource: 'transactions', monthsObserved: 1 });
+    expect(evaluateSmallEmergencyFund(ctx).evidence).toBe('$100 / $3,000 (3% from 1 month of spending)');
+  });
+
+  it('no new string carries an advice lexeme or an exclamation (CR-R1-1/2)', () => {
+    for (const n of [1, 2, 3, 12]) {
+      const s = baselineSuffix('transactions', n);
+      expect(s).not.toMatch(ADVICE_LEXICON);
+      expect(s).not.toContain('!');
+      expect(s).toBe(n === 1 ? ' from 1 month of spending' : ` from ${n} months of spending`);
+    }
+    expect(baselineSuffix('household', 0)).toBe(' from Household');
+    expect(baselineSuffix('none', 0)).toBe('');
   });
 });
 
 // ---------------------------------------------------------------------------
-// W4 review (MINOR 6): the EF baseline window was anchored with
-// `ctx.today.toISOString()`, but `ctx.today` is a LOCAL-midnight Date
-// (context.ts: dateFromLocalISO(useLocalToday())). East of UTC, local midnight
-// is the PREVIOUS UTC day — so on the 1st of a month the as-of month rolled
-// back and every current-month transaction fell outside the window
-// (`month > asOfMonth`). The divisor dropped, the baseline jumped, and the
-// sample profile's 6.7x reserve read as 5.1x. This is the house
-// localTodayISO-vs-toISOString gotcha class (the T2 UTC lesson).
+// W4 review (MINOR 6), restated for the complete-month rule (R1): the as-of day
+// is the LOCAL day. East of UTC, `toISOString()` on a local-midnight `today`
+// reports the PREVIOUS day — on the 1st that rolls the as-of month back, so the
+// month that JUST COMPLETED would fall out of the window and the household
+// would drop to its Household fallback. West-of-UTC zones share the UTC day
+// and are controls. Two rows with DISTINCT amounts: a window that still
+// counts the in-progress month reads (1,200 + 5,000) / 2 = $3,100, not $1,200.
+// (Historical note: under the pre-R1 inclusive window this class made the
+// sample profile's 6.7x reserve read as 5.1x — the T2 UTC lesson.)
 // ---------------------------------------------------------------------------
-describe('efContext as-of anchoring (local day, not UTC)', () => {
+describe('efContext as-of anchoring (local day, not UTC) — complete-month rule', () => {
   const originalTZ = process.env.TZ;
 
   afterEach(() => {
@@ -414,22 +444,56 @@ describe('efContext as-of anchoring (local day, not UTC)', () => {
     };
   }
 
+  const AUGUST = [tx(1, '2026-08-03', 700), tx(2, '2026-08-31', 500)]; // one complete month, $1,200; first real row on the 3rd (guard inert)
+  const SEPT_1 = tx(3, '2026-09-01', 5000);                             // the in-progress month — must NOT count
+
   it.each([
     ['Pacific/Auckland', '2026-08-31T12:00:00.000Z'], // = 2026-09-01 00:00 NZST (UTC+12)
     ['Asia/Tokyo', '2026-08-31T15:00:00.000Z'], // = 2026-09-01 00:00 JST (UTC+9)
     ['America/Los_Angeles', '2026-09-01T07:00:00.000Z'], // = 2026-09-01 00:00 PDT (control)
     ['UTC', '2026-09-01T00:00:00.000Z'], // CI's zone (control)
-  ])('counts current-month spending on the 1st in %s', (tz, instant) => {
+  ])('on the local 1st in %s, August is complete and September is not', (tz, instant) => {
     process.env.TZ = tz;
     vi.useFakeTimers();
     vi.setSystemTime(new Date(instant));
     expect(localTodayISO()).toBe('2026-09-01'); // precondition: it IS the 1st, locally
 
-    const ctx = contextForToday([tx(1, '2026-09-01', 1200)], [spendCat]);
-    const r = evaluateSmallEmergencyFund(ctx);
-    // From transactions ($1,200 over one observed month), NOT the $6,000
-    // household fallback the UTC-anchored window fell back to.
-    expect(r.evidence).toMatch(/from 12-mo avg/);
-    expect(r.evidence).toMatch(/\$1,200/);
+    const r = evaluateSmallEmergencyFund(contextForToday([...AUGUST, SEPT_1], [spendCat]));
+    expect(r.evidence).toBe('$30,000 cash ≥ $1,200 target from 1 month of spending');
+    // Only in-progress rows → the Household fallback, stated.
+    const only = evaluateSmallEmergencyFund(contextForToday([SEPT_1], [spendCat]));
+    expect(only.evidence).toBe('$30,000 cash ≥ $6,000 target from Household');
+  });
+});
+
+// Ruling 7: the recorded bug class pinned at the CONSUMER across a local month
+// boundary — a row posting on the 1st must not move the figure.
+describe('efContext — cross-month-boundary anchor: a row posting on the 1st never moves the figure', () => {
+  const originalTZ = process.env.TZ;
+  afterEach(() => { process.env.TZ = originalTZ; });
+
+  const spendCat: Category = {
+    id: 1, name: 'Everything', parentCategoryId: null, color: null, icon: null,
+    type: CategoryType.NEED, isCapital: false, systemManaged: false, monthlyBudget: null,
+  };
+
+  const THREE = [tx(1, '2026-04-01', 5800), tx(2, '2026-05-01', 5911.12), tx(3, '2026-06-01', 6022.24)]; // avg 5,911.12
+  const JULY_1 = tx(4, '2026-07-01', 96.31);
+  const at = (iso: string, transactions: Transaction[]): RoadmapContext =>
+    ({ ...makeContext({ baseline: 6000, cash: 30_000, transactions, categories: [spendCat] }), today: dateFromLocalISO(iso) });
+
+  it.each(['Pacific/Auckland', 'America/Los_Angeles', 'UTC'])('in %s', (tz) => {
+    process.env.TZ = tz;
+    for (const iso of ['2026-07-01', '2026-07-15', '2026-07-31']) {
+      const ctx = at(iso, [...THREE, JULY_1]);
+      expect(localTodayISO(ctx.today)).toBe(iso); // precondition: the local round trip
+      expect(efContext(ctx).baseline).toBeCloseTo(5911.12, 2);
+      expect(efContext(ctx).monthsObserved).toBe(3);
+      expect(evaluateSmallEmergencyFund(ctx).evidence).toBe('$30,000 cash ≥ $5,911 target from 3 months of spending');
+      expect(efContext(ctx)).toEqual(efContext(at(iso, THREE))); // the July-1 row is invisible
+    }
+    // June 30: the two-month figure — the single move on the 1st is JUNE entering, not the July row.
+    expect(evaluateSmallEmergencyFund(at('2026-06-30', [...THREE, JULY_1])).evidence)
+      .toBe('$30,000 cash ≥ $5,856 target from 2 months of spending'); // (5800 + 5911.12) / 2 = 5,855.56
   });
 });

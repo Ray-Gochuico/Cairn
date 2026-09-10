@@ -18,12 +18,14 @@ type ExpenseSource = LeverPayload['expenseSource'];
 // Pin ONE noun for the custom mode — "Custom monthly expense" — used verbatim
 // for the tab aria-label, the NumberField label, and the inline base-source
 // label. (UX F-4/F-5: no "Custom" / "custom amount" / "Custom monthly expense"
-// drift.) The other two labels are the inline base-source phrasings.
-const SOURCE_LABEL: Record<ExpenseSource, string> = {
-  latestMonth: 'latest complete month',
-  rolling12m:  '12-month average',
-  custom:      'custom monthly expense',
-};
+// drift.) The other two labels are the inline base-source phrasings; the
+// data-mode label states its COUNT (R1 — CR-R1-6): "average of {n} complete
+// months".
+function baseSourceLabel(source: ExpenseSource, rollingMonths: number): string {
+  if (source === 'latestMonth') return 'latest complete month';
+  if (source === 'custom') return 'custom monthly expense';
+  return `average of ${rollingMonths} complete ${rollingMonths === 1 ? 'month' : 'months'}`;
+}
 
 function emptyRow(): ExpensePeriod {
   const today = new Date().toISOString().slice(0, 10);
@@ -65,13 +67,20 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
     [draft, monthISO],
   );
   // Resolve the data-driven base from expenseBasis (precomputed on RealState at
-  // capture). Falls back to 0 when RealState is not yet available.
+  // capture). Every read is optional-chained THROUGH expenseBasis: a RealState
+  // without it is a supported state (the Feature-B back-compat contract — hand-
+  // built fixtures and legacy callers), so a missing basis must read 0, never
+  // throw. R1 review (MINOR 6): the two data-mode reads below used to
+  // dereference `expenseBasis` directly.
   const dataBase =
     source === 'latestMonth'
-      ? (real?.expenseBasis.latestMonth ?? 0)
+      ? (real?.expenseBasis?.latestMonth ?? 0)
       : source === 'rolling12m'
-        ? (real?.expenseBasis.rolling12m ?? 0)
+        ? (real?.expenseBasis?.rolling12m ?? 0)
         : 0;
+  // Evaluated on EVERY render (including custom mode), unlike the two branches
+  // above, which are gated on the selected source.
+  const rollingMonths = real?.expenseBasis?.rolling12mMonths ?? 0;
 
   // For custom mode, `customMonthly` drives the base; null (blank field) reads as 0.
   const base = source === 'custom' ? (customMonthly ?? 0) : dataBase;
@@ -122,7 +131,7 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
               variant={source === s ? 'default' : 'ghost'}
               onClick={() => setSource(s)}
             >
-              {s === 'latestMonth' ? 'Latest complete month' : s === 'rolling12m' ? '12-month average' : 'Custom monthly expense'}
+              {s === 'latestMonth' ? 'Latest complete month' : s === 'rolling12m' ? 'Spending average' : 'Custom monthly expense'}
             </Button>
           ))}
         </div>
@@ -141,7 +150,7 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
 
         {emptyData ? (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm" data-testid="expense-empty-data">
-            <div className="font-medium">No spending data in this window</div>
+            <div className="font-medium">No complete month of spending yet</div>
             {/* Copy (UX F-5): the "or:" connector is shown ONLY when the baseline
                 prefill button below actually exists (householdBaseline > 0). With
                 no baseline there is no dangling "or:" — the Custom-tab fallback is
@@ -150,8 +159,8 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
             {householdBaseline > 0 ? (
               <>
                 <p className="text-xs text-muted-foreground mt-1">
-                  This mode needs imported transactions. Switch to Custom and enter an
-                  amount, or:
+                  This mode needs a complete month of imported transactions.
+                  Switch to Custom and enter an amount, or:
                 </p>
                 <Button size="sm" variant="outline" className="mt-2" onClick={prefillFromBaseline}>
                   Use my {formatCurrency(householdBaseline)} expense baseline
@@ -159,7 +168,7 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
               </>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                This mode needs imported transactions.{' '}
+                This mode needs a complete month of imported transactions.{' '}
                 <Button
                   variant="link"
                   size="sm"
@@ -185,7 +194,7 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
               <span>
                 Base{' '}
                 <span data-testid="expense-base-source" className="text-muted-foreground">
-                  ({SOURCE_LABEL[source]})
+                  ({baseSourceLabel(source, rollingMonths)})
                 </span>
                 :
               </span>

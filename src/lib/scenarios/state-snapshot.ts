@@ -2,7 +2,7 @@ import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction,
 import type { Bracket } from '@/lib/tax';
 import { AccountType, type FilingStatus } from '@/types/enums';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
-import { latestCompleteMonthBaseline, rolling12mBaseline } from '@/lib/expense-baseline';
+import { latestCompleteMonthBaseline, rolling12mBaselineDetail } from '@/lib/expense-baseline';
 
 export interface AppSettingsSlice {
   defaultInflation: number;
@@ -169,8 +169,10 @@ export interface RealState {
   expenseBasis: {
     /** Total real spending in the latest COMPLETE month (in-progress month excluded). */
     latestMonth: number;
-    /** Trailing-12-month average monthly real spending (distinct-months divisor). */
+    /** Average real spending over the complete months (up to 12) before the start month — the in-progress month never counts. */
     rolling12m: number;
+    /** Complete months behind `rolling12m` (0..12) — transient, never serialized; the popover states it. */
+    rolling12mMonths: number;
   };
 }
 
@@ -392,9 +394,11 @@ export function captureRealState(inputs: RealStateInputs): RealState {
   }
 
   const categories = inputs.categories ?? [];
+  const rolling = rolling12mBaselineDetail(inputs.transactions, categories, inputs.startISO); // startISO is 'YYYY-MM' (local) — complete = strictly before it
   const expenseBasis = {
     latestMonth: latestCompleteMonthBaseline(inputs.transactions, categories, inputs.startISO),
-    rolling12m: rolling12mBaseline(inputs.transactions, categories, inputs.startISO),
+    rolling12m: rolling.average,
+    rolling12mMonths: rolling.monthsObserved,
   };
 
   const initialPhysicalAssets = computeInitialPhysicalAssets(

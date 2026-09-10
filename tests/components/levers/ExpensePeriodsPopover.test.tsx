@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -17,6 +17,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
+import { ADVICE_LEXICON } from '../../helpers/advice-lexicon';
 import type { Scenario } from '@/types/scenario';
 import type { ExpensePeriod } from '@/lib/scenarios';
 
@@ -227,7 +228,7 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
   it('renders the three-way selector as a tablist', () => {
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     expect(screen.getByRole('tab', { name: /latest complete month/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /12-month average/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Spending average' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /custom monthly expense/i })).toBeInTheDocument();
   });
 
@@ -257,7 +258,8 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
   it('HARD-GATED empty-data state: a data mode with no spending surfaces the no-data notice + a one-tap baseline prefill', () => {
     seedAllStores({ transactions: [], expenseSource: 'rolling12m', householdBaseline: 4500 });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    expect(screen.getByText(/no spending data in this window/i)).toBeInTheDocument();
+    expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+    expect(screen.getByText('This mode needs a complete month of imported transactions. Switch to Custom and enter an amount, or:')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /use my \$4,500 expense baseline/i }));
     expect(screen.getByTestId('expense-base')).toHaveTextContent('4,500');
   });
@@ -265,7 +267,9 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
   it('empty-data with NO household baseline: no dangling "or:", offers a Custom fallback action (UX F-5)', () => {
     seedAllStores({ transactions: [], expenseSource: 'rolling12m', householdBaseline: 0 });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    expect(screen.getByText(/no spending data in this window/i)).toBeInTheDocument();
+    expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to Custom' }).closest('p'))
+      .toHaveTextContent('This mode needs a complete month of imported transactions. Switch to Custom to enter an amount.');
     expect(screen.queryByRole('button', { name: /expense baseline/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/, or:/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /switch to custom/i }));
@@ -288,5 +292,78 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
     await vi.waitFor(() => expect(spy).toHaveBeenCalled());
     const patch = spy.mock.calls.at(-1)![1];
     expect(patch).toMatchObject({ expenseSource: 'custom', customMonthly: 4200 });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R1 — the count-stated base label (CR-R1-6, D-R1-P5/P6). Only this describe
+// pins the clock (toFake: ['Date'] — useLocalToday's 60 s setInterval stays
+// real); the describes above keep running on the real clock as before.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ExpensePeriodsPopover — R1 count-stated base label (fake Date: local 2026-05-15)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 4, 15, 12)); // LOCAL May 15 2026 — useLocalToday → '2026-05-15'; startISO '2026-05'
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const row = (id: number, date: string, amount: number) =>
+    ({ id, householdId: 1, date, amount, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 });
+  const IN_PROGRESS = row(99, '2026-05-09', 9999);
+
+  // Moved into this describe by the R1 review (MINOR 11): it was authored in the
+  // real-clock describe above, where its in-progress row was built from a
+  // `new Date()`-derived month. Under the pinned clock the literal 2026-05-09
+  // row IS the in-progress month, so the test is now clock-injected like every
+  // other R1-authored case in this file.
+  it('both data modes show the complete-month empty state when only in-progress rows exist (CR-R1-7a)', () => {
+    for (const mode of ['rolling12m', 'latestMonth'] as const) {
+      seedAllStores({ transactions: [IN_PROGRESS] as any, expenseSource: mode, householdBaseline: 4500 });
+      const { unmount } = render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('n = 3: Base (average of 3 complete months): $3,000 — the in-progress row is invisible', () => {
+    seedAllStores({ transactions: [row(1, '2026-02-05', 3000), row(2, '2026-03-05', 3000), row(3, '2026-04-05', 3000), IN_PROGRESS] as any, expenseSource: 'rolling12m' });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByTestId('expense-base')).toHaveTextContent('$3,000');
+    expect(screen.getByTestId('expense-base-source')).toHaveTextContent('(average of 3 complete months)');
+  });
+
+  it('n = 1 pluralizes as "month"', () => {
+    seedAllStores({ transactions: [row(1, '2026-04-05', 3000), IN_PROGRESS] as any, expenseSource: 'rolling12m' });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByTestId('expense-base-source')).toHaveTextContent('(average of 1 complete month)');
+  });
+
+  // D-R1-P5: with twelve months the label reads "average of 12 complete months".
+  // The negative pin is written as /\d+-month average/ rather than the literal
+  // phrase so the wave's grep-zero receipt for that phrase holds across tests/
+  // too — and it catches EVERY {n}-month-average form, not just the twelve.
+  it('n = 12 says "average of 12 complete months" — never an {n}-month-average label (D-R1-P5)', () => {
+    const twelve = Array.from({ length: 12 }, (_, i) => {
+      const idx = 2025 * 12 + 4 + i; // 2025-05 … 2026-04
+      return row(i + 1, `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}-05`, 3000);
+    });
+    seedAllStores({ transactions: [...twelve, IN_PROGRESS] as any, expenseSource: 'rolling12m' });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByTestId('expense-base')).toHaveTextContent('$3,000');
+    expect(screen.getByTestId('expense-base-source')).toHaveTextContent('(average of 12 complete months)');
+    expect(screen.queryByText(/\d+-month average/)).toBeNull();
+  });
+
+  it('every R1 string is calm (lexicon + no exclamation)', () => {
+    seedAllStores({ transactions: [IN_PROGRESS] as any, expenseSource: 'rolling12m', householdBaseline: 4500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // Scoped to the R1 surfaces (the empty-data box + the tab names), not the
+    // shell's chrome — verified lexicon-free at ed659f7a, but not this wave's to pin.
+    const text = [
+      screen.getByTestId('expense-empty-data').textContent ?? '',
+      ...screen.getAllByRole('tab').map((t) => t.textContent ?? ''),
+    ].join(' ');
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    expect(text).not.toContain('!');
   });
 });

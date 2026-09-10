@@ -43,6 +43,7 @@ describe('computeEfOverlap — overlap = min(cashSavingsReserve, moderate EF tar
   it('unanswered jobStability → 6× ASSUMED: min(30,000, 6×6,000=36,000) = 30,000', () => {
     expect(computeEfOverlap(fixtureCtx(), 30000)).toEqual({
       overlapDollars: 30000, efTargetDollars: 36000, multiple: 6, assumed: true, baselineSource: 'household',
+      baselineDollars: 6000, monthsObserved: 0, // R1 K3: additive — CI-H5 states the figure and its provenance
     });
   });
 
@@ -50,6 +51,7 @@ describe('computeEfOverlap — overlap = min(cashSavingsReserve, moderate EF tar
     const ctx = fixtureCtx({ persons: [makePerson({ id: 1, jobStability: 'stable' })] });
     expect(computeEfOverlap(ctx, 30000)).toEqual({
       overlapDollars: 18000, efTargetDollars: 18000, multiple: 3, assumed: false, baselineSource: 'household',
+      baselineDollars: 6000, monthsObserved: 0,
     });
   });
 

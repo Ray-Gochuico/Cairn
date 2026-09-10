@@ -8,6 +8,9 @@ export const toCents = (dollars: number): number => Math.round(dollars * 100);
 export interface BucketGaps {
   baselineDollars: number;
   baselineSource: BaselineSource;
+  /** Complete months behind `baselineDollars` when the source is transactions;
+   *  0 otherwise (R1 — the count every consumer states). */
+  baselineMonths: number;
   reserveDollars: number;
   /** max(0, max($1,000, 1× baseline) − reserve). 0 when baseline missing. */
   efFloorGapCents: number;
@@ -40,7 +43,7 @@ export function avalancheOrder(loans: Loan[]): Loan[] {
  * (the debtClassification.ts ×100 seam). Pure over ctx.
  */
 export function computeBucketGaps(ctx: InterviewContext): BucketGaps {
-  const { baseline, cash, baselineSource } = efContext(ctx);
+  const { baseline, cash, baselineSource, monthsObserved } = efContext(ctx);
   const active = ctx.loans.filter((l) => l.currentBalance > 0);
   const high = avalancheOrder(active.filter((l) => classifyDebtRate(l.interestRate * 100, ctx.thresholds) === 'high'));
   const mid = avalancheOrder(active.filter((l) => classifyDebtRate(l.interestRate * 100, ctx.thresholds) === 'moderate'));
@@ -50,6 +53,7 @@ export function computeBucketGaps(ctx: InterviewContext): BucketGaps {
   return {
     baselineDollars: baseline,
     baselineSource,
+    baselineMonths: monthsObserved,
     reserveDollars: cash,
     efFloorGapCents: noBaseline ? 0 : gapTo(Math.max(1000, baseline)),
     ef3GapCents: noBaseline ? 0 : gapTo(3 * baseline),
