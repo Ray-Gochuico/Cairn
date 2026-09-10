@@ -64,17 +64,17 @@ function makeMilestones(): Map<number, Milestones> {
   return m;
 }
 
-function setup(opts?: { dollarMode?: 'nominal' | 'real'; inflation?: number }) {
+function setup(opts?: { netWorth30yFmt?: Map<number, string>; basisSuffix?: string }) {
   const onClose = vi.fn();
   const onEditLevers = vi.fn();
   render(
     <MemoryRouter>
       <ManageScenariosModal
         milestones={makeMilestones()}
+        netWorth30yFmt={opts?.netWorth30yFmt ?? new Map([[1, '$2,345,000'], [2, '$2,550,000']])}
+        basisSuffix={opts?.basisSuffix ?? '(future $)'}
         onClose={onClose}
         onEditLevers={onEditLevers}
-        dollarMode={opts?.dollarMode ?? 'nominal'}
-        inflation={opts?.inflation ?? 0.025}
       />
     </MemoryRouter>,
   );
@@ -97,24 +97,25 @@ describe('ManageScenariosModal', () => {
     expect(screen.getByText('No overrides')).toBeInTheDocument();
   });
 
-  it('shows debt-free, FI, and 30y NW columns per row (nominal basis)', () => {
-    setup({ dollarMode: 'nominal' });
+  it('shows debt-free, FI, and 30y NW columns per row — every cell carries the Future $ mark (WI-7)', () => {
+    setup();
     expect(screen.getByText('2029-06')).toBeInTheDocument();
     expect(screen.getByText('2042-04')).toBeInTheDocument();
-    expect(screen.getByText('$2,345,000')).toBeInTheDocument();
-    expect(screen.getByText('$2,550,000')).toBeInTheDocument();
-    // Header names the nominal basis.
-    expect(screen.getByText(/30y NW \(nominal\)/)).toBeInTheDocument();
+    const cells = screen.getAllByTestId('manage-nw30y').map((c) => c.textContent);
+    expect(cells).toEqual(['$2,345,000 (future $)', '$2,550,000 (future $)']);
+    expect(screen.getByText('30y NW')).toBeInTheDocument(); // plain header — the mark lives on the cells (D-W51-7)
   });
 
-  it('30y NW follows the page dollar toggle — real mode deflates to today\'s $ and names the basis', () => {
-    // Real mode: 2,345,000 / 1.025^30 = 1,118,zzz — never the nominal figure
-    // (a modal number 2.1× the chart is the nominal-on-real class T17 closes).
-    setup({ dollarMode: 'real', inflation: 0.025 });
-    expect(screen.getByText(/30y NW \(today's \$\)/)).toBeInTheDocument();
-    expect(screen.queryByText('$2,345,000')).not.toBeInTheDocument();
-    expect(screen.queryByText('$2,550,000')).not.toBeInTheDocument();
-    expect(screen.getByText('$1,117,962')).toBeInTheDocument(); // 2,345,000 / 1.025^30
+  it("30y NW renders the bundle's strings verbatim — a today's-$ bundle never shows the nominal figure (T17, structurally)", () => {
+    setup({ netWorth30yFmt: new Map([[1, '$1,117,962'], [2, '$1,215,694']]), basisSuffix: "(today's $)" });
+    const cells = screen.getAllByTestId('manage-nw30y').map((c) => c.textContent);
+    expect(cells).toEqual(["$1,117,962 (today's $)", "$1,215,694 (today's $)"]);
+    expect(screen.queryByText(/\$2,345,000/)).not.toBeInTheDocument();
+  });
+
+  it('a scenario without a 30y figure prints an em-dash, never a fake $0', () => {
+    setup({ netWorth30yFmt: new Map([[1, '$2,345,000']]) });
+    expect(screen.getAllByTestId('manage-nw30y').map((c) => c.textContent)).toEqual(['$2,345,000 (future $)', '—']);
   });
 
   it('Duplicate calls scenarios-store.duplicate(id)', async () => {

@@ -629,8 +629,8 @@ export default function WhatIf() {
           milestones={milestones}
           onClose={() => setManageOpen(false)}
           onEditLevers={openLeversFor}
-          dollarMode={dollarMode}
-          inflation={displayInflation}
+          netWorth30yFmt={basisView.netWorth30yFmt}
+          basisSuffix={basisView.suffix}
         />
       )}
     </PageContainer>
