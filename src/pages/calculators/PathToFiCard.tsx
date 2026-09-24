@@ -37,7 +37,7 @@ import {
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { CHART_NEUTRAL } from '@/components/charts/palette';
 import { InlineLink } from '@/components/calculators/InlineLink';
-import { cn } from '@/lib/utils';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 
 type PathMode = 'KEEP' | 'STOP'; // "Keep contributing" | "Stop today"
 
@@ -68,9 +68,6 @@ function usePathMode(): [PathMode, (m: PathMode) => void] {
   }, []);
   return [mode, set];
 }
-
-const SEG_BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
-const SEG_BTN_ACTIVE = 'bg-primary text-primary-foreground';
 
 // W2: the History median is an ORDER STATISTIC, not the plan's headline
 // trajectory — deliberately foreground-stroked, never `hero` (no blaze, no
@@ -103,6 +100,11 @@ const COLUMNS: CalcColumn[] = [
     header: <span data-testid="ptf-gap">Gap to coast {TODAY_SUFFIX}</span>,
     numeric: true,
   },
+];
+
+const PATH_MODE_OPTIONS: ReadonlyArray<SegmentedOption<PathMode>> = [
+  { value: 'KEEP', label: 'Keep contributing' },
+  { value: 'STOP', label: 'Stop today' },
 ];
 
 interface PathToFiCardProps {
@@ -266,28 +268,13 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
         min={0}
         edited={overriddenKeys.has('yearsUntilRetirement')}
       />
-      <div
-        role="group"
-        aria-label="Path mode"
-        className="inline-flex self-start rounded border overflow-hidden"
-      >
-        <button
-          type="button"
-          aria-pressed={mode === 'KEEP'}
-          onClick={() => setMode('KEEP')}
-          className={cn(SEG_BTN_BASE, mode === 'KEEP' ? SEG_BTN_ACTIVE : '')}
-        >
-          Keep contributing
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'STOP'}
-          onClick={() => setMode('STOP')}
-          className={cn(SEG_BTN_BASE, 'border-l', mode === 'STOP' ? SEG_BTN_ACTIVE : '')}
-        >
-          Stop today
-        </button>
-      </div>
+      <SegmentedControl
+        label="Path mode"
+        className="self-start"
+        options={PATH_MODE_OPTIONS}
+        value={mode}
+        onChange={setMode}
+      />
       <RailViewGroup>
         <ReturnSourceControl
           source={source}

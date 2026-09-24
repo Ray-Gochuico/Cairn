@@ -1,9 +1,12 @@
-import { cn } from '@/lib/utils';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { CALCULATORS_PAGE_ID, useDollarBasis } from '@/lib/calculators/dollar-basis';
+import type { DollarBasis } from '@/lib/calculators/dollar-basis';
 
-const BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
-const BTN_ACTIVE = 'bg-primary text-primary-foreground';
+const BASIS_OPTIONS: ReadonlyArray<SegmentedOption<DollarBasis>> = [
+  { value: 'today', label: "Today's $" },
+  { value: 'future', label: 'Future $' },
+];
 
 /** C4 — the calculators bar governs 2 of its cards, so it names them (m8). */
 export const CALCULATORS_SCOPE_NOTE = 'Applies to Path to FI & Compound Interest';
@@ -36,28 +39,7 @@ export function DollarBasisToggle({
       <span className="text-xs text-muted-foreground">
         <TermTooltip term="NOMINAL VS REAL">Dollar basis</TermTooltip>
       </span>
-      <div
-        role="group"
-        aria-label="Dollar basis"
-        className="inline-flex rounded border overflow-hidden"
-      >
-        <button
-          type="button"
-          aria-pressed={basis === 'today'}
-          onClick={() => setBasis('today')}
-          className={cn(BTN_BASE, basis === 'today' ? BTN_ACTIVE : '')}
-        >
-          Today&#39;s $
-        </button>
-        <button
-          type="button"
-          aria-pressed={basis === 'future'}
-          onClick={() => setBasis('future')}
-          className={cn(BTN_BASE, 'border-l', basis === 'future' ? BTN_ACTIVE : '')}
-        >
-          Future $
-        </button>
-      </div>
+      <SegmentedControl label="Dollar basis" options={BASIS_OPTIONS} value={basis} onChange={setBasis} />
       {/* m8: the bar serves every section — name what this control governs. */}
       {scopeNote != null && (
         <span className="text-xs text-muted-foreground" data-testid="dollar-basis-scope-note">

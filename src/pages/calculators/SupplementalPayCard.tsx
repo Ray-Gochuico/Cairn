@@ -19,7 +19,6 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
 import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
-import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -33,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import type { BonusFrequency } from '@/types/schema';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 
 type SupplementalType = 'BONUS' | 'COMMISSION';
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
@@ -64,8 +64,10 @@ function useSupplementalType(): [SupplementalType, (t: SupplementalType) => void
   return [type, set];
 }
 
-const SEG_BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
-const SEG_BTN_ACTIVE = 'bg-primary text-primary-foreground';
+const PAY_TYPE_OPTIONS: ReadonlyArray<SegmentedOption<SupplementalType>> = [
+  { value: 'BONUS', label: 'Bonus' },
+  { value: 'COMMISSION', label: 'Commission' },
+];
 
 interface SupplementalPayCardProps {
   cardId?: string;
@@ -213,24 +215,13 @@ export function SupplementalPayCard({ cardId }: SupplementalPayCardProps = {}) {
   const rail = (
     <>
       {active.isOverridden && <RailReset onClick={active.reset} />}
-      <div role="group" aria-label="Pay type" className="inline-flex self-start rounded border overflow-hidden">
-        <button
-          type="button"
-          aria-pressed={type === 'BONUS'}
-          onClick={() => setType('BONUS')}
-          className={cn(SEG_BTN_BASE, type === 'BONUS' ? SEG_BTN_ACTIVE : '')}
-        >
-          Bonus
-        </button>
-        <button
-          type="button"
-          aria-pressed={type === 'COMMISSION'}
-          onClick={() => setType('COMMISSION')}
-          className={cn(SEG_BTN_BASE, 'border-l', type === 'COMMISSION' ? SEG_BTN_ACTIVE : '')}
-        >
-          Commission
-        </button>
-      </div>
+      <SegmentedControl
+        label="Pay type"
+        className="self-start"
+        options={PAY_TYPE_OPTIONS}
+        value={type}
+        onChange={setType}
+      />
       <EarnerSelect
         persons={persons}
         selectedId={earner?.id ?? null}

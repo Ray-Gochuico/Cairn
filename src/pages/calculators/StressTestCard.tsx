@@ -21,16 +21,11 @@ import { withViewSearch } from '@/lib/view-scope';
 import { formatCurrency, formatPercent, formatSignedCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 
 type StressMode = 'KEEP' | 'PORTFOLIO';
 const MODE_KEY = 'calc-mode:stress-test'; // view-state, the usePathMode idiom (DP-5)
 const WINDOW_KEY = 'calc-window:stress-test'; // view-state, literal-validated
-
-// PathToFiCard's segmented-control constants, copied verbatim (third copy
-// accepted this wave; extraction chip filed — W5's DollarBasisToggle circles
-// this area).
-const SEG_BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
-const SEG_BTN_ACTIVE = 'bg-primary text-primary-foreground';
 
 function readMode(): StressMode {
   try {
@@ -57,6 +52,11 @@ function seededStockPct(): { pct: number; fromLastRun: boolean } {
   }
   return { pct: Math.round(DEFAULT_STOCK_PCT * 100), fromLastRun: false };
 }
+
+const STRESS_MODE_OPTIONS: ReadonlyArray<SegmentedOption<StressMode>> = [
+  { value: 'KEEP', label: 'Keep contributing' }, // CP-4
+  { value: 'PORTFOLIO', label: 'Portfolio only' },
+];
 
 /**
  * Last year the CHART plots. `replayWindow` deliberately runs from the window
@@ -228,28 +228,13 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
           ? 'from your last Backtest run'
           : "app default 75/25 — the Backtest tool's default mix"}
       </p>
-      <div
-        role="group"
-        aria-label="Stress mode"
-        className="inline-flex self-start rounded border overflow-hidden"
-      >
-        <button
-          type="button"
-          aria-pressed={mode === 'KEEP'}
-          onClick={() => setMode('KEEP')}
-          className={cn(SEG_BTN_BASE, mode === 'KEEP' ? SEG_BTN_ACTIVE : '')}
-        >
-          Keep contributing
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'PORTFOLIO'}
-          onClick={() => setMode('PORTFOLIO')}
-          className={cn(SEG_BTN_BASE, 'border-l', mode === 'PORTFOLIO' ? SEG_BTN_ACTIVE : '')}
-        >
-          Portfolio only
-        </button>
-      </div>
+      <SegmentedControl
+        label="Stress mode"
+        className="self-start"
+        options={STRESS_MODE_OPTIONS}
+        value={mode}
+        onChange={setMode}
+      />
     </>
   );
 

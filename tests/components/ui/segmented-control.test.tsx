@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
@@ -7,6 +9,7 @@ import {
   SEG_BTN_BASE,
   SEG_GROUP,
 } from '@/components/ui/segmented-control';
+import { collectSourceFiles, stripComments } from '../../policy/source-walker';
 
 const OPTIONS = [
   { value: 'KEEP', label: 'Keep contributing' },
@@ -92,5 +95,40 @@ describe('SegmentedControl — the ONE aria-pressed group (was seven verbatim co
     const buttons = within(screen.getByRole('group', { name: 'Three' })).getAllByRole('button');
     expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
     expect(buttons.map((b) => b.className.includes('border-l'))).toEqual([false, true, true]);
+  });
+});
+
+/* ── The copies stay dead. Lives here (not tests/policy/) because tests/policy
+   is embargoed this wave except the dollar-basis file (D-B2-10; chip: promote). ── */
+const ROOT = path.resolve(__dirname, '..', '..', '..');
+const SHARED = 'src/components/ui/segmented-control.tsx';
+const COPY_RE = new RegExp(
+  [
+    'const\\s+(SEG_)?BTN_(BASE|ACTIVE)\\s*=', // the constant pairs (four SEG_BTN_* + three BTN_*)
+    "'px-2 py-0\\.5 text-xs transition-colors'", // the base literal itself, retyped anywhere
+  ].join('|'),
+);
+
+describe('the copies stay dead (B2 — one implementation, one contract)', () => {
+  it('no src file outside the shared module declares the class pair or retypes its base literal', async () => {
+    const files = await collectSourceFiles(path.join(ROOT, 'src'));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const rel = path.relative(ROOT, file).split(path.sep).join('/');
+      if (rel === SHARED) continue;
+      if (COPY_RE.test(stripComments(readFileSync(file, 'utf8')))) offenders.push(rel);
+    }
+    expect(
+      offenders,
+      'render <SegmentedControl>, or import SEG_BTN_* from @/components/ui/segmented-control',
+    ).toEqual([]);
+  });
+
+  it('the detector catches every landed copy shape (an untested detector is a bypass)', () => {
+    expect(COPY_RE.test("const SEG_BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';")).toBe(true);
+    expect(COPY_RE.test("const BTN_ACTIVE = 'bg-primary text-primary-foreground';")).toBe(true);
+    expect(COPY_RE.test("className={cn('px-2 py-0.5 text-xs transition-colors', on)}")).toBe(true);
+    expect(COPY_RE.test("import { SEG_BTN_BASE } from '@/components/ui/segmented-control';")).toBe(false);
+    expect(COPY_RE.test("const BUTTON_BASE = 'h-7';")).toBe(false);
   });
 });
