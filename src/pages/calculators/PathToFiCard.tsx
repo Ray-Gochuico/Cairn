@@ -13,6 +13,7 @@ import { InlineChart } from '@/components/charts/InlineChart';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { NOTHING_INVESTED_LINE, nothingInvested } from '@/lib/calculators/nothing-invested';
 import {
   buildHistoryFanView,
   usePathToFiBasisView,
@@ -235,6 +236,10 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       : 0;
 
   const anyUnreachable = (fiSeries ?? []).some((s) => !Number.isFinite(s.years));
+  // B3 (D-B3-3): with nothing invested every scenario is "unreachable" for a
+  // non-rate reason — the register replaces the KEEP lock and the per-scenario
+  // lock note is suppressed (the meaning already says why).
+  const noInvestment = nothingInvested(engine.portfolio, engine.annualContribution);
   const coastFloored = (coastRows ?? []).some((r) => r.realRate < 0);
 
   // Chart series/markers styling stays card-local; the DATA is the bundle's
@@ -376,10 +381,16 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       : '—';
   const meaning =
     mode === 'KEEP' && (!moderateFi || !Number.isFinite(moderateFi.years)) ? (
-      // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
-      <span className="text-warning-foreground">
-        Returns at or below inflation — the target is never reached in real terms.
-      </span>
+      noInvestment ? (
+        // B3 (CR-B3-2): an input state, not a rate problem — byte-identical on
+        // Earliest Retirement (parity pin). KEEP only: STOP's "0% of CoastFI" is honest.
+        <span data-testid="path-to-fi-nothing-invested">{NOTHING_INVESTED_LINE}</span>
+      ) : (
+        // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
+        <span className="text-warning-foreground">
+          Returns at or below inflation — the target is never reached in real terms.
+        </span>
+      )
     ) : mode === 'STOP' && atOrPastRetirement ? (
       <>Already at/after your target retirement age — no CoastFI horizon to compute.</>
     ) : mode === 'KEEP' ? (
@@ -469,7 +480,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               );
             })}
           </CalcTable>
-          {anyUnreachable && (
+          {anyUnreachable && !noInvestment && (
             <p role="note" className="text-xs text-muted-foreground">
               Returns at or below inflation — this scenario never reaches the target in real
               terms.

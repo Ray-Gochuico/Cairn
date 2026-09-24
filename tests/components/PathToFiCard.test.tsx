@@ -34,6 +34,7 @@ import {
   useDollarBasisStore,
 } from '@/lib/calculators/dollar-basis';
 import { cleanup } from '@testing-library/react';
+import { NOTHING_INVESTED_LINE } from '@/lib/calculators/nothing-invested';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -843,5 +844,86 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(screen.getByLabelText('Years to retirement')).toHaveValue(10);
     expect(screen.getByTestId('path-to-fi-meaning')).toHaveTextContent(/to your FI target/);
     expect(screen.queryByTestId('path-to-fi-scope-exclusions')).not.toBeInTheDocument();
+  });
+});
+
+describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D-B3-3)', () => {
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+    __resetScenarioAssumptionsForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const primeNothing = () =>
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+      contributionAmounts: [],
+    });
+
+  it('KEEP: $0 portfolio and $0/yr at a POSITIVE real rate → the register replaces the rate lock; the per-scenario lock note is suppressed', () => {
+    primeNothing();
+    renderCard();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('—');
+    const line = screen.getByTestId('path-to-fi-nothing-invested');
+    expect(line.textContent).toBe(
+      'Nothing invested — the portfolio and contributions in the scenario bar above are both zero, so the target is never reached.',
+    );
+    expect(line.textContent).toBe(NOTHING_INVESTED_LINE);
+    expect(line.className).not.toContain('text-warning-foreground');
+    expect(
+      screen.queryByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toBeNull();
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+    // The table still renders (the coast gap is a real number even at $0).
+    expect(screen.getByTestId('path-to-fi-table')).toBeInTheDocument();
+  });
+
+  it('STOP (D-B3-3 — KEEP only): nothing invested answers "0% of CoastFI" with NO register; the rate-lock note stays suppressed', async () => {
+    // STOP's headline is honest at $0 (0% of the coast amount), so the register is not
+    // shown there. The per-scenario note is still suppressed: its "returns at or below
+    // inflation" reason is as false in STOP as in KEEP when nothing is invested.
+    primeNothing();
+    renderCard();
+    await toStop();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('0% of CoastFI');
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(screen.queryByText(NOTHING_INVESTED_LINE)).toBeNull();
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+  });
+
+  it('$0 portfolio WITH contributions is a normal solve — no register, no lock', () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+    });
+    renderCard();
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(screen.queryByText(/Returns at or below inflation/)).toBeNull();
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/36\.\d years/); // t* = 36.12 (Appendix D.5)
+  });
+
+  it('a positive portfolio with no contributions at a rate at or below inflation keeps the Wave-17 lock (the rate IS the reason)', () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(
+      screen.getByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeInTheDocument();
   });
 });
