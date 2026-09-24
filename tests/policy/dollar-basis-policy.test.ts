@@ -46,10 +46,6 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
   'src/lib/financial-independence.ts',
   // Real-only by plan law (interview CI-33; anchor $13,538 / anti $18,194).
   'src/lib/interview/effects.ts',
-  // LEGACY (2026-09-01, coordinator ruling A): W1 landed before this ratchet;
-  // uses realRateOfUnfloored for rate arithmetic only (no $ converter);
-  // migrate onto the basis boundary then shrink by one — chip.
-  'src/pages/calculators/EarliestRetirementCard.tsx',
 ]);
 
 /**
@@ -61,7 +57,8 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
 // W5.1 Task 5: ProjectionChart + the scenarios barrel came off — 9 → 7.
 // W5.1 Task 6: FiCards came off — 7 → 6. Remaining LEGACY: the two W1 cards (ruling A chip).
 // B2 Task 5: StressTestCard onto the boundary (realRateView) — 6 → 5.
-const CONVERTER_ALLOWLIST_CEILING = 5;
+// B2 Task 6: EarliestRetirementCard onto the boundary — 5 → 4. No LEGACY entry remains.
+const CONVERTER_ALLOWLIST_CEILING = 4;
 
 async function converterOffenders(): Promise<string[]> {
   const files = await collectSourceFiles(SRC_DIR);

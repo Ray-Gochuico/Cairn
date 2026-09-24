@@ -61,6 +61,10 @@ import {
   STRESS_TEST_BASIS_FIGURES,
   STRESS_TEST_BASIS_CHARTS,
 } from '@/pages/calculators/StressTestCard';
+import {
+  EarliestRetirementCard,
+  RETIREMENT_AGE_BASIS_FIGURES,
+} from '@/pages/calculators/EarliestRetirementCard';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
@@ -304,6 +308,17 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
         <StressTestCard cardId="stress-test" />
       </MemoryRouter>,
       { figures: STRESS_TEST_BASIS_FIGURES, charts: STRESS_TEST_BASIS_CHARTS },
+    );
+  });
+
+  it('EarliestRetirementCard (scoped, age found): criterion + probe rows pinned today (the criterion states the basis); contributions + exclusions invariant', () => {
+    primeScoped({ bobPortfolio: 400_000 }); // Bob's plan HOLDS (t ≈ 43.6 → age 80 ≤ 90) — the full bisection renders
+    syncCalcScope(2);
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <EarliestRetirementCard cardId="retirement-age" />
+      </MemoryRouter>,
+      { figures: RETIREMENT_AGE_BASIS_FIGURES, charts: [] },
     );
   });
 });

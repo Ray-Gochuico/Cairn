@@ -3,7 +3,7 @@ import { InlineLink } from '@/components/calculators/InlineLink';
 import { ScopeExclusionsLine } from '@/components/calculators/ScopeExclusionsLine';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
-import { realRateOfUnfloored } from '@/lib/calculators/real-rate';
+import { realRateView, type RegisteredFigure } from '@/lib/calculators/basis-view';
 import { yearsToFi } from '@/lib/financial-independence';
 import { MAX_SOLVE_AGE, solveEarliestRetirement } from '@/lib/calculators/retirement-age-solver';
 import { pickModerateEntry } from '@/lib/growth-scenario';
@@ -53,7 +53,8 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
   const targetFv = engine.swr > 0 ? engine.annualExpenses / engine.swr : 0;
   const noTarget = targetFv <= 0 || engine.monthlyExpenses <= 0; // PathToFi's predicate
   const moderate = pickModerateEntry(scenarioList);
-  const realRate = moderate ? realRateOfUnfloored(moderate.rate, engine.inflation) : 0;
+  // B2: the boundary's rate leg (unfloored, real) — the card imports no converter.
+  const realRate = moderate ? realRateView(moderate.rate, engine.inflation).realRate : 0;
 
   const solve =
     ageNow == null || noTarget || moderate == null
@@ -77,7 +78,7 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
             yearsToFi({
               pv: engine.portfolio,
               pmt: engine.annualContribution,
-              annualRate: realRateOfUnfloored(s.rate, engine.inflation),
+              annualRate: realRateView(s.rate, engine.inflation).realRate,
               targetFv,
             }),
           )
@@ -156,6 +157,7 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
     );
   }
   if (solve == null || ageNow == null || moderate == null) return null; // unreachable after the gates above
+  const { approxReal } = realRateView(moderate.rate, engine.inflation); // the CP-31 clause
 
   const answerT = solve.answerT ?? 0;
   const rowLead = (t: number) => (twoPerson ? `In ${t} years` : `Age ${ageNow + t}`);
@@ -204,12 +206,12 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
       <>{`earliest whole-year age where ${subjectName}'s plan holds — at your ${moderate.label} scenario`}</>
     );
 
-  const criterion = `Holds means: the projected portfolio at that age meets the target ${formatCurrency(targetFv)} = 12 × ${formatCurrency(engine.monthlyExpenses)}/mo ÷ ${formatPercent(engine.swr)} SWR — in today's dollars, at ${formatPercent(moderate.rate)} ≈ ${formatPercent(realRate)} real.`;
+  const criterion = `Holds means: the projected portfolio at that age meets the target ${formatCurrency(targetFv)} = 12 × ${formatCurrency(engine.monthlyExpenses)}/mo ÷ ${formatPercent(engine.swr)} SWR — in today's dollars, at ${formatPercent(moderate.rate)} ${approxReal}.`;
   const contributionsLine = `Contributions of ${formatCurrency(engine.annualContribution)}/yr continue until ${twoPerson ? 'then' : 'that age'} — ${provenance.annualContribution}.`;
 
   return (
     <CalculatorCard cardId={cardId} title={TITLE} dirty={dirty} headline={headline} meaning={meaning}>
-      <p className="text-sm text-muted-foreground">{criterion}</p>
+      <p data-testid="retirement-age-criterion" className="text-sm text-muted-foreground">{criterion}</p>
       {solve.probes.length > 0 && (
         <div>
           <div className="text-xs uppercase tracking-wider text-muted-foreground">The search</div>
@@ -234,7 +236,7 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
         </div>
       )}
       <div className="space-y-1 text-xs text-muted-foreground">
-        <p>{contributionsLine}</p>
+        <p data-testid="retirement-age-contributions">{contributionsLine}</p>
         <p>Ages count whole years from today.</p>
       </div>
       {scope.isScoped && scopeExclusions && (
@@ -249,3 +251,15 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
     </CalculatorCard>
   );
 }
+
+/** B2 test-only registration (the W5 frozen contract; B2's markTestId). The
+ *  criterion and every probe row are today's dollars by construction (the
+ *  target is today's expenses ÷ SWR; the FV compounds the real rate) —
+ *  PINNED, never page-flipped; the probe list's basis statement is the
+ *  criterion sentence above it. Year-0 inputs are invariant. No chart. */
+export const RETIREMENT_AGE_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'retirement-age-criterion', cls: 'pinned', pinnedBasis: 'today' }, // CP-31 (mark in the node) — E4
+  { testId: 'retirement-age-probes', cls: 'pinned', pinnedBasis: 'today', markTestId: 'retirement-age-criterion' }, // CP-32 — E6
+  { testId: 'retirement-age-contributions', cls: 'invariant' }, // CP-35 (year-0) — E8
+  { testId: 'retirement-age-scope-exclusions', cls: 'invariant' }, // CP-43 (year-0; scoped fixture) — E10
+];
