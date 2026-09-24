@@ -137,15 +137,38 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
         </div>
 
         {source === 'custom' && (
-          <NumberField
-            id="custom-monthly-expense"
-            label="Custom monthly expense"
-            value={customMonthly}
-            onChange={setCustomMonthly}
-            suffix="$/mo"
-            step="50"
-            min={0}
-          />
+          <>
+            <NumberField
+              id="custom-monthly-expense"
+              label="Custom monthly expense"
+              value={customMonthly}
+              onChange={setCustomMonthly}
+              suffix="$/mo"
+              step="50"
+              min={0}
+            />
+            {/* C2 (design OD1 — "custom prefilled from the best-available
+                signal, never a silent $0"; D-C2-7): a SAVED custom base at $0
+                with a household baseline on file offers the same one-tap
+                prefill the data-mode guard offers — its exact button copy
+                (CR-R1-7b), no new string. Every pre-C2 Baseline is custom/$0
+                and reaches this tab from the G11 row's "Open Expenses →". The
+                SAVED value gates it (not the draft alone) so clearing a
+                positive field to retype never flickers the offer in. A
+                suggestion only (OD3): nothing persists until Apply. */}
+            {(active?.leverPayload.customMonthly ?? 0) <= 0 &&
+              (customMonthly ?? 0) <= 0 &&
+              householdBaseline > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-testid="expense-custom-zero-prefill"
+                  onClick={prefillFromBaseline}
+                >
+                  Use my {formatCurrency(householdBaseline)} expense baseline
+                </Button>
+              )}
+          </>
         )}
 
         {emptyData ? (

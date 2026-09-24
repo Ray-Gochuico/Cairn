@@ -423,6 +423,51 @@ describe('ExpensePeriodsPopover — C2: a NEW scenario opens on Spending average
     }
   });
 
+  it('Custom tab, SAVED base $0, baseline on file → the one-tap prefill (CR-R1-7b\'s literal) sits under the field; tapping fills the field', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByText('No complete month of spending yet')).toBeNull();           // not the data-mode guard
+    const offer = screen.getByTestId('expense-custom-zero-prefill');
+    expect(offer).toHaveTextContent('Use my $4,500 expense baseline');
+    fireEvent.click(offer);
+    expect(screen.getByTestId('expense-base')).toHaveTextContent('4,500');
+    expect((screen.getByLabelText('Custom monthly expense') as HTMLInputElement).value).toBe('4500');
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();                // draft > 0 → the offer is gone
+  });
+
+  it('the offer is ABSENT when the saved base is positive (clearing the field to retype never flickers it in)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 6_000, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Custom monthly expense'), { target: { value: '' } });
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+  });
+
+  it('the offer is ABSENT with no household baseline (nothing to offer)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 0 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+  });
+
+  it('the prefill is a suggestion only: nothing persists until Apply, and Apply writes the tapped figure as custom', async () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const spy = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    fireEvent.click(screen.getByTestId('expense-custom-zero-prefill'));
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(spy.mock.calls.at(-1)![1]).toMatchObject({ expenseSource: 'custom', customMonthly: 4_500 });
+  });
+
+  it('the Custom-tab offer\'s text is calm (lexicon + no exclamation)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const text = screen.getByTestId('expense-custom-zero-prefill').textContent ?? '';
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    expect(text).not.toContain('!');
+  });
+
   it('every string on the C2 surfaces is calm (lexicon + no exclamation)', () => {
     seedFactoryScenario();
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
