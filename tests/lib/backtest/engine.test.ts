@@ -246,6 +246,27 @@ describe('backtestPlan — production-seed neutralization (BT-1/BT-2)', () => {
     // states[12].cash compounds to exactly $104,500 (100k × 1.045) → this fails.
     expect(states[12].cash).toBe(100_000);
   });
+
+  it('BT-4 (C2): the per-year payload PINS expenseSource custom/0 — a seed carrying a spending average never adds it to the replay\'s withdrawals', () => {
+    // The production seed (useRealState → captureRealState) carries
+    // expenseBasis; neutralizeSeed strips debts/housing/leases but not that.
+    // Since C2 the NEW-scenario factory default is rolling12m, so a per-year
+    // payload that merely inherited emptyLeverPayload() would add the seed's
+    // spending average to EVERY replay year on top of config.annualSpending.
+    // The pin is the two literal lines in runBacktest; this is its kill.
+    const withBasis = {
+      ...prodSeed(1_500_000),
+      expenseBasis: { latestMonth: 5_000, rolling12m: 5_000, rolling12mMonths: 12 },
+    } as RealState;
+    const clean = backtestPlan(prodSeed(1_500_000), cfg());
+    const withAverage = backtestPlan(withBasis, cfg());
+    expect(withAverage).toEqual(clean);
+    expect(withAverage.survivedCount).toBe(clean.survivedCount);
+    expect(withAverage.endings.worst.value).toBe(clean.endings.worst.value);
+    // The flat-return variant shares runBacktest — same pin, same kill.
+    expect(backtestPlanWithFlatReturn(withBasis, cfg(), 0.03))
+      .toEqual(backtestPlanWithFlatReturn(prodSeed(1_500_000), cfg(), 0.03));
+  });
 });
 
 describe('wave-9 M66 — real obligations must not drain the replay', () => {
