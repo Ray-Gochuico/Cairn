@@ -806,6 +806,14 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(caption).toHaveTextContent(
       "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted. Expenses default to half the household baseline.",
     );
+    // B3 (item 5) byte-identity receipt, captured BEFORE the migration onto
+    // ScopeExclusionsLine: exact textContent, leading space of the clause included.
+    expect(caption.textContent).toBe(
+      "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted. Expenses default to half the household baseline.",
+    );
+    expect(screen.getByTestId('ptf-joint-portfolio').textContent).toBe('$8,000');
+    expect(screen.getByTestId('ptf-unattributed-contribution').textContent).toBe('$600');
+    expect(caption.className).toBe('text-xs text-muted-foreground');
     // Edit the expenses field in the P2 silo before a fresh render — the
     // even-split clause must drop (the default no longer applies):
     cleanup();
@@ -831,6 +839,9 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(caption).toHaveTextContent(/joint accounts \(\$8,000\)/);
     // …but the even-split sentence is gone: expenses now come from Bob's Inputs.
     expect(caption).not.toHaveTextContent('Expenses default');
+    expect(caption.textContent).toBe(
+      "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted.",
+    );
   });
 
   it('Wave B: the years-to-retirement rail default follows the SCOPED person, not the household min', () => {

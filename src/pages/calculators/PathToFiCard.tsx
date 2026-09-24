@@ -38,6 +38,7 @@ import {
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { CHART_NEUTRAL } from '@/components/charts/palette';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { ScopeExclusionsLine } from '@/components/calculators/ScopeExclusionsLine';
 import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 
 type PathMode = 'KEEP' | 'STOP'; // "Keep contributing" | "Stop today"
@@ -146,7 +147,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   );
   const yearsUntilRetirement = values.yearsUntilRetirement ?? 0;
 
-  const { engine, scenarioList, editedCount, isEdited } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount, isEdited, scopeExclusions } = useScenarioAssumptions();
   const scenarioEdited = editedCount > 0;
 
   const inflation = engine.inflation;
@@ -441,21 +442,28 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               declared, never silent; the even-split clause drops once the
               expenses field is edited (the default no longer applies) AND
               when the person's durable baseline (migration 0051) is set —
-              expenses then come from their Inputs, not the split. */}
-          {scope.isScoped && view?.scopeExclusionsFmt && (
-            <p className="text-xs text-muted-foreground" data-testid="path-to-fi-scope-exclusions">
-              {scope.personName}&#39;s solve counts only {scope.personName}&#39;s accounts and
-              contributions — joint accounts (
-              <span data-testid="ptf-joint-portfolio">{view.scopeExclusionsFmt.jointPortfolio}</span>)
-              and unattributed contributions (
-              <span data-testid="ptf-unattributed-contribution">
-                {view.scopeExclusionsFmt.unattributedContribution}
-              </span>
-              /yr) aren&#39;t counted.
-              {!isEdited.monthlyExpenses &&
-                scope.person?.monthlyExpenseBaseline == null &&
-                ' Expenses default to half the household baseline.'}
-            </p>
+              expenses then come from their Inputs, not the split. B3 moved
+              the sentence onto the shared ScopeExclusionsLine (byte-identical;
+              the two figure testids stay registered with the basis sweep via
+              figureTestIds). The numbers come from the same hook the boundary
+              formats from, through the same formatCurrency. */}
+          {scope.isScoped && scopeExclusions && (
+            <ScopeExclusionsLine
+              personName={scope.personName!}
+              noun="solve"
+              jointPortfolio={scopeExclusions.jointPortfolio}
+              unattributedContribution={scopeExclusions.unattributedContribution}
+              testId="path-to-fi-scope-exclusions"
+              figureTestIds={{
+                jointPortfolio: 'ptf-joint-portfolio',
+                unattributedContribution: 'ptf-unattributed-contribution',
+              }}
+              trailing={
+                !isEdited.monthlyExpenses && scope.person?.monthlyExpenseBaseline == null
+                  ? ' Expenses default to half the household baseline.'
+                  : null
+              }
+            />
           )}
           <CalcTable columns={COLUMNS} testId="path-to-fi-table">
             {fiSeries.map((s, i) => {
