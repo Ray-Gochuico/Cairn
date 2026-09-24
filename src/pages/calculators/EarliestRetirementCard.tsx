@@ -11,6 +11,7 @@ import { currentAge } from '@/lib/dates';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { formatCurrency, formatPercent } from '@/lib/format';
+import { NOTHING_INVESTED_LINE, nothingInvested } from '@/lib/calculators/nothing-invested';
 
 const TITLE = 'Earliest Retirement';
 
@@ -37,6 +38,9 @@ const wholeYears = (years: number): number =>
 export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?: string }) {
   const { engine, scenarioList, editedCount, scopeExclusions, provenance } = useScenarioAssumptions();
   const scope = useCalcScope();
+  // B3 (D-B3-3): an INPUT state that outranks the rate lock. Checked at render,
+  // never in the solver — the verdict stays `never-real` (nothing to reach with).
+  const noInvestment = nothingInvested(engine.portfolio, engine.annualContribution);
   const household = useHouseholdStore((s) => s.household);
   const persons = usePersonsStore((s) => s.persons);
 
@@ -194,10 +198,16 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
     ) : solve.verdict === 'not-by-max' ? (
       <>the plan doesn&#39;t hold by age 90 under these assumptions.</>
     ) : solve.verdict === 'never-real' ? (
-      // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
-      <span className="text-warning-foreground">
-        Returns at or below inflation — the target is never reached in real terms.
-      </span>
+      noInvestment ? (
+        // B3 (CR-B3-2): nothing invested is an input state, not a rate problem —
+        // the register replaces the lock; byte-identical on Path to FI (parity pin).
+        <span data-testid="retirement-age-nothing-invested">{NOTHING_INVESTED_LINE}</span>
+      ) : (
+        // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
+        <span className="text-warning-foreground">
+          Returns at or below inflation — the target is never reached in real terms.
+        </span>
+      )
     ) : solve.verdict === 'past-max' ? (
       <>Past age 90 — the solver&#39;s search range ends there.</>
     ) : twoPerson ? (

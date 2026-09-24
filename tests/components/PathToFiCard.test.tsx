@@ -34,6 +34,7 @@ import {
   useDollarBasisStore,
 } from '@/lib/calculators/dollar-basis';
 import { cleanup } from '@testing-library/react';
+import { NOTHING_INVESTED_LINE } from '@/lib/calculators/nothing-invested';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -350,6 +351,17 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
     // 6% nominal at 3% inflation → (1.06/1.03)−1 = 2.9126% → "2.9%".
     expect(screen.getByText(/6% ≈ 2\.9% real/)).toBeInTheDocument();
     expect(screen.getByText(/5% ≈ 1\.9% real/)).toBeInTheDocument();
+  });
+
+  it('B3 (CR-B3-1c): a negative real rate renders a TRUE MINUS in the Rate column — 2% at 3% inflation reads "2% ≈ −1% real"', () => {
+    // real = 1.02 / 1.03 − 1 = −0.97087…% → "−1%". With $24k/yr against $200k the target is still
+    // reachable (t* ≈ 87.0 — the D-R4 parity test's fixture), so the table renders, no lock.
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.02 }] });
+    renderCard();
+    const cell = screen.getByText('2% ≈ −1% real');
+    expect(cell).toBeInTheDocument();
+    expect(cell.textContent).not.toContain('-');
+    expect(screen.queryByText(/≈ -1% real/)).toBeNull();
   });
 
   it('numeric columns are right-aligned (CalcTable); Scenario stays left', () => {
@@ -794,6 +806,14 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(caption).toHaveTextContent(
       "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted. Expenses default to half the household baseline.",
     );
+    // B3 (item 5) byte-identity receipt, captured BEFORE the migration onto
+    // ScopeExclusionsLine: exact textContent, leading space of the clause included.
+    expect(caption.textContent).toBe(
+      "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted. Expenses default to half the household baseline.",
+    );
+    expect(screen.getByTestId('ptf-joint-portfolio').textContent).toBe('$8,000');
+    expect(screen.getByTestId('ptf-unattributed-contribution').textContent).toBe('$600');
+    expect(caption.className).toBe('text-xs text-muted-foreground');
     // Edit the expenses field in the P2 silo before a fresh render — the
     // even-split clause must drop (the default no longer applies):
     cleanup();
@@ -819,6 +839,9 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(caption).toHaveTextContent(/joint accounts \(\$8,000\)/);
     // …but the even-split sentence is gone: expenses now come from Bob's Inputs.
     expect(caption).not.toHaveTextContent('Expenses default');
+    expect(caption.textContent).toBe(
+      "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted.",
+    );
   });
 
   it('Wave B: the years-to-retirement rail default follows the SCOPED person, not the household min', () => {
@@ -832,5 +855,160 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(screen.getByLabelText('Years to retirement')).toHaveValue(10);
     expect(screen.getByTestId('path-to-fi-meaning')).toHaveTextContent(/to your FI target/);
     expect(screen.queryByTestId('path-to-fi-scope-exclusions')).not.toBeInTheDocument();
+  });
+});
+
+describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D-B3-3)', () => {
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+    __resetScenarioAssumptionsForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const primeNothing = () =>
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+      contributionAmounts: [],
+    });
+
+  it('KEEP: $0 portfolio and $0/yr at a POSITIVE real rate → the register replaces the rate lock; the per-scenario lock note is suppressed', () => {
+    primeNothing();
+    renderCard();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('—');
+    const line = screen.getByTestId('path-to-fi-nothing-invested');
+    expect(line.textContent).toBe(
+      'Nothing invested — the portfolio and contributions in the scenario bar above are both zero, so the target is never reached.',
+    );
+    expect(line.textContent).toBe(NOTHING_INVESTED_LINE);
+    expect(line.className).not.toContain('text-warning-foreground');
+    expect(
+      screen.queryByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toBeNull();
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+    // The table still renders (the coast gap is a real number even at $0).
+    expect(screen.getByTestId('path-to-fi-table')).toBeInTheDocument();
+  });
+
+  it('STOP (D-B3-3 — KEEP only): nothing invested answers "0% of CoastFI" with NO register; the rate-lock note stays suppressed', async () => {
+    // STOP's headline is honest at $0 (0% of the coast amount), so the register is not
+    // shown there. The per-scenario note is still suppressed: its "returns at or below
+    // inflation" reason is as false in STOP as in KEEP when nothing is invested.
+    primeNothing();
+    renderCard();
+    await toStop();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('0% of CoastFI');
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(screen.queryByText(NOTHING_INVESTED_LINE)).toBeNull();
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+  });
+
+  it('STOP (B3 review): a $0 portfolio WITH contributions at a POSITIVE real rate — the stop-today solve has nothing to grow, so the rate-lock note is suppressed; KEEP on the same bar solves', async () => {
+    // 6% at 3% (real +2.9%), pv $0, $24,000/yr. STOP solves with annualContribution 0, so every
+    // STOP row is unreachable for the same non-rate reason as the $0/$0 case — the note's
+    // "returns at or below inflation" would be false. The suppression follows the MODE's
+    // contribution (0 in STOP), not the bar's.
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+    });
+    renderCard();
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/36\.\d years/); // KEEP: t* = 36.12 (Appendix D.5)
+    expect(screen.queryByText(/Returns at or below inflation/)).toBeNull();
+    await toStop();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('0% of CoastFI');
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull(); // the register stays KEEP-only (D-B3-3)
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+  });
+
+  it('STOP (B3 review): a positive portfolio at a rate at or below inflation keeps the per-scenario note (the rate IS the reason)', async () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    await toStop();
+    expect(
+      screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeInTheDocument();
+  });
+
+  it('$0 portfolio WITH contributions is a normal solve — no register, no lock', () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+    });
+    renderCard();
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(screen.queryByText(/Returns at or below inflation/)).toBeNull();
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/36\.\d years/); // t* = 36.12 (Appendix D.5)
+  });
+
+  it('a positive portfolio with no contributions at a rate at or below inflation keeps the Wave-17 lock (the rate IS the reason)', () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(
+      screen.getByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeInTheDocument();
+  });
+});
+
+/* B3 (R4 ruling 7): the rail's years-to-retirement default follows the LOCAL
+   calendar-day age. basePerson retires at 65 and is born 1990-01-01. */
+describe('PathToFiCard — the years-to-retirement default reads the LOCAL calendar day (B3)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Los Angeles at 03:00Z on Jan 1: age 35 → 30 years to retirement (the UTC-day shape: 29)', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(30);
+  });
+
+  it('Auckland at the same instant: age 36 → 29', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(29);
   });
 });

@@ -4,7 +4,17 @@ import type { ClassTargetRow } from '@/lib/allocation-hierarchy';
 import type { PositionsResult } from '@/lib/positions';
 import PositionsSection from '@/components/investments/PositionsSection';
 import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatSignedPercent, TRUE_MINUS } from '@/lib/format';
+
+/**
+ * The drift cell's colour follows the figure it RENDERS (B3 review), not the
+ * raw fraction: a figure that reads zero at one decimal ("+0.0%", or "−0.0%"
+ * for float noise below it) is neutral; otherwise its sign glyph picks the tone.
+ */
+function driftTone(shown: string): string {
+  if (!/[1-9]/.test(shown)) return 'text-muted-foreground';
+  return shown.startsWith(TRUE_MINUS) ? 'text-destructive-soft-foreground' : 'text-success-foreground';
+}
 
 /**
  * "Allocation & positions" card body (D-P5 rename; card id stays `drift` —
@@ -58,17 +68,20 @@ function DriftCardImpl({ classRows, positions, scopeCaption }: DriftCardProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {classRows.map((r) => (
-                    <tr key={r.assetClass} data-testid={`class-row-${r.assetClass}`} className="border-b last:border-b-0">
-                      <td className="py-2 pr-2">{ASSET_CLASS_LABEL[r.assetClass]}</td>
-                      <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
-                      <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
-                      <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                        {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
-                      </td>
-                    </tr>
-                  ))}
+                  {classRows.map((r) => {
+                    const drift = r.targetPct == null ? null : formatSignedPercent(r.driftPct, 1);
+                    return (
+                      <tr key={r.assetClass} data-testid={`class-row-${r.assetClass}`} className="border-b last:border-b-0">
+                        <td className="py-2 pr-2">{ASSET_CLASS_LABEL[r.assetClass]}</td>
+                        <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
+                        <td className={`py-2 pl-2 text-right tabular-nums ${drift == null ? 'text-muted-foreground' : driftTone(drift)}`}>
+                          {drift ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

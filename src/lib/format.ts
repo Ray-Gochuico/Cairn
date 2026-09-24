@@ -1,8 +1,47 @@
 export const formatCurrency = (n: number): string =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
-export const formatPercent = (n: number): string =>
-  new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(n);
+/** The TRUE MINUS (U+2212). The ASCII hyphen-minus is never a sign in rendered copy. */
+export const TRUE_MINUS = '−';
+
+const PERCENT_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Percent from a fraction (0.029 → "2.9%"), at most one decimal. A negative
+ * renders with a TRUE MINUS (U+2212, "−1%"): the money register
+ * (formatSignedCurrency) and every hand-rolled signed percent in the app
+ * (StressTestCard, PositionsSection, MonthlyMiniWindow, AssetValueChart)
+ * already use it, while Intl's en-US percent output is the ASCII hyphen
+ * (B3, v1.7.0). Post-processed rather than `signDisplay: 'negative'`, which
+ * throws a RangeError on WebViews that predate NumberFormat v3. A value that
+ * rounds to zero at this precision renders unsigned ("0%", never "-0%"): the
+ * sign of a rounded-away magnitude is a formatting artifact, not a rate.
+ */
+export const formatPercent = (n: number): string => {
+  const s = PERCENT_FORMATTER.format(n);
+  if (s === '-0%') return '0%';
+  return s.startsWith('-') ? TRUE_MINUS + s.slice(1) : s;
+};
+
+/**
+ * Explicitly SIGNED percent from a fraction: '+' for zero and positives, the
+ * TRUE MINUS for negatives, exactly `digits` decimals (0.1 → "+10.0%",
+ * −0.034 → "−3.4%", −0.391 with 0 digits → "−39%"). The register of
+ * StressTestCard's headline and "vs start" cells, shared (B3). The 1e-8
+ * pre-round is pctFromFraction's (scenario-assumptions.ts), inlined so this
+ * module stays a leaf — 0.0295 × 100 is 2.9499999999999997 in IEEE-754 and
+ * must still read "3.0" (the percent the fraction stands for is 2.95). The
+ * sign is decided on the RAW fraction, as signedPct does: a float-noise
+ * negative (0.3 − (0.1 + 0.2)) pre-rounds to −0, and reading the sign there
+ * would print "+0.0%" where the Stress card prints "−0.0%".
+ */
+export function formatSignedPercent(fraction: number, digits: number): string {
+  const pct = Math.round(fraction * 100 * 1e8) / 1e8;
+  return `${fraction < 0 ? TRUE_MINUS : '+'}${Math.abs(pct).toFixed(digits)}%`;
+}
 
 /**
  * Signed full-dollar form: a negative renders with a TRUE MINUS (U+2212,

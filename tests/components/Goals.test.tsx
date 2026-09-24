@@ -325,6 +325,36 @@ describe('Goals page', () => {
     expect(bar).toHaveAttribute('aria-valuenow', '25');
   });
 
+  it('B3 review: the percent label is floored at zero like its bar — an imported negative balance reads "0%", never a U+2212 percent beside the Intl-hyphen dollar', () => {
+    // The CSV snapshot importer accepts a negative total_value (finiteness only), so
+    // currentSaved can be −500 on a $10,000 goal: percentComplete = −0.05, which the
+    // unfloored label rendered "−5%" on the same row as formatCurrency's "-$500".
+    primeStores({
+      goals: [
+        {
+          name: 'Underwater',
+          type: GoalType.GENERIC,
+          targetAmount: 10_000,
+          targetDate: '2031-01-01',
+          linkedAccountIds: [1],
+        },
+      ],
+      accounts: [{ id: 1, name: 'Savings' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: -500 }],
+    });
+
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+    const row = screen.getByTestId('goal-current-saved').closest('div') as HTMLElement;
+    expect((row.lastElementChild as HTMLElement).textContent).toBe('0%');
+    expect(row.textContent).not.toContain('−');
+    const bar = screen.getByRole('progressbar', { name: /underwater progress/i });
+    expect(bar).toHaveAttribute('aria-valuenow', '0');
+  });
+
   it('derives currentSaved from latest snapshot per linked account (ignores older snapshots)', () => {
     primeStores({
       goals: [

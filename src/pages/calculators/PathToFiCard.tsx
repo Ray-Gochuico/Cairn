@@ -13,6 +13,7 @@ import { InlineChart } from '@/components/charts/InlineChart';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { NOTHING_INVESTED_LINE, nothingInvested } from '@/lib/calculators/nothing-invested';
 import {
   buildHistoryFanView,
   usePathToFiBasisView,
@@ -37,6 +38,7 @@ import {
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { CHART_NEUTRAL } from '@/components/charts/palette';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { ScopeExclusionsLine } from '@/components/calculators/ScopeExclusionsLine';
 import { SegmentedControl, type SegmentedOption } from '@/components/ui/segmented-control';
 
 type PathMode = 'KEEP' | 'STOP'; // "Keep contributing" | "Stop today"
@@ -145,7 +147,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   );
   const yearsUntilRetirement = values.yearsUntilRetirement ?? 0;
 
-  const { engine, scenarioList, editedCount, isEdited } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount, isEdited, scopeExclusions } = useScenarioAssumptions();
   const scenarioEdited = editedCount > 0;
 
   const inflation = engine.inflation;
@@ -235,6 +237,17 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       : 0;
 
   const anyUnreachable = (fiSeries ?? []).some((s) => !Number.isFinite(s.years));
+  // B3 (D-B3-3): with nothing invested every scenario is "unreachable" for a
+  // non-rate reason — the register replaces the KEEP lock and the per-scenario
+  // lock note is suppressed (the meaning already says why).
+  const noInvestment = nothingInvested(engine.portfolio, engine.annualContribution);
+  // The per-scenario note follows the MODE's contribution (B3 review): STOP
+  // solves with none, so a $0 portfolio is unreachable there for the same
+  // non-rate reason even when the bar carries contributions.
+  const rateNoteSuppressed = nothingInvested(
+    engine.portfolio,
+    mode === 'KEEP' ? engine.annualContribution : 0,
+  );
   const coastFloored = (coastRows ?? []).some((r) => r.realRate < 0);
 
   // Chart series/markers styling stays card-local; the DATA is the bundle's
@@ -376,10 +389,16 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       : '—';
   const meaning =
     mode === 'KEEP' && (!moderateFi || !Number.isFinite(moderateFi.years)) ? (
-      // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
-      <span className="text-warning-foreground">
-        Returns at or below inflation — the target is never reached in real terms.
-      </span>
+      noInvestment ? (
+        // B3 (CR-B3-2): an input state, not a rate problem — byte-identical on
+        // Earliest Retirement (parity pin). KEEP only: STOP's "0% of CoastFI" is honest.
+        <span data-testid="path-to-fi-nothing-invested">{NOTHING_INVESTED_LINE}</span>
+      ) : (
+        // Wave 17 honesty lock (verbatim): the warning REPLACES the sentence.
+        <span className="text-warning-foreground">
+          Returns at or below inflation — the target is never reached in real terms.
+        </span>
+      )
     ) : mode === 'STOP' && atOrPastRetirement ? (
       <>Already at/after your target retirement age — no CoastFI horizon to compute.</>
     ) : mode === 'KEEP' ? (
@@ -430,21 +449,28 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               declared, never silent; the even-split clause drops once the
               expenses field is edited (the default no longer applies) AND
               when the person's durable baseline (migration 0051) is set —
-              expenses then come from their Inputs, not the split. */}
-          {scope.isScoped && view?.scopeExclusionsFmt && (
-            <p className="text-xs text-muted-foreground" data-testid="path-to-fi-scope-exclusions">
-              {scope.personName}&#39;s solve counts only {scope.personName}&#39;s accounts and
-              contributions — joint accounts (
-              <span data-testid="ptf-joint-portfolio">{view.scopeExclusionsFmt.jointPortfolio}</span>)
-              and unattributed contributions (
-              <span data-testid="ptf-unattributed-contribution">
-                {view.scopeExclusionsFmt.unattributedContribution}
-              </span>
-              /yr) aren&#39;t counted.
-              {!isEdited.monthlyExpenses &&
-                scope.person?.monthlyExpenseBaseline == null &&
-                ' Expenses default to half the household baseline.'}
-            </p>
+              expenses then come from their Inputs, not the split. B3 moved
+              the sentence onto the shared ScopeExclusionsLine (byte-identical;
+              the two figure testids stay registered with the basis sweep via
+              figureTestIds). The numbers come from the same hook the boundary
+              formats from, through the same formatCurrency. */}
+          {scope.isScoped && scopeExclusions && (
+            <ScopeExclusionsLine
+              personName={scope.personName!}
+              noun="solve"
+              jointPortfolio={scopeExclusions.jointPortfolio}
+              unattributedContribution={scopeExclusions.unattributedContribution}
+              testId="path-to-fi-scope-exclusions"
+              figureTestIds={{
+                jointPortfolio: 'ptf-joint-portfolio',
+                unattributedContribution: 'ptf-unattributed-contribution',
+              }}
+              trailing={
+                !isEdited.monthlyExpenses && scope.person?.monthlyExpenseBaseline == null
+                  ? ' Expenses default to half the household baseline.'
+                  : null
+              }
+            />
           )}
           <CalcTable columns={COLUMNS} testId="path-to-fi-table">
             {fiSeries.map((s, i) => {
@@ -469,7 +495,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               );
             })}
           </CalcTable>
-          {anyUnreachable && (
+          {anyUnreachable && !rateNoteSuppressed && (
             <p role="note" className="text-xs text-muted-foreground">
               Returns at or below inflation — this scenario never reaches the target in real
               terms.

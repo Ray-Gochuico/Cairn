@@ -11,9 +11,14 @@ import { TODAY_SUFFIX } from './basis-view';
  */
 const years = (n: number) => (n === 1 ? 'year' : 'years');
 
-// CH-1
+// CH-1 — amended B3 (v1.7.0, chip task_c681224b item 3): the KEEP census runs
+// over the CHART's horizon (PathToFiCard's D-P6 memo: the slowest scenario's
+// whole-year solve, clamped 10–50), which is NOT the rail's years-to-retirement
+// input, so the line names its source. CH-2 (STOP) is untouched: its H IS the
+// input. Option B (drive H from the input) was declined — it would cut the
+// Assumed chart before slow scenarios reach the target (B3 plan, D-B3-4).
 export function holdsLineKeep(a: { H: number; J: number; M: number }): string {
-  return `Reached the target within ${a.H} ${years(a.H)} in ${a.J} of the ${a.M} full ${a.H}-year stretches since 1871 — a count of past stretches, not a probability.`;
+  return `Reached the target within the chart's ${a.H}-year horizon in ${a.J} of the ${a.M} full ${a.H}-year stretches since 1871 — a count of past stretches, not a probability.`;
 }
 // CH-2 — the STOP variant names the zero-contribution premise.
 export function holdsLineStop(a: { H: number; J: number; M: number }): string {

@@ -669,6 +669,16 @@ describe('honesty lines + cross-link', () => {
     expect(screen.getByText('The assumed path compounds your 6% return ≈ 2.9% real with the same contribution basis.')).toBeInTheDocument();
   });
 
+  it('B3 (CR-B3-1c): CP-21 renders a negative real rate with a TRUE MINUS — 2% return at 3% inflation', () => {
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.02 }] }); // inflation stays the fixture's 3%
+    renderCard();
+    const line = screen.getByText(/^The assumed path compounds your/);
+    expect(line.textContent).toBe(
+      'The assumed path compounds your 2% return ≈ −1% real with the same contribution basis.',
+    );
+    expect(line.textContent).not.toContain('-');
+  });
+
   it('CP-22 cross-link preserves the ?view= search (withViewSearch)', () => {
     renderCardAt('/calculators?view=p2');
     const link = screen.getByRole('link', { name: 'Open the Historical Backtest tool' });

@@ -271,6 +271,38 @@ describe('Dashboard goals strip', () => {
     expect(within(offTrackCard as HTMLElement).getByText(/off track/i)).toBeInTheDocument();
   });
 
+  it('B3 review: the mini card\'s percent label is the bar\'s [0, 1] clamp — an imported negative balance reads "0% complete" (never U+2212), over-funded "100% complete"', () => {
+    // The CSV snapshot importer accepts a negative total_value, so currentSaved can be
+    // −500 on a $10,000 goal (percentComplete −0.05 — the unclamped label read "−5% complete").
+    primeStores({
+      goals: [
+        { name: 'Underwater', targetAmount: 10_000, targetDate: '2030-01-01', linkedAccountIds: [1] },
+        { name: 'Already There', targetAmount: 10_000, targetDate: '2030-01-01', linkedAccountIds: [2] },
+      ],
+      accounts: [
+        { id: 1, name: 'Savings A' },
+        { id: 2, name: 'Savings B' },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: -500 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 12_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    const goalsWidget = screen.getByTestId('widget-goals');
+    const under = within(goalsWidget).getByText('Underwater').closest('[class*="rounded"]') as HTMLElement;
+    expect(within(under).getByText(/complete$/).textContent).toBe('0% complete');
+    expect(under.textContent).not.toContain('−');
+    const funded = within(goalsWidget).getByText('Already There').closest('[class*="rounded"]') as HTMLElement;
+    expect(within(funded).getByText(/complete$/).textContent).toBe('100% complete');
+  });
+
   it('shows a "View all" link to the Goals page when at least one goal exists', () => {
     primeStores({
       goals: [{ name: 'Emergency Fund' }],

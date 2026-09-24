@@ -30,6 +30,7 @@ import { yearsToFi } from '@/lib/financial-independence';
 import { realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { CALCULATORS_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import { formatCurrency } from '@/lib/format';
+import { NOTHING_INVESTED_LINE } from '@/lib/calculators/nothing-invested';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -396,6 +397,11 @@ describe('edge verdicts (the spec edge table)', () => {
     renderCard();
     const lock = screen.getByText('Returns at or below inflation — the target is never reached in real terms.');
     expect(lock.className).toContain('text-warning-foreground');
+    // B3 (CR-B3-1c): the criterion's "≈ x% real" slot carries a TRUE MINUS. (After B2 the <p>
+    // carries data-testid="retirement-age-criterion"; the text query works on both shapes.)
+    expect(screen.getByText(/^Holds means:/).textContent).toBe(
+      "Holds means: the projected portfolio at that age meets the target $1,500,000 = 12 × $5,000/mo ÷ 4% SWR — in today's dollars, at 2% ≈ −1% real.",
+    );
     expect(within(screen.getByTestId('retirement-age-probes')).getAllByRole('listitem')).toHaveLength(1);
     expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
   });
@@ -467,6 +473,59 @@ describe('edge verdicts (the spec edge table)', () => {
       'Add a person to see your earliest retirement age.',
     );
     expect(screen.getByRole('link', { name: 'Add a person' })).toHaveAttribute('href', '/inputs/persons');
+  });
+
+  /* B3 (v1.7.0, chip task_c681224b item 2): with nothing invested every solve is
+     "unreachable" and the card used to answer with the RATE lock (CP-39) — parity-
+     correct, copy-wrong. The register is an INPUT state, not an assumption warning:
+     plain span, one constant shared with Path to FI (parity pinned below). This is
+     the fresh-household default (persons + scenarios, no snapshots, no contributions). */
+  it('B3 (CR-B3-2): nothing invested at a POSITIVE real rate renders the nothing-invested register, not the rate lock; the age-90 probe still shows $0', () => {
+    primeBar({ portfolio: 0, annualContribution: 0 }); // 6% / 3% → real +2.9126%
+    renderCard();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('—');
+    const line = screen.getByTestId('retirement-age-nothing-invested');
+    expect(line.textContent).toBe(
+      'Nothing invested — the portfolio and contributions in the scenario bar above are both zero, so the target is never reached.',
+    );
+    expect(line.textContent).toBe(NOTHING_INVESTED_LINE);
+    expect(line.className).not.toContain('text-warning-foreground');
+    expect(
+      screen.queryByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toBeNull();
+    // The honest search is still shown: one age-90 probe of a $0 portfolio.
+    const items = within(screen.getByTestId('retirement-age-probes')).getAllByRole('listitem');
+    expect(items).toHaveLength(1);
+    expect(items[0]).toHaveTextContent('Age 90 · $0 vs $1,500,000 — not yet');
+    expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
+  });
+
+  it('B3 parity: Path to FI (KEEP) and Earliest Retirement render the SAME nothing-invested sentence on one bar, and neither locks', () => {
+    primeBar({ portfolio: 0, annualContribution: 0 });
+    render(
+      <MemoryRouter>
+        <EarliestRetirementCard cardId="retirement-age" />
+        <PathToFiCard cardId="path-to-fi" />
+      </MemoryRouter>,
+    );
+    const erc = screen.getByTestId('retirement-age-nothing-invested').textContent;
+    const ptf = screen.getByTestId('path-to-fi-nothing-invested').textContent;
+    expect(erc).toBe(ptf);
+    expect(erc).toBe(NOTHING_INVESTED_LINE);
+    expect(
+      screen.queryAllByText('Returns at or below inflation — the target is never reached in real terms.'),
+    ).toHaveLength(0);
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+  });
+
+  it('B3: the register needs BOTH zero — a $0 portfolio with contributions solves normally (Age 73 on the house bar)', () => {
+    // pv 0, pmt $24k/yr at real 2.9126%: FV(36) = $1,492,318 < $1.5M, FV(37) = $1,559,784 ≥ → t = 37 → 36 + 37 (Appendix D.5).
+    primeBar({ portfolio: 0 });
+    renderCard();
+    expect(screen.queryByTestId('retirement-age-nothing-invested')).toBeNull();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('Age 73');
   });
 });
 
@@ -558,5 +617,51 @@ describe('B2 — boundary leg + registration (no figure moves)', () => {
     const before = ids.map((id) => screen.getByTestId(id).textContent);
     act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
     expect(ids.map((id) => screen.getByTestId(id).textContent)).toEqual(before);
+  });
+});
+
+/* B3 (R4 ruling 7): the card's ageNow is the LOCAL calendar day. Snapshots are
+   dated BEFORE the instant because buildScenarioDefaults takes the latest
+   snapshot on or before todayIso; no contributions so nothing is future-dated. */
+describe('EarliestRetirementCard — ageNow reads the LOCAL calendar day (B3)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Los Angeles at 03:00Z on Jan 1: Alice (b. 1990-01-01) is still 35 — already-holds prints the age', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 2_000_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('Now');
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      'the target is already met at age 35 — nothing left to solve.', // the UTC-day shape printed 36
+    );
+  });
+
+  it('Auckland at the same instant: Jan 1 locally — 36', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 2_000_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      'the target is already met at age 36 — nothing left to solve.',
+    );
   });
 });

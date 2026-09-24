@@ -133,7 +133,9 @@ export function GoalProgressCard({
   const { goal } = projection;
   // Clamp the visual width to [0, 1]; aria-valuenow follows the same clamp so
   // an over-funded goal reads as "100" instead of e.g. "150" (still labelled
-  // on-track, but the bar can't visually overflow).
+  // on-track, but the bar can't visually overflow). The percent label reads
+  // the same clamp (B3 review): an imported negative balance is "0%", never a
+  // U+2212 percent beside formatCurrency's hyphen dollar on one row.
   const pct = Math.min(1, Math.max(0, projection.percentComplete));
   const valuenow = Math.round(pct * 100);
   // Wave 11 T24: a fully-funded goal reads "Funded ✓" at a capped 100%, not
@@ -203,7 +205,7 @@ export function GoalProgressCard({
               </span>{' '}
               saved
             </span>
-            <span className="tabular-nums">{formatPercent(Math.min(1, projection.percentComplete))}</span>
+            <span className="tabular-nums">{formatPercent(pct)}</span>
           </div>
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"

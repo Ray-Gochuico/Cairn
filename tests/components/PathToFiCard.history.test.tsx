@@ -396,6 +396,25 @@ describe('PathToFiCard — History fan rendering (D-UB8, CH-3, CH-9)', () => {
     // The KEEP line never carries the STOP premise.
     expect(holdsEl.textContent).not.toContain('without further contributions');
   });
+
+  /* B3 (chip task_c681224b item 3): KEEP's H is the CHART horizon — the slowest
+     scenario's whole-year solve, clamped 10–50 (D-P6) — not the rail's years-to-
+     retirement, which drives the COAST column only. On this fixture the rail reads
+     30 (age 36 → 66) while H = 16 (Appendix D.3 of the B3 plan: Moderate 6% at 3%
+     ⇒ real 2.9126%; t = 15.06 ⇒ 16; M = 2007 − 1871 + 1 = 137; J = 123). The
+     amended CH-1 says so. A mutant that drives H from the input reads "30-year". */
+  it('B3 (CR-B3-3): the KEEP holds line names the chart horizon — 16 here, while the rail reads 30', () => {
+    acceptBacktest();
+    renderCard();
+    clickHistory();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(30);
+    const holdsEl = screen.getByTestId('path-to-fi-holds');
+    expect(holdsEl.textContent).toBe(
+      "Reached the target within the chart's 16-year horizon in 123 of the 137 full 16-year stretches since 1871 — a count of past stretches, not a probability.",
+    );
+    expect(holdsEl.textContent).toBe(holdsLineKeep({ H: 16, J: 123, M: 137 }));
+    expect(holdsEl.textContent).not.toContain('within 30');
+  });
 });
 
 describe('PathToFiCard — degradation (⚑F5, CH-5/CH-6)', () => {
