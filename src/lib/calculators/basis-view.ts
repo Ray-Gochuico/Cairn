@@ -46,6 +46,16 @@ export interface RegisteredFigure {
   cls: FigureClass;
   /** REQUIRED iff cls === 'pinned' (the figure's true, fixed basis). */
   pinnedBasis?: DollarBasis;
+  /**
+   * v1.7.0 B2 — ADDITIVE, optional, pinned figures ONLY (the W2 freeze allows
+   * exactly this, as W-I's rowsTestId did): data-testid of the element whose
+   * text states this figure's fixed basis when neither the figure's own node
+   * nor its parent carries the mark — copy-law cells such as the Stress Test
+   * card's CP-10/11/16 rows, whose basis is the card-level CP-18 line. The
+   * sweep requires that element to render, with the pinnedBasis mark, in
+   * BOTH bases. Absent = the W5 node-or-parent rule, byte-unchanged.
+   */
+  markTestId?: string;
 }
 
 export interface RegisteredChart {

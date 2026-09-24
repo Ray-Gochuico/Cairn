@@ -51,12 +51,27 @@ interface Snapshot {
   captions: Map<string, string>;
   /** W-I: chartTestId → the hook's data-rows attribute (only for charts that declare rowsTestId). */
   rows: Map<string, string>;
+  /** B2: figure testId → the declared mark element's text (only for figures that declare markTestId). */
+  marks: Map<string, string>;
   looseDollarTexts: string[];
 }
 
 function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
   const figures = new Map<string, FigureSnap[]>();
+  const marks = new Map<string, string>();
   for (const f of registry.figures) {
+    if (f.markTestId !== undefined && f.cls !== 'pinned') {
+      throw new Error(`${f.testId}: markTestId is a pinned-figure option (contract violation)`);
+    }
+    if (f.markTestId !== undefined) {
+      const markEl = container.querySelector<HTMLElement>(`[data-testid="${f.markTestId}"]`);
+      if (!markEl) {
+        throw new Error(
+          `basis sweep: mark element "${f.markTestId}" for "${f.testId}" not rendered by the fixture`,
+        );
+      }
+      marks.set(f.testId, markEl.textContent ?? '');
+    }
     const nodes = Array.from(
       container.querySelectorAll<HTMLElement>(`[data-testid="${f.testId}"]`),
     );
@@ -116,7 +131,7 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
     if (figureSelectors.some((s) => el.closest(s))) continue;
     looseDollarTexts.push(text.trim());
   }
-  return { figures, captions, rows, looseDollarTexts };
+  return { figures, captions, rows, marks, looseDollarTexts };
 }
 
 /**
@@ -127,6 +142,8 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *  - invariant: byte-identical textContent across bases.
  *  - pinned: byte-identical AND its pinnedBasis mark appears in the node or
  *    its parent element in BOTH bases (the phrase may close the sentence).
+ *  - pinned + markTestId (B2, opt-in): the mark may instead sit on the declared
+ *    element, which must render with that mark in BOTH bases.
  *  - charts: the caption names the active basis (convertible) or the declared
  *    pinnedBasis, in both bases.
  *  - chart DATA (W-I, only when rowsTestId is declared): the hook's data-rows
@@ -203,9 +220,20 @@ export function expectBasisDiscipline(
         const basis = f.pinnedBasis;
         if (!basis)
           throw new Error(`${f.testId}: pinned figure missing pinnedBasis (contract violation)`);
-        if (!hasMark(snapT.text, basis) && !hasMark(snapT.parentText, basis))
+        // B2: node, OR parent, OR the declared mark element (markTestId) — in each basis.
+        const markT = today.marks.get(f.testId);
+        const markF = future.marks.get(f.testId);
+        if (
+          !hasMark(snapT.text, basis) &&
+          !hasMark(snapT.parentText, basis) &&
+          !(markT !== undefined && hasMark(markT, basis))
+        )
           problems.push(`${f.testId}[${i}]: pinned(${basis}) mark missing in today render`);
-        if (!hasMark(snapF.text, basis) && !hasMark(snapF.parentText, basis))
+        if (
+          !hasMark(snapF.text, basis) &&
+          !hasMark(snapF.parentText, basis) &&
+          !(markF !== undefined && hasMark(markF, basis))
+        )
           problems.push(`${f.testId}[${i}]: pinned(${basis}) mark missing in future render`);
       }
     });
