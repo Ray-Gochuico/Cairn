@@ -973,7 +973,7 @@ describe('C2 historical anchors — the seeded Baseline through the production m
     expect(authoredMonthlyExpense(p, real.expenseBasis, real.startISO)).toBeCloseTo(5911.12, 2);
     const states = projectScenario(real, p, { startISO: real.startISO, months: 360 });
     expect(states[1].expenses).toBeCloseTo(5923.30, 2);                 // 5,911.12 × one month of 2.4%/yr
-    const m = milestonesOf(real, p, false);
+    const m = milestonesOf(real, p, true);                               // FI 2033-03 holds under the C2 gate
     expect(m.financialIndependenceISO).toBe('2033-03');
     expect(m.debtFreeISO).toBe('2046-01');
     expect(m.retirementISO).toBe('2052-10');
@@ -987,6 +987,7 @@ describe('C2 historical anchors — the seeded Baseline through the production m
     const legacy = milestonesOf(real, CUSTOM_ZERO(), false);
     expect(legacy.financialIndependenceISO).toBeUndefined();               // `s.expenses > 0` never held
     expect(legacy.netWorth30y).toBeCloseTo(12_216_365.93, 2);
+    expect(milestonesOf(real, CUSTOM_ZERO(), true).financialIndependenceISO).toBeUndefined();
   });
 
   it('the household-baseline scenario (custom/$6,000 — what an untouched Send now carries) reads FI 2033-07; NW30y $9,025,313.05', async () => {
@@ -1007,11 +1008,16 @@ describe('C2 historical anchors — the seeded Baseline through the production m
     expect(real.expenseBasis.rolling12mMonths).toBe(0);
     const states = projectScenario(real, emptyLeverPayload(), { startISO: real.startISO, months: 360 });
     expect(states[1].expenses).toBeCloseTo(2505.15, 2);                 // rent alone, inflated one month
+    const withBaseline = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
     // rolling12m resolves 0 with no complete month — the SAME false date the custom/0 default gave.
     expect(milestonesOf(real, emptyLeverPayload(), false).financialIndependenceISO).toBe('2026-08');
     expect(milestonesOf(real, CUSTOM_ZERO(), false).financialIndependenceISO).toBe('2026-08');
+    // … and the C2 gate (the page passes the authored month-0 expense) reads none for both — the G11 row says why.
+    expect(milestonesOf(real, emptyLeverPayload(), true).financialIndependenceISO).toBeUndefined();
+    expect(milestonesOf(real, CUSTOM_ZERO(), true).financialIndependenceISO).toBeUndefined();
+    // A scenario WITH an authored expense keeps its date under both gates.
+    expect(milestonesOf(real, withBaseline, true).financialIndependenceISO).toBe('2045-01');
     expect(milestonesOf(real, CUSTOM_ZERO(), false).netWorth30y).toBeCloseTo(10_886_760.56, 2);
-    const withBaseline = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
     expect(milestonesOf(real, withBaseline, false).financialIndependenceISO).toBe('2045-01');
     expect(milestonesOf(real, withBaseline, false).netWorth30y).toBeCloseTo(7_693_055.21, 2);
   });

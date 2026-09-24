@@ -130,6 +130,39 @@ describe('detectMilestones', () => {
     });
   });
 
+  // ----- C2 — the SCENARIO's authored expense gate (sibling of M2) ----------
+  describe('zero authored scenario expense (C2)', () => {
+    // The hazard: a household with rent on file and a scenario whose authored
+    // expense is $0 (custom/0, or a data mode with no complete month). The
+    // engine's `expenses` is the rent alone (> 0), the household baseline is
+    // set (> 0), so M2 is open and the crossing fires on month one against
+    // rent — "FI next month". Seeded repro: FI 2026-08 (sample-profile.test).
+    const rentOnly = buildStates([
+      { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000 },
+      { month: '2026-08', netWorth: 950_000, debt: 0, expenses: 2_510, liquid: 950_000 },
+    ]);
+
+    it('a $0 authored expense gates the FI scan OFF even though engine expenses are > 0 (rent) and the household baseline is set', () => {
+      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000, scenarioMonthlyExpenseBase: 0 });
+      expect(m.financialIndependenceISO).toBeUndefined();
+      expect(m.debtFreeISO).toBe('2026-07');                              // the other milestones are untouched
+    });
+
+    it('a positive authored expense keeps the crossing behavior', () => {
+      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000, scenarioMonthlyExpenseBase: 5_911.12 });
+      expect(m.financialIndependenceISO).toBe('2026-07');                 // 947k × 4% / 12 ≈ $3,157 ≥ $2,505
+    });
+
+    it('omitted → legacy behavior (callers without a scenario in scope are not gated)', () => {
+      expect(detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBe('2026-07');
+    });
+
+    it('BOTH gates hold: a $0 household baseline with a positive scenario base still reads no FI (G1 and the FI cards keep saying why)', () => {
+      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 0, scenarioMonthlyExpenseBase: 5_911.12 });
+      expect(m.financialIndependenceISO).toBeUndefined();
+    });
+  });
+
   // ----- Wave-3 Task 4 — FI milestone uses LIQUID, not net worth ------------
   describe('FI milestone uses liquid (investments + cash), excludes home equity', () => {
     it('a $1M home owner with $0 investments NEVER reaches FI by the 4% rule', () => {

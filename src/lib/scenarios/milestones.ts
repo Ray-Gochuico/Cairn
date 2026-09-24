@@ -12,6 +12,16 @@ export interface FinancialIndependenceParams {
    * legacy expenses-only behavior (callers without household context).
    */
   monthlyExpenseBaseline?: number;
+  /**
+   * C2: the scenario's AUTHORED month-0 monthly expense — its resolved expense
+   * base plus the expense periods active in the start month
+   * (authoredMonthlyExpense in expense-base.ts). A $0 authored expense leaves
+   * the projection's spending to the household's recurring obligations alone
+   * (rent, leases), and a crossing against rent alone is not FI — `<= 0` →
+   * no FI milestone, the same rule as the household gate above. Omitted →
+   * not gated (callers without a scenario in scope).
+   */
+  scenarioMonthlyExpenseBase?: number;
 }
 
 export interface Milestones {
@@ -61,10 +71,13 @@ export function detectMilestones(
   let financialIndependenceISO: string | undefined;
   let retirementISO: string | undefined;
 
-  // Round-3 M2: a zero baseline means "no FI target", not "instant FI" —
-  // skip the crossing scan entirely so every consumer renders "FI —".
+  // Round-3 M2: a zero HOUSEHOLD baseline means "no FI target", not "instant
+  // FI"; C2: a zero SCENARIO-authored expense means the same — the engine's
+  // expenses are then rent/leases alone. Either → skip the crossing scan so
+  // every consumer renders "FI —" (the G11 register row says why).
   const fiScanEnabled =
-    params.monthlyExpenseBaseline === undefined || params.monthlyExpenseBaseline > 0;
+    (params.monthlyExpenseBaseline === undefined || params.monthlyExpenseBaseline > 0) &&
+    (params.scenarioMonthlyExpenseBase === undefined || params.scenarioMonthlyExpenseBase > 0);
 
   for (let i = 0; i < states.length; i++) {
     const s = states[i];
