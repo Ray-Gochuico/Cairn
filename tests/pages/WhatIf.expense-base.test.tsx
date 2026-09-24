@@ -205,6 +205,21 @@ describe('WhatIf — C2 page wiring: the per-scenario FI gate + G11 from ONE res
     });
   });
 
+  it('the Expenses request WAITS for activation: nothing is raised while setActive is pending (the dialog must open on the named scenario)', async () => {
+    let settle!: () => void;
+    h.setActive = vi.fn(() => new Promise<void>((r) => { settle = r; }));
+    h.scenarios = [scenario(1, 'Baseline', {}, { customMonthly: 4_000 }), scenario(2, 'Sent', {})];
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Expenses →' }));
+    expect(h.setActive).toHaveBeenCalledWith(2);
+    await new Promise((r) => setTimeout(r, 50));   // several frames: activation still pending
+    expect((leverBarProps.at(-1) as { openRequest: unknown }).openRequest).toBeNull();
+    settle();
+    await waitFor(() => {
+      expect((leverBarProps.at(-1) as { openRequest: unknown }).openRequest).toEqual({ lever: 'expenses', nonce: 1 });
+    });
+  });
+
   it('the page carries no reserved phrase and no exclamation mark on the G11 surface', () => {
     renderPage();
     const card = screen.getByTestId('whatif-model-gaps-card');
