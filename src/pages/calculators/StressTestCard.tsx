@@ -9,7 +9,12 @@ import { ScopeExclusionsLine } from '@/components/calculators/ScopeExclusionsLin
 import { useCalculatorState } from '@/lib/calculator-state';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
-import { realRateOfUnfloored } from '@/lib/calculators/real-rate';
+import {
+  realRateView,
+  TODAY_SUFFIX,
+  type RegisteredChart,
+  type RegisteredFigure,
+} from '@/lib/calculators/basis-view';
 import { pctFromFraction } from '@/lib/calculators/scenario-assumptions';
 import { DEFAULT_STOCK_PCT, datasetReplayRows, flatPathEnd, replayWindow } from '@/lib/backtest/replay';
 import { STRESS_WINDOWS } from '@/lib/backtest/windows';
@@ -144,8 +149,9 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
       : null;
 
   const nYears = win.span.endYear - win.span.startYear + 1;
-  const realRate = realRateOfUnfloored(engine.returnRate, engine.inflation);
-  const baselineEnd = result ? flatPathEnd(engine.portfolio, realRate, contribution, nYears) : 0;
+  // B2: the boundary's rate leg (unfloored, real) — the card imports no converter.
+  const rate = realRateView(engine.returnRate, engine.inflation);
+  const baselineEnd = result ? flatPathEnd(engine.portfolio, rate.realRate, contribution, nYears) : 0;
   const depth = result ? result.troughBalance / engine.portfolio - 1 : 0;
   const endDelta = result ? result.windowEndBalance / engine.portfolio - 1 : 0;
   // CP-15 is a claim about CONTRIBUTIONS outpacing losses, so it needs both
@@ -332,6 +338,7 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <ResultRow
               label="Deepest year-end"
+              testId="stress-test-trough"
               value={
                 outpaced
                   ? "Never below its starting value at a year-end — contributions outpaced this window's losses."
@@ -340,6 +347,7 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
             />
             <ResultRow
               label={`End of window (${win.span.endYear})`}
+              testId="stress-test-window-end"
               value={`${formatCurrency(result.windowEndBalance)} · ${signedPct(endDelta, 1)} vs start`}
             />
           </div>
@@ -350,11 +358,13 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
           )}
           <ResultRow
             label={`Vs your assumed path (${nYears} ${nYears === 1 ? 'year' : 'years'})`}
+            testId="stress-test-baseline"
             value={`${formatCurrency(baselineEnd)} assumed · ${formatCurrency(result.windowEndBalance)} replayed · gap ${formatSignedCurrency(result.windowEndBalance - baselineEnd)}`}
           />
           {chartSeries.length > 1 && (
             <InlineChart
-              label="Window replay"
+              label={`Window replay ${TODAY_SUFFIX}`}
+              labelTestId="stress-test-chart-caption"
               testId="stress-test-chart"
               data={chartSeries.map((y) => ({ year: y.year, balance: y.balance }))}
               xKey="year"
@@ -390,11 +400,11 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
           return deflated to real. {stockPctPercent}% / {bondPctPercent}% mix, rebalanced annually —
           the same return basis as the Historical Backtest.
         </p>
-        <p>All figures in today&#39;s dollars — the window&#39;s inflation is already taken out.</p>
+        <p data-testid="stress-test-basis-line">All figures in today&#39;s dollars — the window&#39;s inflation is already taken out.</p>
         <p>Measured at year-ends — the data is annual, so the worst moments within a year were deeper.</p>
         <p>
-          The assumed path compounds your {formatPercent(engine.returnRate)} return ≈{' '}
-          {formatPercent(realRate)} real with the same contribution basis.
+          The assumed path compounds your {formatPercent(engine.returnRate)} return {rate.approxReal}{' '}
+          with the same contribution basis.
         </p>
       </div>
       {scope.isScoped && scopeExclusions && (
@@ -418,3 +428,26 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
     </CalculatorCard>
   );
 }
+
+/** B2 test-only registration (the W5 frozen contract; W-I's rows hook; B2's
+ *  markTestId). Every replay / baseline figure is today's dollars by
+ *  construction (CP-18) — PINNED, never page-flipped; year-0 inputs are
+ *  invariant. The three copy-law rows carry no adjacent mark, so they point
+ *  at the CP-18 line. */
+export const STRESS_TEST_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'stress-test-meaning', cls: 'invariant' }, // CP-9 scoped portfolio (year-0) — S7
+  { testId: 'stress-test-trough', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' }, // CP-10 — S10
+  { testId: 'stress-test-window-end', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' }, // CP-11 — S11
+  { testId: 'stress-recovery', cls: 'invariant' }, // CP-12 contributions (year-0) — S12
+  { testId: 'stress-test-baseline', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' }, // CP-16 — S13
+  { testId: 'stress-test-scope-exclusions', cls: 'invariant' }, // CP-27 (year-0; scoped fixture) — S19
+];
+export const STRESS_TEST_BASIS_CHARTS: RegisteredChart[] = [
+  {
+    chartTestId: 'stress-test-chart',
+    captionTestId: 'stress-test-chart-caption',
+    cls: 'pinned',
+    pinnedBasis: 'today',
+    rowsTestId: 'rc-composed-chart', // W-I: the replay rows are byte-identical across bases — S14
+  },
+];

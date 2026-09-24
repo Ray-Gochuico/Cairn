@@ -56,6 +56,11 @@ import {
   PATH_TO_FI_BASIS_CHARTS,
   PATH_TO_FI_HISTORY_BASIS_CHARTS,
 } from '@/pages/calculators/PathToFiCard';
+import {
+  StressTestCard,
+  STRESS_TEST_BASIS_FIGURES,
+  STRESS_TEST_BASIS_CHARTS,
+} from '@/pages/calculators/StressTestCard';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
@@ -134,7 +139,7 @@ function resetStores() {
 
 /** PathToFiCard.test.tsx's `primeStores` + `primeScoped` (person scope, so ALL
  *  five registered figures — the two exclusion figures included — render). */
-function primeScoped() {
+function primeScoped(opts: { bobPortfolio?: number } = {}) {
   useHouseholdStore.setState({
     household: {
       filingStatus: FilingStatus.SINGLE,
@@ -159,7 +164,7 @@ function primeScoped() {
   useSnapshotsStore.setState({
     snapshots: [
       { accountId: 1, snapshotDate: '2026-04-01', totalValue: 100_000 },
-      { accountId: 2, snapshotDate: '2026-04-01', totalValue: 40_000 },
+      { accountId: 2, snapshotDate: '2026-04-01', totalValue: opts.bobPortfolio ?? 40_000 },
       { accountId: 3, snapshotDate: '2026-04-01', totalValue: 8_000 },
     ].map((s, i) => ({
       id: i + 1,
@@ -274,6 +279,31 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
         <PathToFiCard cardId="path-to-fi" />
       </MemoryRouter>,
       { figures: PATH_TO_FI_BASIS_FIGURES, charts: PATH_TO_FI_HISTORY_BASIS_CHARTS },
+    );
+  });
+
+  /* ── B2: the two W1 cards — PINNED today's dollars by construction (the
+        stress replay is real, CP-18; the solver's target is today's expenses
+        ÷ SWR, CP-31). Byte-identical in both page bases; the copy-law rows
+        point at their card-level basis line through markTestId. Scoped
+        fixtures, so the exclusions lines render and every registered figure
+        is present (the PathToFi sweep's rule). ───────────────────────────── */
+
+  it('StressTestCard (scoped, accepted): replay rows + baseline pinned today via CP-18; year-0 inputs invariant; the replay chart rows never re-inflate', () => {
+    primeScoped(); // Bob $40k, $1,200/yr — 1929 · KEEP · 75/25: three down years, never outpaced
+    syncCalcScope(2);
+    localStorage.clear(); // no last Backtest run → the 75/25 default (CP-7)
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: DISCLOSURES.backtest.version },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <StressTestCard cardId="stress-test" />
+      </MemoryRouter>,
+      { figures: STRESS_TEST_BASIS_FIGURES, charts: STRESS_TEST_BASIS_CHARTS },
     );
   });
 });

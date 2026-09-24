@@ -9,7 +9,7 @@
  * render ungated.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -22,6 +22,7 @@ import { StressTestCard, chartEndYear } from '@/pages/calculators/StressTestCard
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { CALCULATORS_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 // DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
@@ -31,10 +32,14 @@ import type { Account, GrowthScenario, Person } from '@/types/schema';
 vi.mock('@/components/charts/InlineChart', () => ({
   InlineChart: ({
     testId,
+    label,
+    labelTestId,
     markers,
     data,
   }: {
     testId?: string;
+    label?: string;
+    labelTestId?: string;
     markers?: Array<{ x: number | string; y: number; color: string }>;
     data?: Array<{ [key: string]: number | string }>;
   }) => (
@@ -42,7 +47,9 @@ vi.mock('@/components/charts/InlineChart', () => ({
       data-testid={testId}
       data-markers={JSON.stringify(markers ?? [])}
       data-years={JSON.stringify((data ?? []).map((p) => p.year))}
-    />
+    >
+      {label != null && <div data-testid={labelTestId}>{label}</div>}
+    </div>
   ),
 }));
 
@@ -710,5 +717,60 @@ describe('empty + scoped states', () => {
   it('person scope renders the CP-27 exclusions line', () => {
     renderScopedCard();
     expect(screen.getByTestId('stress-test-scope-exclusions')).toHaveTextContent(/stress test counts only/);
+  });
+});
+
+/* ── B2: the boundary leg + the W5 registration. NO figure moves — the
+   registered nodes carry exactly the literals the getByText pins above read. ── */
+describe('B2 — boundary leg + registration (no figure moves)', () => {
+  afterEach(() => __resetDollarBasisForTests());
+
+  const dotcomPortfolioOnly = () => {
+    renderCard();
+    setStockPct(100);
+    clickMode('Portfolio only');
+    clickChip('The dot-com crash');
+  };
+
+  it('the registered nodes carry the SAME CP-10/11/16 figures the pins above read; CP-18 is the mark element', () => {
+    dotcomPortfolioOnly();
+    expect(screen.getByTestId('stress-test-trough')).toHaveTextContent('$60,858 in 2002 · −39.1% vs start');
+    expect(screen.getByTestId('stress-test-window-end')).toHaveTextContent('$60,858 · −39.1% vs start');
+    expect(screen.getByTestId('stress-test-baseline')).toHaveTextContent(
+      '$108,995 assumed · $60,858 replayed · gap −$48,136',
+    );
+    expect(screen.getByTestId('stress-test-basis-line')).toHaveTextContent(
+      "All figures in today's dollars — the window's inflation is already taken out.",
+    );
+  });
+
+  it("CR-B2-1: the chart caption names the pinned basis in the house short register — Window replay (today's $)", () => {
+    renderCard(); // default 1929 state renders the chart
+    expect(screen.getByTestId('stress-test-chart-caption')).toHaveTextContent("Window replay (today's $)");
+  });
+
+  it('NOMINAL ANTI-PIN: the baseline compounds the REAL rate — the nominal-rate figures never render', () => {
+    // 100000 · 1.06^3 = $119,101.60 (nominal) vs the pinned $108,995 (3/103 real, CP-16 pin above);
+    // a helper phrasing the nominal rate would read "≈ 6% real" (CP-21 pins "≈ 2.9% real").
+    dotcomPortfolioOnly();
+    expect(screen.queryByText(/\$119,102/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/≈ 6% real/)).not.toBeInTheDocument();
+    expect(screen.getByText(/≈ 2\.9% real/)).toBeInTheDocument();
+  });
+
+  it('a page-basis flip leaves every stress figure byte-identical (pinned today, never page-flipped)', () => {
+    dotcomPortfolioOnly();
+    const ids = [
+      'stress-test-headline',
+      'stress-test-meaning',
+      'stress-test-trough',
+      'stress-test-window-end',
+      'stress-test-baseline',
+      'stress-recovery',
+      'stress-test-chart-caption',
+    ];
+    const before = ids.map((id) => screen.getByTestId(id).textContent);
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(ids.map((id) => screen.getByTestId(id).textContent)).toEqual(before);
   });
 });
