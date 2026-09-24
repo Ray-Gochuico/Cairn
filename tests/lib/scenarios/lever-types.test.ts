@@ -324,11 +324,27 @@ describe('LeverPayloadSchema — gapAllocation default', () => {
   });
 });
 
-describe('emptyLeverPayload — Feature B new-scenario default', () => {
-  it('carries explicit expenseSource + customMonthly (new-scenario default)', () => {
+describe('emptyLeverPayload — the NEW-scenario default (C2, design OD1: never a silent $0)', () => {
+  // Shipped v1.0.0 → v1.6.0 as custom/0: every new scenario — the first-boot
+  // Baseline, a Send-to-What-If — projected $0 of spending, and a household
+  // paying only rent read a false FI date (C2 investigation, 2026-09-24).
+  // The factory default is now the spending average, behind the popover's
+  // non-silent empty-data guard (OD1's second sanctioned branch).
+  it('carries the spending average (expenseSource rolling12m) with customMonthly 0', () => {
     const p = emptyLeverPayload();
-    expect(p.expenseSource).toBe('custom');
+    expect(p.expenseSource).toBe('rolling12m');
     expect(p.customMonthly).toBe(0);
+  });
+
+  it('the SCHEMA default stays custom/0 — the two defaults are DIFFERENT on purpose (the dual default, B5)', () => {
+    const saved = LeverPayloadSchema.parse({
+      extraLoanPayments: [], lumpSums: [], expensePeriods: [],
+      returns: { defaultRate: 0.07, overrides: {} },
+      income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
+    });
+    expect(saved.expenseSource).toBe('custom');
+    expect(saved.customMonthly).toBe(0);
+    expect(saved.expenseSource).not.toBe(emptyLeverPayload().expenseSource);
   });
 
   it('parses cleanly through the schema (no missing required fields)', () => {

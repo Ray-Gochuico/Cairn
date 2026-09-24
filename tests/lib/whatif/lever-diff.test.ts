@@ -97,7 +97,8 @@ describe('computeAssumptionParity', () => {
       // CR-P10 renders ENGINE-effective ages (C1): DEF's one person retires at 65.
       [{ ...base, retirementAgeOverride: 60 }, 'retirement age 65 vs 60'],
       // CR-P11 mode rename (R1): the rolling12m mode reads 'spending average'.
-      [{ ...base, expenseSource: 'rolling12m' }, 'expenses base custom vs spending average'],
+      // C2: P() is rolling12m now, so the CUSTOM side is the explicit one.
+      [{ ...base, expenseSource: 'custom' }, 'expenses base spending average vs custom'],
       [{ ...base, annualLongTermGains: 12_000 }, 'long-term gains $0/yr vs $12,000/yr'],
       [{ ...base, annualQualifiedDividends: 2_500 }, 'qualified dividends $0/yr vs $2,500/yr'],
       [{ ...base, annualNonQualifiedDividends: 900 }, 'non-qualified dividends $0/yr vs $900/yr'],
@@ -118,13 +119,15 @@ describe('computeAssumptionParity', () => {
     const seqB = { ...seqA, effectiveDrawdownTaxRate: 0.22 };
     const dd2 = computeAssumptionParity(seqA, seqB, HH, DEF);
     expect(dd2.differences).toEqual(['drawdown tax 0% vs 22%']);
-    // customMonthly is inert unless a side actually uses the 'custom' source.
+    // customMonthly is inert unless a side actually uses the 'custom' source
+    // (C2: P() is rolling12m, so the custom pair below is explicit).
     const rollingA = { ...base, expenseSource: 'rolling12m' as const };
     const rollingB = { ...rollingA, customMonthly: 5_000 };
     const cm = computeAssumptionParity(rollingA, rollingB, HH, DEF);
     expect(cm.differences).toEqual([]);
-    const customB = { ...base, customMonthly: 5_000 };
-    expect(computeAssumptionParity(base, customB, HH, DEF).differences)
+    const customA = { ...base, expenseSource: 'custom' as const };
+    const customB = { ...customA, customMonthly: 5_000 };
+    expect(computeAssumptionParity(customA, customB, HH, DEF).differences)
       .toEqual(['custom expenses $0/mo vs $5,000/mo']);
   });
 

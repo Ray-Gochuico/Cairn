@@ -29,6 +29,17 @@ import {
 } from '@/domain/roadmap/rules/iraBranch';
 import { formatCurrency } from '@/lib/format';
 import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
+import { HoldingsRepo } from '@/domain/holdings';
+import { HousingPaymentsRepo } from '@/domain/housing-payments';
+import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
+import { PropertiesRepo } from '@/domain/properties';
+import { VehiclesRepo } from '@/domain/vehicles';
+import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { SettingsRepo } from '@/domain/app-settings';
+import { AccountSnapshotSchema } from '@/types/schema';
+import { captureRealState, projectScenario, detectMilestones, emptyLeverPayload, effectiveSwr, type RealState } from '@/lib/scenarios';
+import { authoredMonthlyExpense } from '@/lib/scenarios/expense-base';
+import type { Scenario } from '@/types/scenario';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -883,6 +894,126 @@ describe('R1 historical anchors — the shipped seed through the production mapp
       expect(s.skipped.find((k) => k.bucket === 'ef_floor')?.reason).toBe(floorSkip);
     }
     expect(aggressive.skipped.find((k) => k.bucket === 'ef_target')?.reason).toBe(floorSkip);
+  });
+});
+
+/** The What-If RealState from the SEEDED DB through the production mappers —
+ *  useRealState's exact recipe (snapshots via the store's own SQL; tax rules =
+ *  the most recent seeded year, as loadAvailableYears resolves; loanPayments
+ *  []; startISO = the seed day's month). Never inline SQL semantics. */
+async function seededReal(db: SqliteAdapter, todayISO: string): Promise<RealState> {
+  const household = (await new HouseholdRepo(db).get())!;
+  const snapRows = await db.select<Record<string, unknown>>('SELECT * FROM account_snapshots ORDER BY snapshot_date ASC, id ASC');
+  const accountSnapshots = snapRows.map((r) => AccountSnapshotSchema.parse({
+    id: r.id, accountId: r.account_id, snapshotDate: r.snapshot_date, totalValue: r.total_value, source: r.source,
+  }));
+  const taxRepo = new TaxRulesRepo(db);
+  const years = await taxRepo.listDistinctYears();
+  const settings = await new SettingsRepo(db).get();
+  return captureRealState({
+    accounts: await new AccountsRepo(db).list(),
+    accountSnapshots,
+    holdings: await new HoldingsRepo(db).listAll(),
+    loans: await new LoansRepo(db).list(),
+    loanPayments: [],
+    transactions: await new TransactionsRepo(db).list(),
+    categories: await new CategoriesRepo(db).list(),
+    household,
+    persons: await new PersonsRepo(db).list(),
+    appSettings: {
+      defaultInflation: settings?.defaultInflation ?? 0.025,
+      defaultReturnRate: settings?.defaultReturnRate ?? 0.07,
+      defaultCashApy: settings?.defaultCashApy ?? null,
+      defaultDrawdownTaxRate: settings?.defaultDrawdownTaxRate ?? null,
+    },
+    startISO: todayISO.slice(0, 7),
+    taxRules: years.length ? await taxRepo.listForYear(Math.max(...years)) : [],
+    housingPayments: await new HousingPaymentsRepo(db).list(),
+    vehicleLeases: await new VehicleLeasesRepo(db).list(),
+    properties: await new PropertiesRepo(db).list(),
+    vehicles: await new VehiclesRepo(db).list(),
+    assetValueSnapshots: await new AssetValueSnapshotsRepo(db).list(),
+  });
+}
+
+describe('C2 historical anchors — the seeded Baseline through the production mappers (Appendix A; seed day 2026-07-08 → startISO 2026-07)', () => {
+  let db: SqliteAdapter;
+  const SEED_DAY = '2026-07-08';
+  beforeEach(async () => {
+    db = await freshDb();
+    await seedSampleProfile(db, { todayISO: SEED_DAY });
+  });
+  /** Both gates (household M2 + the C2 scenario gate) when c2Gate is true; M2 alone otherwise. */
+  const milestonesOf = (real: RealState, payload: ReturnType<typeof emptyLeverPayload>, c2Gate: boolean) => {
+    const scenario = { id: 1, leverPayload: payload } as unknown as Scenario;
+    const states = projectScenario(real, payload, { startISO: real.startISO, months: 360 });
+    return detectMilestones(states, {
+      withdrawalRate: effectiveSwr(scenario, real.household),
+      monthlyExpenseBaseline: real.household.monthlyExpenseBaseline,
+      ...(c2Gate ? { scenarioMonthlyExpenseBase: authoredMonthlyExpense(payload, real.expenseBasis, real.startISO) } : {}),
+    });
+  };
+  // The pre-C2 factory default, spelled out — the anti-pin's payload.
+  const CUSTOM_ZERO = () => ({ ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 0 });
+
+  it('captures the spending average the Roadmap states: $5,911.12 from 3 complete months (MFJ, baseline $6,000, 2.4% inflation)', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    expect(real.household.filingStatus).toBe('MFJ');
+    expect(real.household.monthlyExpenseBaseline).toBe(6000);
+    expect(real.household.inflationAssumption).toBeCloseTo(0.024, 6);
+    expect(real.expenseBasis.rolling12m).toBeCloseTo(5911.12, 2);
+    expect(real.expenseBasis.rolling12mMonths).toBe(3);
+    expect(real.expenseBasis.latestMonth).toBeCloseTo(5911.12, 2);
+    expect((real.housingPayments ?? []).length).toBe(0);
+  });
+
+  it('the factory Baseline (rolling12m) spends $5,911.12 in month 1 (inflated) and reaches FI 2033-03; NW30y $9,072,583.18', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const p = emptyLeverPayload();
+    expect(authoredMonthlyExpense(p, real.expenseBasis, real.startISO)).toBeCloseTo(5911.12, 2);
+    const states = projectScenario(real, p, { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBeCloseTo(5923.30, 2);                 // 5,911.12 × one month of 2.4%/yr
+    const m = milestonesOf(real, p, false);
+    expect(m.financialIndependenceISO).toBe('2033-03');
+    expect(m.debtFreeISO).toBe('2046-01');
+    expect(m.retirementISO).toBe('2052-10');
+    expect(m.netWorth30y).toBeCloseTo(9_072_583.18, 2);
+  });
+
+  it('ANTI-PIN — the pre-C2 custom/0 Baseline spent $0 and read FI undefined while its NW30y was $12,216,365.93 (the silent $0)', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const states = projectScenario(real, CUSTOM_ZERO(), { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBe(0);
+    const legacy = milestonesOf(real, CUSTOM_ZERO(), false);
+    expect(legacy.financialIndependenceISO).toBeUndefined();               // `s.expenses > 0` never held
+    expect(legacy.netWorth30y).toBeCloseTo(12_216_365.93, 2);
+  });
+
+  it('the household-baseline scenario (custom/$6,000 — what an untouched Send now carries) reads FI 2033-07; NW30y $9,025,313.05', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const p = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
+    const m = milestonesOf(real, p, false);
+    expect(m.financialIndependenceISO).toBe('2033-07');
+    expect(m.netWorth30y).toBeCloseTo(9_025_313.05, 2);
+  });
+
+  it('THE HAZARD (investigation §E): transactions deleted + one $2,500 rent → the shipped gate read FI 2026-08 from rent alone for BOTH defaults', async () => {
+    await db.execute('DELETE FROM transactions');
+    await db.execute(
+      `INSERT INTO housing_payments (household_id, name, monthly_amount, start_date, end_date) VALUES (1, 'Rent', 2500, '2026-01-01', NULL)`,
+    );
+    const real = await seededReal(db, SEED_DAY);
+    expect(real.expenseBasis.rolling12m).toBe(0);
+    expect(real.expenseBasis.rolling12mMonths).toBe(0);
+    const states = projectScenario(real, emptyLeverPayload(), { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBeCloseTo(2505.15, 2);                 // rent alone, inflated one month
+    // rolling12m resolves 0 with no complete month — the SAME false date the custom/0 default gave.
+    expect(milestonesOf(real, emptyLeverPayload(), false).financialIndependenceISO).toBe('2026-08');
+    expect(milestonesOf(real, CUSTOM_ZERO(), false).financialIndependenceISO).toBe('2026-08');
+    expect(milestonesOf(real, CUSTOM_ZERO(), false).netWorth30y).toBeCloseTo(10_886_760.56, 2);
+    const withBaseline = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
+    expect(milestonesOf(real, withBaseline, false).financialIndependenceISO).toBe('2045-01');
+    expect(milestonesOf(real, withBaseline, false).netWorth30y).toBeCloseTo(7_693_055.21, 2);
   });
 });
 

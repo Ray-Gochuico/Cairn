@@ -23,6 +23,11 @@ import type { ExpensePeriod } from '@/lib/scenarios';
 
 function resetStores(opts: { expensePeriods?: ExpensePeriod[] } = {}) {
   const payload = emptyLeverPayload();
+  // C2: the factory default is the spending average; the describes this
+  // helper feeds test the Custom / periods surface, so the fixture states
+  // its mode instead of inheriting one.
+  payload.expenseSource = 'custom';
+  payload.customMonthly = 0;
   if (opts.expensePeriods) payload.expensePeriods = opts.expensePeriods;
   useScenariosStore.setState({
     scenarios: [{
@@ -362,6 +367,69 @@ describe('ExpensePeriodsPopover — R1 count-stated base label (fake Date: local
       screen.getByTestId('expense-empty-data').textContent ?? '',
       ...screen.getAllByRole('tab').map((t) => t.textContent ?? ''),
     ].join(' ');
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    expect(text).not.toContain('!');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C2 — the factory default's face (Task 3) and the Custom tab at $0 (Task 7,
+// D-C2-7 ⚑ C2-F5).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ExpensePeriodsPopover — C2: a NEW scenario opens on Spending average; a custom $0 base offers the household prefill', () => {
+  function seedFactoryScenario(opts: { householdBaseline?: number } = {}) {
+    seedAllStores({ transactions: [], householdBaseline: opts.householdBaseline ?? 4_500 });
+    // The factory payload VERBATIM — not seedAllStores' explicit-custom fixture.
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'Baseline', isBaseline: true, color: '#4f86f7', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: emptyLeverPayload(),
+        createdAt: '', updatedAt: '',
+      } as Scenario],
+    });
+  }
+
+  it('a fresh scenario with no complete month opens on the Spending average tab with the empty-data guard (never a silent $0)', () => {
+    seedFactoryScenario();
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByRole('tab', { name: 'Spending average' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /use my \$4,500 expense baseline/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Custom monthly expense')).toBeNull();
+  });
+
+  it('a fresh scenario WITH a complete month reads its base from the spending average, count stated', () => {
+    // The R1 describe's clock idiom (fake Date only; local 2026-05-15 →
+    // startISO '2026-05'), and a day-5 row: the rolling average drops a FIRST
+    // month whose earliest row is past the grace day (7), so a day-10 row
+    // would be excluded as a partial month.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 4, 15, 12));
+      seedAllStores({
+        transactions: [{
+          id: 1, householdId: 1, date: '2026-04-05', amount: 3_000,
+          merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1,
+        }] as any,
+        expenseSource: 'rolling12m',
+      });
+      render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect(screen.getByRole('tab', { name: 'Spending average' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('expense-base')).toHaveTextContent('3,000');
+      expect(screen.getByTestId('expense-base-source')).toHaveTextContent('average of 1 complete month');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('every string on the C2 surfaces is calm (lexicon + no exclamation)', () => {
+    seedFactoryScenario();
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // The dialog portals out of the render container, so the scan reads the
+    // document body (the whole open dialog) — and proves it is non-empty.
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('No complete month of spending yet');
     expect(text).not.toMatch(ADVICE_LEXICON);
     expect(text).not.toContain('!');
   });
