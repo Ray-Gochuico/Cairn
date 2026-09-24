@@ -13,7 +13,7 @@
  * three-scenario range 61–70.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -28,6 +28,7 @@ import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-
 import { projectedFv } from '@/lib/calculators/retirement-age-solver';
 import { yearsToFi } from '@/lib/financial-independence';
 import { realRateOfUnfloored } from '@/lib/calculators/real-rate';
+import { CALCULATORS_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import { formatCurrency } from '@/lib/format';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
@@ -519,5 +520,43 @@ describe('scope', () => {
     // read 'In N years' and carry no 'Age').
     expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent(/Age \d+/);
     expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(/where Bob's plan holds/);
+  });
+});
+
+/* ── B2: the boundary leg + the W5 registration. NO figure moves. ─────────── */
+describe('B2 — boundary leg + registration (no figure moves)', () => {
+  afterEach(() => __resetDollarBasisForTests());
+
+  it('CP-31 on its registered node, byte-exact; CP-35 on its node', () => {
+    renderCard();
+    expect(screen.getByTestId('retirement-age-criterion').textContent).toBe(
+      "Holds means: the projected portfolio at that age meets the target $1,500,000 = 12 × $5,000/mo ÷ 4% SWR — in today's dollars, at 6% ≈ 2.9% real.",
+    );
+    expect(screen.getByTestId('retirement-age-contributions')).toHaveTextContent(
+      /^Contributions of \$24,000\/yr continue until that age — /,
+    );
+  });
+
+  it('NOMINAL ANTI-PIN: the solver runs on the REAL rate — a nominal 6% solve would answer Age 56 and phrase "≈ 6% real"', () => {
+    // yearsToFi at r = 0.06: ln((1.5M + 24k/0.06) / (200k + 24k/0.06)) / ln 1.06 = ln(3.1667)/0.058269 = 19.78 → 20 → Age 56.
+    // At 3/103: pmt/r = 824,000 exactly → ln(2,324,000/1,024,000)/ln(1.0291262) = 28.5465 → 29 → Age 65 (the pin above).
+    renderCard();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('Age 65');
+    expect(screen.getByTestId('retirement-age-headline')).not.toHaveTextContent('Age 56');
+    expect(screen.queryByText(/≈ 6% real/)).not.toBeInTheDocument();
+  });
+
+  it('a page-basis flip leaves the whole solve byte-identical (pinned today, never page-flipped)', () => {
+    renderCard();
+    const ids = [
+      'retirement-age-headline',
+      'retirement-age-criterion',
+      'retirement-age-probes',
+      'retirement-age-verdict',
+      'retirement-age-contributions',
+    ];
+    const before = ids.map((id) => screen.getByTestId(id).textContent);
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(ids.map((id) => screen.getByTestId(id).textContent)).toEqual(before);
   });
 });

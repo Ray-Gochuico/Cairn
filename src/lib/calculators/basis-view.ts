@@ -14,6 +14,7 @@ import {
 import { coastFi } from '@/lib/coast-fi';
 import { toReal } from '@/lib/scenarios/real';
 import { formatCurrency, formatSignedCurrency } from '@/lib/format';
+import { formatPercent } from '@/lib/format'; // B2: realRateView's rate clause (additive import — the W2 freeze)
 import type { ChartDisplayMode } from './real-mode';
 import type { HistoryFanResult } from '@/lib/history-fan';
 import type { Milestones, MonthlyState } from '@/lib/scenarios';
@@ -45,6 +46,16 @@ export interface RegisteredFigure {
   cls: FigureClass;
   /** REQUIRED iff cls === 'pinned' (the figure's true, fixed basis). */
   pinnedBasis?: DollarBasis;
+  /**
+   * v1.7.0 B2 — ADDITIVE, optional, pinned figures ONLY (the W2 freeze allows
+   * exactly this, as W-I's rowsTestId did): data-testid of the element whose
+   * text states this figure's fixed basis when neither the figure's own node
+   * nor its parent carries the mark — copy-law cells such as the Stress Test
+   * card's CP-10/11/16 rows, whose basis is the card-level CP-18 line. The
+   * sweep requires that element to render, with the pinnedBasis mark, in
+   * BOTH bases. Absent = the W5 node-or-parent rule, byte-unchanged.
+   */
+  markTestId?: string;
 }
 
 export interface RegisteredChart {
@@ -429,4 +440,25 @@ export function buildWhatIfCoastLeg(args: {
     coastFmt: formatCurrency(coastFiTarget),
     realRateUnfloored: realRateOfUnfloored(args.rate, args.inflation), // the T17 explainer's "≈x% real"
   };
+}
+
+/* ── v1.7.0 B2 — the W1 cards' rate leg (chip task_e1ab8035) ───────────────
+      RATE vocabulary, not dollar basis: the Stress Test card's assumed-path
+      baseline + CP-21 "≈ x% real" clause, and the Earliest Retirement solver's
+      real rate + CP-31 clause. Pure (no hook, no store): both cards' figures
+      are pinned today's dollars by construction and never read the page
+      basis. UNFLOORED on purpose — a negative real return stays negative; the
+      solver's CP-39 verdict is reachability, never the sign of the rate. The
+      cards import THIS, never real-rate.ts (CONVERTER_ALLOWLIST 6 → 4). ──── */
+
+export interface RealRateView {
+  /** The exact Fisher real rate, unfloored — the solver / baseline input. */
+  realRate: number;
+  /** `≈ {formatPercent(realRate)} real` — the CP-21 / CP-31 clause, byte-exact. */
+  approxReal: string;
+}
+
+export function realRateView(nominalRate: number, inflation: number): RealRateView {
+  const realRate = realRateOfUnfloored(nominalRate, inflation);
+  return { realRate, approxReal: `≈ ${formatPercent(realRate)} real` };
 }

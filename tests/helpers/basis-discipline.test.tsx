@@ -463,3 +463,82 @@ describe('expectBasisDiscipline — W5.1 options (plumbing, not contract)', () =
     expect(() => expectBasisDiscipline(<Portaled />, ONE_INV, { root: document.body })).not.toThrow();
   });
 });
+
+/* ── v1.7.0 B2: a pinned figure's basis statement may live on a declared
+   ELEMENT (markTestId) when copy law keeps both the figure and its parent
+   bare — the Stress Test card's CP-10/11/16 rows vs its card-level CP-18
+   line. Opt-in, pinned-only; each `it` fails when its clause in
+   tests/helpers/basis-discipline.tsx is missing OR loosened (MARK / BOTH
+   BASES distinguish the arm's text and per-basis reads, not its absence). ── */
+
+function mkMarkedCard(markText: (b: DollarBasis) => string | null) {
+  return function MarkedCard() {
+    const [basis] = useDollarBasis(CALCULATORS_PAGE_ID);
+    const mark = markText(basis);
+    return (
+      <div>
+        <div>
+          <span data-testid="fig-far">$300</span>
+        </div>
+        {mark !== null && <p data-testid="basis-line">{mark}</p>}
+      </div>
+    );
+  };
+}
+const FAR_PINNED: BasisRegistry = {
+  figures: [{ testId: 'fig-far', cls: 'pinned', pinnedBasis: 'today', markTestId: 'basis-line' }],
+  charts: [],
+};
+const FAR_PINNED_UNLINKED: BasisRegistry = {
+  figures: [{ testId: 'fig-far', cls: 'pinned', pinnedBasis: 'today' }],
+  charts: [],
+};
+const CP18 = "All figures in today's dollars — the window's inflation is already taken out.";
+
+describe('expectBasisDiscipline — B2 markTestId (the statement is a declared element)', () => {
+  beforeEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
+
+  it('LINK: a bare pinned figure passes ONLY through markTestId — unlinked, the W5 node-or-parent rule still rejects it', () => {
+    const Card = mkMarkedCard(() => CP18);
+    expect(() => expectBasisDiscipline(<Card />, FAR_PINNED)).not.toThrow();
+    cleanup();
+    expect(() => expectBasisDiscipline(<Card />, FAR_PINNED_UNLINKED)).toThrow(
+      /fig-far\[0\]: pinned\(today\) mark missing in today render/,
+    );
+  });
+
+  it('MARK: the linked element must carry the pinnedBasis mark — a bare statement fails', () => {
+    const Bare = mkMarkedCard(() => 'All figures as recorded.');
+    expect(() => expectBasisDiscipline(<Bare />, FAR_PINNED)).toThrow(
+      /fig-far\[0\]: pinned\(today\) mark missing in today render/,
+    );
+  });
+
+  it('BOTH BASES: a statement that flips with the page fails in the future render', () => {
+    const Flipping = mkMarkedCard((b) => (b === 'today' ? "in today's dollars" : 'in future dollars'));
+    expect(() => expectBasisDiscipline(<Flipping />, FAR_PINNED)).toThrow(
+      /fig-far\[0\]: pinned\(today\) mark missing in future render/,
+    );
+  });
+
+  it('RENDERED: a linked element the fixture never renders throws', () => {
+    const Missing = mkMarkedCard(() => null);
+    expect(() => expectBasisDiscipline(<Missing />, FAR_PINNED)).toThrow(
+      /mark element "basis-line" for "fig-far" not rendered by the fixture/,
+    );
+  });
+
+  it('CONTRACT: markTestId on a non-pinned figure throws (it is a pinned-figure option)', () => {
+    const Card = mkMarkedCard(() => CP18);
+    expect(() =>
+      expectBasisDiscipline(<Card />, {
+        figures: [{ testId: 'fig-far', cls: 'invariant', markTestId: 'basis-line' }],
+        charts: [],
+      }),
+    ).toThrow(/fig-far: markTestId is a pinned-figure option/);
+  });
+});

@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
 // W-I: the house recharts mock (verbatim from the two *.history.test.tsx
@@ -42,6 +42,7 @@ vi.mock('recharts', () => ({
   ),
 }));
 
+import { screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../../helpers/basis-discipline';
 import {
@@ -56,6 +57,15 @@ import {
   PATH_TO_FI_BASIS_CHARTS,
   PATH_TO_FI_HISTORY_BASIS_CHARTS,
 } from '@/pages/calculators/PathToFiCard';
+import {
+  StressTestCard,
+  STRESS_TEST_BASIS_FIGURES,
+  STRESS_TEST_BASIS_CHARTS,
+} from '@/pages/calculators/StressTestCard';
+import {
+  EarliestRetirementCard,
+  RETIREMENT_AGE_BASIS_FIGURES,
+} from '@/pages/calculators/EarliestRetirementCard';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
@@ -134,7 +144,7 @@ function resetStores() {
 
 /** PathToFiCard.test.tsx's `primeStores` + `primeScoped` (person scope, so ALL
  *  five registered figures — the two exclusion figures included — render). */
-function primeScoped() {
+function primeScoped(opts: { bobPortfolio?: number; bobContribution?: number } = {}) {
   useHouseholdStore.setState({
     household: {
       filingStatus: FilingStatus.SINGLE,
@@ -159,7 +169,7 @@ function primeScoped() {
   useSnapshotsStore.setState({
     snapshots: [
       { accountId: 1, snapshotDate: '2026-04-01', totalValue: 100_000 },
-      { accountId: 2, snapshotDate: '2026-04-01', totalValue: 40_000 },
+      { accountId: 2, snapshotDate: '2026-04-01', totalValue: opts.bobPortfolio ?? 40_000 },
       { accountId: 3, snapshotDate: '2026-04-01', totalValue: 8_000 },
     ].map((s, i) => ({
       id: i + 1,
@@ -182,7 +192,7 @@ function primeScoped() {
   });
   useContributionsStore.setState({
     contributions: [
-      { id: 1, accountId: 2, personId: 2, date: '2026-04-15', amount: 1_200, source: ContributionSource.MANUAL },
+      { id: 1, accountId: 2, personId: 2, date: '2026-04-15', amount: opts.bobContribution ?? 1_200, source: ContributionSource.MANUAL },
       { id: 2, accountId: 3, personId: null, date: '2026-04-20', amount: 600, source: ContributionSource.MANUAL },
       { id: 3, accountId: 1, personId: 1, date: '2026-04-25', amount: 500, source: ContributionSource.MANUAL },
     ],
@@ -274,6 +284,98 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
         <PathToFiCard cardId="path-to-fi" />
       </MemoryRouter>,
       { figures: PATH_TO_FI_BASIS_FIGURES, charts: PATH_TO_FI_HISTORY_BASIS_CHARTS },
+    );
+  });
+
+  /* ── B2: the two W1 cards — PINNED today's dollars by construction (the
+        stress replay is real, CP-18; the solver's target is today's expenses
+        ÷ SWR, CP-31). Byte-identical in both page bases; the copy-law rows
+        point at their card-level basis line through markTestId. Scoped
+        fixtures, so the exclusions lines render and every registered figure
+        is present (the PathToFi sweep's rule). ───────────────────────────── */
+
+  it('StressTestCard (scoped, accepted): replay rows + baseline pinned today via CP-18; year-0 inputs invariant; the replay chart rows never re-inflate', () => {
+    primeScoped(); // Bob $40k, $1,200/yr — 1929 · KEEP · 75/25: three down years, never outpaced
+    syncCalcScope(2);
+    localStorage.clear(); // no last Backtest run → the 75/25 default (CP-7)
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: DISCLOSURES.backtest.version },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <StressTestCard cardId="stress-test" />
+      </MemoryRouter>,
+      { figures: STRESS_TEST_BASIS_FIGURES, charts: STRESS_TEST_BASIS_CHARTS },
+    );
+  });
+
+  /* ── B2 review (MINOR 0): the default sweep renders ONE state. Two landed
+        states render a different subset — the single-year 2022 window plots
+        one point (below the two-point chart gate) and says CP-14's data-ends
+        line; the contributions-outpaced state (CP-15 / DP-15) omits the
+        recovery row. Each gets its own completeness scan, with a state guard
+        so the fixture cannot drift back to a state the default sweep covers. ── */
+
+  const acceptBacktest = () =>
+    useAcceptancesStore.setState({
+      acceptedVersions: { backtest: DISCLOSURES.backtest.version },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
+
+  it('StressTestCard, single-year 2022 window (CP-14; chartless): every registered figure keeps its class; no unregistered $ renders', () => {
+    primeScoped(); // Bob $40k, $1,200/yr — 2022 · KEEP · 75/25: a down year, never outpaced
+    syncCalcScope(2);
+    localStorage.clear(); // the 75/25 default (CP-7)
+    sessionStorage.setItem('calc-window:stress-test', 'inflation-2022');
+    acceptBacktest();
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <StressTestCard cardId="stress-test" />
+      </MemoryRouter>,
+      { figures: STRESS_TEST_BASIS_FIGURES, charts: [] }, // one plotted point — no chart renders
+    );
+    // state guard: the 2022 window, chartless, saying the CP-14 data-ends line
+    expect(screen.getByRole('radio', { name: 'The 2022 inflation shock 2022' })).toBeChecked();
+    expect(screen.queryByTestId('stress-test-chart')).not.toBeInTheDocument();
+    expect(screen.getByTestId('stress-recovery')).toHaveTextContent(
+      'Not back to its starting value by 2022, where the bundled data ends.',
+    );
+  });
+
+  it('StressTestCard, contributions outpaced (CP-15 / DP-15): the recovery row is omitted, the rest keep their classes; the marker-less replay chart rows never re-inflate', () => {
+    primeScoped({ bobContribution: 40_000 }); // $40,000/yr on Bob's $40k outpaces the 1929 window's losses
+    syncCalcScope(2);
+    localStorage.clear();
+    acceptBacktest();
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <StressTestCard cardId="stress-test" />
+      </MemoryRouter>,
+      {
+        figures: STRESS_TEST_BASIS_FIGURES.filter((f) => f.testId !== 'stress-recovery'), // DP-15 omits it
+        charts: STRESS_TEST_BASIS_CHARTS,
+      },
+    );
+    // state guard: the outpaced sentence replaces the CP-10 dollars, and the recovery row is gone
+    expect(screen.getByTestId('stress-test-trough')).toHaveTextContent(
+      "Never below its starting value at a year-end — contributions outpaced this window's losses.",
+    );
+    expect(screen.queryByTestId('stress-recovery')).not.toBeInTheDocument();
+  });
+
+  it('EarliestRetirementCard (scoped, age found): criterion + probe rows pinned today (the criterion states the basis); contributions + exclusions invariant', () => {
+    primeScoped({ bobPortfolio: 400_000 }); // Bob's plan HOLDS (t ≈ 43.6 → age 80 ≤ 90) — the full bisection renders
+    syncCalcScope(2);
+    expectBasisDiscipline(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <EarliestRetirementCard cardId="retirement-age" />
+      </MemoryRouter>,
+      { figures: RETIREMENT_AGE_BASIS_FIGURES, charts: [] },
     );
   });
 });

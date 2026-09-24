@@ -9,7 +9,7 @@
  * render ungated.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -19,22 +19,31 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
 import { StressTestCard, chartEndYear } from '@/pages/calculators/StressTestCard';
+import { datasetReplayRows, replayWindow } from '@/lib/backtest/replay';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { CALCULATORS_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 // DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
 // the chart's marker CONTRACT is pinned at the prop boundary. The smoke fix
-// adds the SERIES contract (which years are plotted) at the same boundary.
+// adds the SERIES contract (which years are plotted) at the same boundary;
+// the B2 review adds the VALUES plotted (`data-balances`) — the sweep's rows
+// hook pins cross-basis identity only, so a basis-independent re-inflation of
+// the plotted balances is caught here or nowhere.
 // No other test in this file reads the chart's internals.
 vi.mock('@/components/charts/InlineChart', () => ({
   InlineChart: ({
     testId,
+    label,
+    labelTestId,
     markers,
     data,
   }: {
     testId?: string;
+    label?: string;
+    labelTestId?: string;
     markers?: Array<{ x: number | string; y: number; color: string }>;
     data?: Array<{ [key: string]: number | string }>;
   }) => (
@@ -42,7 +51,10 @@ vi.mock('@/components/charts/InlineChart', () => ({
       data-testid={testId}
       data-markers={JSON.stringify(markers ?? [])}
       data-years={JSON.stringify((data ?? []).map((p) => p.year))}
-    />
+      data-balances={JSON.stringify((data ?? []).map((p) => p.balance))}
+    >
+      {label != null && <div data-testid={labelTestId}>{label}</div>}
+    </div>
   ),
 }));
 
@@ -52,6 +64,10 @@ function chartMarkers(): Array<{ x: number; y: number; color: string }> {
 
 function chartYears(): number[] {
   return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-years')!);
+}
+
+function chartBalances(): number[] {
+  return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-balances')!);
 }
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -582,6 +598,44 @@ describe('chart series is a VIEW of the replay, clipped at the recovery (smoke f
     expect(years).toContain(recovery.x);
   });
 
+  it('B2 review: the DEFAULT state plots the replay year-ends BY VALUE — the literal 1929–1932 rows, exactly result.yearEnds', () => {
+    // The literal year-ends of the default-state pin above (1929 $106,181.39 ·
+    // 1930 $107,006.19 · 1931 $90,195.78 trough · 1932 $109,478.57): the
+    // plotted rows are the real replay itself, never re-inflated for the chart.
+    renderCard(); // depression-1929 · KEEP · 75/25 · $100k · $12k/yr
+    const balances = chartBalances();
+    expect(chartYears()).toEqual([1929, 1930, 1931, 1932]);
+    expect(balances).toHaveLength(4);
+    [106_181.39, 107_006.19, 90_195.78, 109_478.57].forEach((v, i) => expect(balances[i]).toBeCloseTo(v, 2));
+    // …and byte-for-byte the replay's own year-ends (no transform on the way to the chart).
+    const replay = replayWindow({
+      startBalance: 100_000,
+      annualContribution: 12_000,
+      span: { startYear: 1929, endYear: 1931 },
+      rows: datasetReplayRows(0.75),
+    });
+    expect(balances).toEqual(replay.yearEnds.filter((y) => y.year <= 1932).map((y) => y.balance));
+    // the destructive marker sits ON the plotted trough point
+    const [trough] = chartMarkers();
+    expect(balances[chartYears().indexOf(trough.x)]).toBe(trough.y);
+  });
+
+  it('B2 review: the 1970s Portfolio-only state plots the literal trough, window-end and recovery balances', () => {
+    // The literal anchors of the trough ≠ end pin: 1973 $80,949.27 · 1974
+    // $61,692.11 (the trough) · 1981 $67,355.49 (the window end) · 1984
+    // $102,431.29 (the recovery) — the plotted values, not only the markers.
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 1970s inflation run');
+    const years = chartYears();
+    const balances = chartBalances();
+    const at = (year: number) => balances[years.indexOf(year)];
+    expect(at(1973)).toBeCloseTo(80_949.27, 2);
+    expect(at(1974)).toBeCloseTo(61_692.11, 2);
+    expect(at(1981)).toBeCloseTo(67_355.49, 2);
+    expect(at(1984)).toBeCloseTo(102_431.29, 2);
+  });
+
   it('the 2022 window clips to the single point it already is — below the two-point chart gate', () => {
     expect(chartEndYear({ startYear: 2022, endYear: 2022 }, null, 2022)).toBe(2022);
     renderCard();
@@ -664,6 +718,10 @@ describe('chips + persistence + provenance', () => {
     renderCard();
     expect(screen.getByRole('radio', { name: 'The 2008 crash 2008' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Portfolio only' })).toHaveAttribute('aria-pressed', 'true');
+    // B2 review: the group's accessible name (SegmentedControl's `label`) is pinned here, on the consumer.
+    expect(screen.getByRole('group', { name: 'Stress mode' })).toContainElement(
+      screen.getByRole('button', { name: 'Portfolio only' }),
+    );
     expect(sessionStorage.getItem('calc-window:stress-test')).toBe('gfc-2008');
     expect(sessionStorage.getItem('calc-mode:stress-test')).toBe('PORTFOLIO');
     // view-state is not an override: no blaze dot, no RailReset
@@ -710,5 +768,60 @@ describe('empty + scoped states', () => {
   it('person scope renders the CP-27 exclusions line', () => {
     renderScopedCard();
     expect(screen.getByTestId('stress-test-scope-exclusions')).toHaveTextContent(/stress test counts only/);
+  });
+});
+
+/* ── B2: the boundary leg + the W5 registration. NO figure moves — the
+   registered nodes carry exactly the literals the getByText pins above read. ── */
+describe('B2 — boundary leg + registration (no figure moves)', () => {
+  afterEach(() => __resetDollarBasisForTests());
+
+  const dotcomPortfolioOnly = () => {
+    renderCard();
+    setStockPct(100);
+    clickMode('Portfolio only');
+    clickChip('The dot-com crash');
+  };
+
+  it('the registered nodes carry the SAME CP-10/11/16 figures the pins above read; CP-18 is the mark element', () => {
+    dotcomPortfolioOnly();
+    expect(screen.getByTestId('stress-test-trough')).toHaveTextContent('$60,858 in 2002 · −39.1% vs start');
+    expect(screen.getByTestId('stress-test-window-end')).toHaveTextContent('$60,858 · −39.1% vs start');
+    expect(screen.getByTestId('stress-test-baseline')).toHaveTextContent(
+      '$108,995 assumed · $60,858 replayed · gap −$48,136',
+    );
+    expect(screen.getByTestId('stress-test-basis-line')).toHaveTextContent(
+      "All figures in today's dollars — the window's inflation is already taken out.",
+    );
+  });
+
+  it("CR-B2-1: the chart caption names the pinned basis in the house short register — Window replay (today's $)", () => {
+    renderCard(); // default 1929 state renders the chart
+    expect(screen.getByTestId('stress-test-chart-caption')).toHaveTextContent("Window replay (today's $)");
+  });
+
+  it('NOMINAL ANTI-PIN: the baseline compounds the REAL rate — the nominal-rate figures never render', () => {
+    // 100000 · 1.06^3 = $119,101.60 (nominal) vs the pinned $108,995 (3/103 real, CP-16 pin above);
+    // a helper phrasing the nominal rate would read "≈ 6% real" (CP-21 pins "≈ 2.9% real").
+    dotcomPortfolioOnly();
+    expect(screen.queryByText(/\$119,102/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/≈ 6% real/)).not.toBeInTheDocument();
+    expect(screen.getByText(/≈ 2\.9% real/)).toBeInTheDocument();
+  });
+
+  it('a page-basis flip leaves every stress figure byte-identical (pinned today, never page-flipped)', () => {
+    dotcomPortfolioOnly();
+    const ids = [
+      'stress-test-headline',
+      'stress-test-meaning',
+      'stress-test-trough',
+      'stress-test-window-end',
+      'stress-test-baseline',
+      'stress-recovery',
+      'stress-test-chart-caption',
+    ];
+    const before = ids.map((id) => screen.getByTestId(id).textContent);
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(ids.map((id) => screen.getByTestId(id).textContent)).toEqual(before);
   });
 });

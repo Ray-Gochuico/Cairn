@@ -1,8 +1,7 @@
 import { cn } from '@/lib/utils';
 import type { Person } from '@/types/schema';
-
-const BTN_BASE = 'px-2 py-0.5 text-xs transition-colors';
-const BTN_ACTIVE = 'bg-primary text-primary-foreground';
+// B2 (D-B2-9): the shared class pair; the person-list render stays (values are number | null).
+import { SEG_BTN_ACTIVE, SEG_BTN_BASE, SEG_GROUP } from '@/components/ui/segmented-control';
 
 interface EarnerSelectProps {
   /** ELIGIBLE persons only — the caller filters (all persons for bonus /
@@ -36,13 +35,13 @@ export function EarnerSelect({
 }: EarnerSelectProps) {
   if (persons.length < 2) return null;
   return (
-    <div role="group" aria-label={label} className="inline-flex rounded border overflow-hidden">
+    <div role="group" aria-label={label} className={SEG_GROUP}>
       {includeCombined && (
         <button
           type="button"
           aria-pressed={selectedId === null}
           onClick={() => onChange(null)}
-          className={cn(BTN_BASE, selectedId === null ? BTN_ACTIVE : '')}
+          className={cn(SEG_BTN_BASE, selectedId === null ? SEG_BTN_ACTIVE : '')}
         >
           {combinedLabel}
         </button>
@@ -53,7 +52,7 @@ export function EarnerSelect({
           type="button"
           aria-pressed={p.id === selectedId}
           onClick={() => onChange(p.id!)}
-          className={cn(BTN_BASE, (i > 0 || includeCombined) && 'border-l', p.id === selectedId ? BTN_ACTIVE : '')}
+          className={cn(SEG_BTN_BASE, (i > 0 || includeCombined) && 'border-l', p.id === selectedId ? SEG_BTN_ACTIVE : '')}
         >
           {p.name}
         </button>
