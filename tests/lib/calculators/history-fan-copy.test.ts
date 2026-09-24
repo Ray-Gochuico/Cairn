@@ -18,14 +18,16 @@ import {
 import { TODAY_SUFFIX } from '@/lib/calculators/basis-view';
 
 describe('history-fan copy contract (byte-exact)', () => {
-  it('CH-1 KEEP holds line', () => {
+  it('CH-1 KEEP holds line — amended by B3 to name the CHART horizon it counts over (D-P6: not the rail input)', () => {
     expect(holdsLineKeep({ H: 30, J: 63, M: 123 })).toBe(
-      'Reached the target within 30 years in 63 of the 123 full 30-year stretches since 1871 — a count of past stretches, not a probability.',
+      "Reached the target within the chart's 30-year horizon in 63 of the 123 full 30-year stretches since 1871 — a count of past stretches, not a probability.",
     );
-    // H=1 plural variant:
+    // H=1: the "{H}-year" compound is invariant, so no singular/plural fork remains in CH-1.
     expect(holdsLineKeep({ H: 1, J: 40, M: 152 })).toBe(
-      'Reached the target within 1 year in 40 of the 152 full 1-year stretches since 1871 — a count of past stretches, not a probability.',
+      "Reached the target within the chart's 1-year horizon in 40 of the 152 full 1-year stretches since 1871 — a count of past stretches, not a probability.",
     );
+    // The retired W2 shape never returns.
+    expect(holdsLineKeep({ H: 30, J: 63, M: 123 })).not.toContain('within 30 years');
   });
   it('CH-2 STOP holds line names "without further contributions"', () => {
     expect(holdsLineStop({ H: 30, J: 63, M: 123 })).toBe(
