@@ -11,6 +11,7 @@ import {
   monthlyReturnFromAnnualWithFrequency,
   type LoanMonthlyContext,
 } from './apply-real';
+import { resolveExpenseBase } from './expense-base';
 import { CompoundingFrequency } from '@/types/enums';
 import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
@@ -602,18 +603,13 @@ function stepMonth(
     real.vehicleLeases ?? [],
     `${monthISO}-15`,
   );
-  // Feature B — the recurring monthly base BEFORE additive period overlays.
-  // custom → customMonthly verbatim; data modes → the figure precomputed on
-  // RealState.expenseBasis at capture. `?? 0` keeps legacy fixtures that
-  // pre-date expenseBasis (and the back-compat custom/0 default) at a 0 base —
-  // byte-identical to the pre-Feature-B engine. The base is added INSIDE the
-  // same *inflationFactor term so it inflates exactly like periods + obligations.
-  const expenseSource =
-    (payload as { expenseSource?: 'latestMonth' | 'rolling12m' | 'custom' }).expenseSource ?? 'custom';
-  const expenseBase =
-    expenseSource === 'custom'
-      ? ((payload as { customMonthly?: number }).customMonthly ?? 0)
-      : (real.expenseBasis?.[expenseSource] ?? 0);
+  // Feature B — the recurring monthly base BEFORE additive period overlays,
+  // resolved by the ONE shared resolver (expense-base.ts, C2): custom →
+  // customMonthly verbatim; data modes → RealState.expenseBasis; `?? 0` keeps
+  // legacy fixtures and the back-compat custom/0 default at a 0 base. The base
+  // is added INSIDE the same *inflationFactor term so it inflates exactly like
+  // periods + obligations.
+  const expenseBase = resolveExpenseBase(payload, real.expenseBasis);
   s.expenses = (expenseBase + periodDelta + obligationDelta) * inflationFactor;
 
   // 5. Debt servicing
