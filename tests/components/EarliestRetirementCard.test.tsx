@@ -619,3 +619,49 @@ describe('B2 — boundary leg + registration (no figure moves)', () => {
     expect(ids.map((id) => screen.getByTestId(id).textContent)).toEqual(before);
   });
 });
+
+/* B3 (R4 ruling 7): the card's ageNow is the LOCAL calendar day. Snapshots are
+   dated BEFORE the instant because buildScenarioDefaults takes the latest
+   snapshot on or before todayIso; no contributions so nothing is future-dated. */
+describe('EarliestRetirementCard — ageNow reads the LOCAL calendar day (B3)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Los Angeles at 03:00Z on Jan 1: Alice (b. 1990-01-01) is still 35 — already-holds prints the age', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 2_000_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByTestId('retirement-age-headline')).toHaveTextContent('Now');
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      'the target is already met at age 35 — nothing left to solve.', // the UTC-day shape printed 36
+    );
+  });
+
+  it('Auckland at the same instant: Jan 1 locally — 36', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 2_000_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByTestId('retirement-age-meaning')).toHaveTextContent(
+      'the target is already met at age 36 — nothing left to solve.',
+    );
+  });
+});

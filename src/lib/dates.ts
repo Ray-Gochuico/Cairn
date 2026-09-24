@@ -20,12 +20,27 @@ export function currentAgeAsOf(dob: string, today: Date): number {
 }
 
 /**
- * Compute current age in whole years from an ISO date-of-birth string,
- * as-of the process clock. Thin delegate over `currentAgeAsOf` so the
- * UTC-boundary logic lives in exactly one place.
+ * The UTC-noon instant of a LOCAL calendar day ('YYYY-MM-DD') — the ONE bridge
+ * from a local day into helpers that read UTC accessors (`currentAgeAsOf`).
+ * Noon, so no zone offset (±14 h) can move the instant off the day (B3).
  */
-export function currentAge(dob: string): number {
-  return currentAgeAsOf(dob, new Date());
+export function utcNoonOf(isoDay: string): Date {
+  return new Date(`${isoDay}T12:00:00Z`);
+}
+
+/**
+ * Age in whole years as of the LOCAL calendar day (B3, v1.7.0 — R4 design
+ * review ruling 7). Derives the local day (`localTodayISO`) and bridges it at
+ * UTC noon into `currentAgeAsOf`, so the DOB side (UTC midnight) and the as-of
+ * side (UTC noon) compare on one calendar with no T6 regression. The previous
+ * shape passed the wall-clock instant straight through, i.e. read the UTC day
+ * — the neighbouring day between local midnight and UTC midnight — so a
+ * birthday ticked a day early east of Greenwich and a day late west of it,
+ * and the calculators' age could disagree with the interview kernel's
+ * local-day age. `now` is injectable for tests; production callers omit it.
+ */
+export function currentAge(dob: string, now: Date = new Date()): number {
+  return currentAgeAsOf(dob, utcNoonOf(localTodayISO(now)));
 }
 
 /**

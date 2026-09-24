@@ -938,3 +938,44 @@ describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D
     ).toBeInTheDocument();
   });
 });
+
+/* B3 (R4 ruling 7): the rail's years-to-retirement default follows the LOCAL
+   calendar-day age. basePerson retires at 65 and is born 1990-01-01. */
+describe('PathToFiCard — the years-to-retirement default reads the LOCAL calendar day (B3)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Los Angeles at 03:00Z on Jan 1: age 35 → 30 years to retirement (the UTC-day shape: 29)', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(30);
+  });
+
+  it('Auckland at the same instant: age 36 → 29', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    primeStores({
+      snapshotValues: [{ accountId: 1, snapshotDate: '2025-12-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(29);
+  });
+});

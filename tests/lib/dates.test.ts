@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { currentAge, currentAgeAsOf, localTodayISO, dateFromLocalISO } from '@/lib/dates';
+import { currentAge, currentAgeAsOf, localTodayISO, dateFromLocalISO, utcNoonOf } from '@/lib/dates';
 
 describe('localTodayISO', () => {
   it('formats a passed Date by LOCAL parts, not UTC', () => {
@@ -24,6 +24,7 @@ describe('currentAge', () => {
     vi.useRealTimers();
   });
 
+  // Instants at 12:00Z so the LOCAL calendar day (B3) is the same day from UTC−11 to UTC+11.
   it('returns the difference in calendar years when birthday has passed', () => {
     vi.setSystemTime(new Date('2026-06-15'));
     // Born 1990-01-01; on 2026-06-15 the birthday already passed -> 36
@@ -37,7 +38,7 @@ describe('currentAge', () => {
   });
 
   it('returns the new age when birthday is exactly today', () => {
-    vi.setSystemTime(new Date('2026-06-15'));
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
     // Born 1990-06-15; birthday is today -> 36
     expect(currentAge('1990-06-15')).toBe(36);
   });
@@ -54,32 +55,57 @@ describe('currentAge', () => {
   });
 
   it('handles a baby born today (age 0)', () => {
-    vi.setSystemTime(new Date('2026-05-14'));
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
     expect(currentAge('2026-05-14')).toBe(0);
   });
 
-  // T6 Fix-5: YYYY-MM-DD DOB must be parsed as UTC midnight so that a UTC-negative
-  // timezone never shifts a Jan-1 birthday into Dec-31 of the prior year and
-  // produces an off-by-one age.
-  //
-  // Concrete failure scenario (EST / UTC-5):
-  //   now  = 2025-12-31T23:30Z  (Dec 31 UTC, which is still Dec 31 EST too)
-  //   born = 1990-01-01         = UTC midnight → local December 31 in UTC-5
-  // Buggy code: birth.getFullYear() via local parse gives 1989 (shifted to Dec 31),
-  //   now.getFullYear() = 2025, year-diff = 36. But birthday is Jan 1 and it's still
-  //   Dec 31 UTC → age should be 35 (birthday not yet occurred).
-  it('T6 UTC: Jan-1 DOB does not compute age one year high on Dec-31 UTC', () => {
-    // "now" is Dec 31 2025 UTC 23:30.
-    vi.setSystemTime(new Date('2025-12-31T23:30:00Z'));
-    // Born 1990-01-01 UTC. Birthday hasn't occurred yet (still Dec 31 UTC).
-    // Correct age = 35. Buggy (local) code gives 36.
-    expect(currentAge('1990-01-01')).toBe(35);
-  });
+  /* B3 (v1.7.0, R4 design review ruling 7): age is as of the LOCAL calendar day,
+     bridged at UTC noon into currentAgeAsOf's UTC accessors. The T6 fix (DOB
+     parsed as UTC midnight) is kept: a Jan-1 birthday still never reads a year
+     high because the DOB side is UTC and the as-of side is UTC noon of the local
+     day. The pre-B3 shape read the wall-clock instant's UTC day, which is the
+     NEIGHBOURING day between local midnight and UTC midnight — every evening
+     west of Greenwich, every morning east of it. Zone arms below; the machine
+     zone alone cannot prove either direction. */
+  describe('reads the LOCAL calendar day (B3) — zone arms', () => {
+    const ORIGINAL_TZ = process.env.TZ;
+    afterEach(() => {
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
 
-  it('T6 UTC: Jan-1 DOB gives correct age on the exact birthday (Jan 1 UTC)', () => {
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-    // On Jan 1 2026 UTC, person born 1990-01-01 UTC turns 36.
-    expect(currentAge('1990-01-01')).toBe(36);
+    // 2026-01-01T03:00Z is Dec 31 19:00 in Los Angeles and Jan 1 16:00 in Auckland (NZDT, UTC+13).
+    it('Los Angeles at 03:00Z on Jan 1: still Dec 31 locally — the Jan-1 birthday has NOT happened (35; the UTC-day shape said 36)', () => {
+      process.env.TZ = 'America/Los_Angeles';
+      vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+      expect(currentAge('1990-01-01')).toBe(35);
+    });
+
+    it('Auckland at the same instant: Jan 1 locally — 36', () => {
+      process.env.TZ = 'Pacific/Auckland';
+      vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+      expect(currentAge('1990-01-01')).toBe(36);
+    });
+
+    // 2025-12-31T23:30Z (the old T6 instant) is Dec 31 15:30 in Los Angeles and Jan 1 12:30 in Auckland.
+    it('Auckland at 23:30Z on Dec 31: Jan 1 locally — 36 (the UTC-day shape said 35)', () => {
+      process.env.TZ = 'Pacific/Auckland';
+      vi.setSystemTime(new Date('2025-12-31T23:30:00Z'));
+      expect(currentAge('1990-01-01')).toBe(36);
+    });
+
+    it('Los Angeles at 23:30Z on Dec 31: Dec 31 locally — 35 (unchanged from T6)', () => {
+      process.env.TZ = 'America/Los_Angeles';
+      vi.setSystemTime(new Date('2025-12-31T23:30:00Z'));
+      expect(currentAge('1990-01-01')).toBe(35);
+    });
+
+    it('injectable now: the birthday at 12:00Z reads the new age in both zones', () => {
+      process.env.TZ = 'Pacific/Auckland';
+      expect(currentAge('1990-06-15', new Date('2026-06-15T12:00:00Z'))).toBe(36);
+      process.env.TZ = 'America/Los_Angeles';
+      expect(currentAge('1990-06-15', new Date('2026-06-15T12:00:00Z'))).toBe(36);
+    });
   });
 });
 
@@ -119,5 +145,15 @@ describe('currentAgeAsOf', () => {
 
   it('UTC: Jan-1 DOB is correct on the exact birthday (Jan 1 UTC)', () => {
     expect(currentAgeAsOf('1990-01-01', new Date('2026-01-01T00:00:00Z'))).toBe(36);
+  });
+});
+
+describe('utcNoonOf (B3 — the one bridge from a local day into UTC-accessor helpers)', () => {
+  it('returns the UTC-noon instant of the day, so no zone offset (±14 h) can move it off the day', () => {
+    const d = utcNoonOf('2026-01-31');
+    expect(d.toISOString()).toBe('2026-01-31T12:00:00.000Z');
+    expect([d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours()]).toEqual([2026, 0, 31, 12]);
+    // Round trip with currentAgeAsOf: the DOB day itself is a birthday.
+    expect(currentAgeAsOf('1990-01-31', d)).toBe(36);
   });
 });
