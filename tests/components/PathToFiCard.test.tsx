@@ -576,6 +576,10 @@ describe('PathToFiCard — Stop today (Coast mode)', () => {
       'aria-pressed',
       'true',
     );
+    // B2 review: the group's accessible name (SegmentedControl's `label`) is pinned here, on the consumer.
+    expect(screen.getByRole('group', { name: 'Path mode' })).toContainElement(
+      screen.getByRole('button', { name: /stop today/i }),
+    );
   });
 
   it('caps headline at 100%+ when the portfolio already exceeds the coast amount', async () => {

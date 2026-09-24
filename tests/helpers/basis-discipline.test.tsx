@@ -467,8 +467,9 @@ describe('expectBasisDiscipline — W5.1 options (plumbing, not contract)', () =
 /* ── v1.7.0 B2: a pinned figure's basis statement may live on a declared
    ELEMENT (markTestId) when copy law keeps both the figure and its parent
    bare — the Stress Test card's CP-10/11/16 rows vs its card-level CP-18
-   line. Opt-in, pinned-only; each `it` fails if — and only if — its clause
-   is missing from tests/helpers/basis-discipline.tsx. ─────────────────── */
+   line. Opt-in, pinned-only; each `it` fails when its clause in
+   tests/helpers/basis-discipline.tsx is missing OR loosened (MARK / BOTH
+   BASES distinguish the arm's text and per-basis reads, not its absence). ── */
 
 function mkMarkedCard(markText: (b: DollarBasis) => string | null) {
   return function MarkedCard() {

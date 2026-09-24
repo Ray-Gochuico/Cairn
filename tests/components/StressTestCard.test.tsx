@@ -19,6 +19,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
 import { StressTestCard, chartEndYear } from '@/pages/calculators/StressTestCard';
+import { datasetReplayRows, replayWindow } from '@/lib/backtest/replay';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import { DISCLOSURES } from '@/legal/disclosures';
@@ -27,7 +28,10 @@ import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 // DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
 // the chart's marker CONTRACT is pinned at the prop boundary. The smoke fix
-// adds the SERIES contract (which years are plotted) at the same boundary.
+// adds the SERIES contract (which years are plotted) at the same boundary;
+// the B2 review adds the VALUES plotted (`data-balances`) — the sweep's rows
+// hook pins cross-basis identity only, so a basis-independent re-inflation of
+// the plotted balances is caught here or nowhere.
 // No other test in this file reads the chart's internals.
 vi.mock('@/components/charts/InlineChart', () => ({
   InlineChart: ({
@@ -47,6 +51,7 @@ vi.mock('@/components/charts/InlineChart', () => ({
       data-testid={testId}
       data-markers={JSON.stringify(markers ?? [])}
       data-years={JSON.stringify((data ?? []).map((p) => p.year))}
+      data-balances={JSON.stringify((data ?? []).map((p) => p.balance))}
     >
       {label != null && <div data-testid={labelTestId}>{label}</div>}
     </div>
@@ -59,6 +64,10 @@ function chartMarkers(): Array<{ x: number; y: number; color: string }> {
 
 function chartYears(): number[] {
   return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-years')!);
+}
+
+function chartBalances(): number[] {
+  return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-balances')!);
 }
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -589,6 +598,44 @@ describe('chart series is a VIEW of the replay, clipped at the recovery (smoke f
     expect(years).toContain(recovery.x);
   });
 
+  it('B2 review: the DEFAULT state plots the replay year-ends BY VALUE — the literal 1929–1932 rows, exactly result.yearEnds', () => {
+    // The literal year-ends of the default-state pin above (1929 $106,181.39 ·
+    // 1930 $107,006.19 · 1931 $90,195.78 trough · 1932 $109,478.57): the
+    // plotted rows are the real replay itself, never re-inflated for the chart.
+    renderCard(); // depression-1929 · KEEP · 75/25 · $100k · $12k/yr
+    const balances = chartBalances();
+    expect(chartYears()).toEqual([1929, 1930, 1931, 1932]);
+    expect(balances).toHaveLength(4);
+    [106_181.39, 107_006.19, 90_195.78, 109_478.57].forEach((v, i) => expect(balances[i]).toBeCloseTo(v, 2));
+    // …and byte-for-byte the replay's own year-ends (no transform on the way to the chart).
+    const replay = replayWindow({
+      startBalance: 100_000,
+      annualContribution: 12_000,
+      span: { startYear: 1929, endYear: 1931 },
+      rows: datasetReplayRows(0.75),
+    });
+    expect(balances).toEqual(replay.yearEnds.filter((y) => y.year <= 1932).map((y) => y.balance));
+    // the destructive marker sits ON the plotted trough point
+    const [trough] = chartMarkers();
+    expect(balances[chartYears().indexOf(trough.x)]).toBe(trough.y);
+  });
+
+  it('B2 review: the 1970s Portfolio-only state plots the literal trough, window-end and recovery balances', () => {
+    // The literal anchors of the trough ≠ end pin: 1973 $80,949.27 · 1974
+    // $61,692.11 (the trough) · 1981 $67,355.49 (the window end) · 1984
+    // $102,431.29 (the recovery) — the plotted values, not only the markers.
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 1970s inflation run');
+    const years = chartYears();
+    const balances = chartBalances();
+    const at = (year: number) => balances[years.indexOf(year)];
+    expect(at(1973)).toBeCloseTo(80_949.27, 2);
+    expect(at(1974)).toBeCloseTo(61_692.11, 2);
+    expect(at(1981)).toBeCloseTo(67_355.49, 2);
+    expect(at(1984)).toBeCloseTo(102_431.29, 2);
+  });
+
   it('the 2022 window clips to the single point it already is — below the two-point chart gate', () => {
     expect(chartEndYear({ startYear: 2022, endYear: 2022 }, null, 2022)).toBe(2022);
     renderCard();
@@ -671,6 +718,10 @@ describe('chips + persistence + provenance', () => {
     renderCard();
     expect(screen.getByRole('radio', { name: 'The 2008 crash 2008' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Portfolio only' })).toHaveAttribute('aria-pressed', 'true');
+    // B2 review: the group's accessible name (SegmentedControl's `label`) is pinned here, on the consumer.
+    expect(screen.getByRole('group', { name: 'Stress mode' })).toContainElement(
+      screen.getByRole('button', { name: 'Portfolio only' }),
+    );
     expect(sessionStorage.getItem('calc-window:stress-test')).toBe('gfc-2008');
     expect(sessionStorage.getItem('calc-mode:stress-test')).toBe('PORTFOLIO');
     // view-state is not an override: no blaze dot, no RailReset

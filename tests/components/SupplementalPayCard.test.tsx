@@ -172,6 +172,10 @@ describe('SupplementalPayCard — shell', () => {
     primeStores();
     renderCard();
     expect(screen.getByRole('button', { name: 'Bonus' })).toHaveAttribute('aria-pressed', 'true');
+    // B2 review: the group's accessible name (SegmentedControl's `label`) is pinned here, on the consumer.
+    expect(screen.getByRole('group', { name: 'Pay type' })).toContainElement(
+      screen.getByRole('button', { name: 'Bonus' }),
+    );
     await toCommission();
     expect(screen.getByRole('button', { name: 'Commission' })).toHaveAttribute(
       'aria-pressed',

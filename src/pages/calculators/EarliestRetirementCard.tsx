@@ -54,7 +54,9 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
   const noTarget = targetFv <= 0 || engine.monthlyExpenses <= 0; // PathToFi's predicate
   const moderate = pickModerateEntry(scenarioList);
   // B2: the boundary's rate leg (unfloored, real) — the card imports no converter.
-  const realRate = moderate ? realRateView(moderate.rate, engine.inflation).realRate : 0;
+  // Held ONCE: the solve's number and the CP-31 clause read the same view.
+  const rate = moderate ? realRateView(moderate.rate, engine.inflation) : null;
+  const realRate = rate ? rate.realRate : 0;
 
   const solve =
     ageNow == null || noTarget || moderate == null
@@ -156,8 +158,8 @@ export function EarliestRetirementCard({ cardId = 'retirement-age' }: { cardId?:
       </CalculatorCard>
     );
   }
-  if (solve == null || ageNow == null || moderate == null) return null; // unreachable after the gates above
-  const { approxReal } = realRateView(moderate.rate, engine.inflation); // the CP-31 clause
+  if (solve == null || ageNow == null || moderate == null || rate == null) return null; // unreachable after the gates above
+  const { approxReal } = rate; // the CP-31 clause
 
   const answerT = solve.answerT ?? 0;
   const rowLead = (t: number) => (twoPerson ? `In ${t} years` : `Age ${ageNow + t}`);
