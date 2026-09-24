@@ -13,6 +13,7 @@ import {
   PATH_TO_FI_BRIDGE,
   buildHistoryFanView,
   HISTORY_FAN_KEYS,
+  realRateView,
 } from '@/lib/calculators/basis-view';
 import type { HistoryFanResult } from '@/lib/history-fan';
 import {
@@ -344,5 +345,36 @@ describe('buildHistoryFanView (W2 pinned arm)', () => {
     expect(v.chartData).toEqual([]);
     expect(v.crossing).toBeNull();
     expect(v.m).toBe(0);
+  });
+});
+
+/* ── v1.7.0 B2 — the W1 cards' rate leg: RATE vocabulary, not dollar basis.
+      Pure; unfloored; the phrase is the CP-21 / CP-31 "≈ x% real" clause. ── */
+describe('realRateView — the Stress Test / Earliest Retirement rate leg (B2)', () => {
+  it('Moderate 6% at 3% inflation: 3/103 exactly, phrased "≈ 2.9% real"', () => {
+    const v = realRateView(0.06, 0.03);
+    expect(v.realRate).toBeCloseTo(3 / 103, 12); // 0.029126213592233 — the CP-16 baseline's exponent base
+    expect(v.approxReal).toBe('≈ 2.9% real');
+  });
+
+  it('the four house scenarios at 3%: 1.9% / 2.9% / 3.9% / 4.9%', () => {
+    expect(realRateView(0.05, 0.03).approxReal).toBe('≈ 1.9% real');
+    expect(realRateView(0.07, 0.03).approxReal).toBe('≈ 3.9% real');
+    expect(realRateView(0.08, 0.03).approxReal).toBe('≈ 4.9% real');
+  });
+
+  it('NOMINAL ANTI-PIN: the phrase never restates the nominal rate (the blend-bug class)', () => {
+    expect(realRateView(0.06, 0.03).approxReal).not.toBe('≈ 6% real');
+    expect(realRateView(0.07, 0.025).approxReal).toBe('≈ 4.4% real'); // 1.07/1.025 − 1 = 0.0439024
+  });
+
+  it('UNFLOORED: 2% at 3% is a NEGATIVE real rate (−0.97087%), phrased −1% — never clamped to 0', () => {
+    const v = realRateView(0.02, 0.03);
+    expect(v.realRate).toBeCloseTo(-0.0097087378640777, 12);
+    // Either minus glyph: B3 moves formatPercent onto U+2212 app-wide; this pin needs no re-anchor.
+    expect(v.approxReal).toMatch(/^≈ [-−]1% real$/);
+    // The exact-zero knife edge the solver suite pins (3% at 3%): a real rate of 0, phrased 0%.
+    expect(realRateView(0.03, 0.03).realRate).toBe(0);
+    expect(realRateView(0.03, 0.03).approxReal).toBe('≈ 0% real');
   });
 });
