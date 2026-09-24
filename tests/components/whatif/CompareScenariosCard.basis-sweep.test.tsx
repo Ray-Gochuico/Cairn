@@ -1,4 +1,5 @@
-import { describe, it, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { act, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../../helpers/basis-discipline';
 import {
@@ -8,7 +9,7 @@ import {
   COMPARE_BASIS_FIGURES_BL6,
 } from '@/components/whatif/CompareScenariosCard';
 import { useWhatIfBasisView } from '@/lib/calculators/basis-view';
-import { WHATIF_PAGE_ID, __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
+import { WHATIF_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import { resolveComparePair } from '@/lib/whatif/plan-review';
 import { emptyLeverPayload, type Milestones, type MonthlyState } from '@/lib/scenarios';
 import { makeHousehold } from '../../factories';
@@ -86,5 +87,18 @@ describe('W5.1 basis-audit sweep — Compare scenarios card (three rungs, both b
     ];
     const milestones = new Map<number, Milestones>([[1, { netWorth30y: 2_000_000 }], [2, { netWorth30y: 2_003_000 }]]);
     expectBasisDiscipline(<Harness scenarios={scenarios} milestones={milestones} />, { figures: COMPARE_BASIS_FIGURES_BL6, charts: [] }, OPTS);
+
+    // Review MINOR 9: the sweep is rate-agnostic (it proves future > today and
+    // the marks), so the FIGURE and the RUNG are pinned here, at the harness's 3%.
+    //   today:  1.03^30 = 2.4272624712;  2,003,000 / 2.4272624712 = 825,209.48 → rounded 825,209
+    //           floor = max(500, 0.005 × 825,209) = 4,126.05 → $4,126
+    //           (the 2,000,000 side → 823,974; |Δ| = 1,235 < 4,126, so BL-3 cannot fire → BL-6)
+    //   future: floor = max(500, 0.005 × 2,003,000) = $10,015; |Δ| = 3,000 < 10,015 → BL-6
+    //   (at 2.5% the today floor would be $4,775 — the rate is pinned, not just the direction)
+    // The sweep leaves the card mounted with the basis restored to Today.
+    const bottomLine = () => screen.getByTestId('compare-bottom-line').textContent;
+    expect(bottomLine()).toBe("These plans end within $4,126 of each other over this horizon (today's $).");
+    act(() => useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'future'));
+    expect(bottomLine()).toBe('These plans end within $10,015 of each other over this horizon (future $).');
   });
 });

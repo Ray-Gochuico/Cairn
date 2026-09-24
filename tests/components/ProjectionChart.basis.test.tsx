@@ -1,8 +1,11 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../helpers/basis-discipline';
+import { collectSourceFiles } from '../policy/source-walker';
 import { useWhatIfBasisView } from '@/lib/calculators/basis-view';
 import { WHATIF_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import { formatCurrency } from '@/lib/format';
@@ -34,6 +37,8 @@ vi.mock('recharts', () => {
   };
 });
 import ProjectionChart, { WHATIF_BASIS_CHARTS } from '@/components/whatif/ProjectionChart';
+
+const ROOT = path.resolve(__dirname, '..', '..');
 
 const baseline: Scenario = {
   id: 1, name: 'Baseline', isBaseline: true, color: '#4f86f7', lineStyle: 'solid',
@@ -94,5 +99,41 @@ describe('W5.1 ProjectionChart — caption + wiring probe (m4 layer b) + sweep',
 
   it('sweep: the chart is a registered convertible chart (caption AND plotted rows); no loose $ outside it', () => {
     expectBasisDiscipline(<Harness />, { figures: [], charts: WHATIF_BASIS_CHARTS }, { pageId: WHATIF_PAGE_ID });
+  });
+
+  // Review MINOR 10: by the frozen W2 contract an ABSENT rowsTestId means
+  // caption-only, so a one-line registry edit would silently drop the plotted-
+  // rows clause from the sweep above. Pin the registry's shape: every
+  // CONVERTIBLE chart registered on /what-if declares its rows hook, and the
+  // hook resolves inside the rendered chart (never a dangling id).
+  it('registry sentinel: every convertible What-If chart carries a rowsTestId that resolves inside the chart', async () => {
+    // Inventory: the page's chart registrations live in ONE module, so the loop
+    // below really is "every chart registered on /what-if".
+    const whatIfSources = [
+      ...(await collectSourceFiles(path.join(ROOT, 'src/components/whatif'), ['.tsx', '.ts'])),
+      path.join(ROOT, 'src/pages/WhatIf.tsx'),
+    ];
+    const registering = whatIfSources
+      .filter((f) => /RegisteredChart\[\]/.test(readFileSync(f, 'utf8')))
+      .map((f) => path.relative(ROOT, f).split(path.sep).join('/'));
+    expect(registering).toEqual(['src/components/whatif/ProjectionChart.tsx']);
+
+    const convertible = WHATIF_BASIS_CHARTS.filter((c) => c.cls === 'convertible');
+    expect(convertible.length).toBeGreaterThan(0);
+    for (const c of convertible) expect(c.rowsTestId, `${c.chartTestId} must declare rowsTestId`).toBeTruthy();
+    expect(WHATIF_BASIS_CHARTS).toEqual([
+      {
+        chartTestId: 'whatif-projection-chart',
+        captionTestId: 'whatif-chart-caption',
+        cls: 'convertible',
+        rowsTestId: 'rc-composed-chart',
+      },
+    ]);
+
+    render(<Harness />);
+    for (const c of convertible) {
+      const chart = screen.getByTestId(c.chartTestId);
+      expect(chart.querySelector(`[data-testid="${c.rowsTestId}"]`)).not.toBeNull();
+    }
   });
 });

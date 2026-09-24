@@ -377,11 +377,18 @@ export function useWhatIfBasisView(args: {
   const [basis] = useDollarBasis(WHATIF_PAGE_ID);
   const { projections, milestones, inflation, startISO } = args;
   return useMemo(() => {
+    // Review MINOR 4: ONE predicate drives both the chart conversion and its
+    // caption. Without a start month the per-month deflation cannot run, the
+    // chart map passes through NOMINAL, and so its caption is the Future one —
+    // a today's-dollar caption over nominal rows is unrepresentable. (The
+    // 30-year recipe needs no start month: the scoreboard strings + suffix keep
+    // the page basis, each phrase matching its own math.)
+    const deflateFrom = basis === 'today' && startISO ? startISO : null;
     let displayProjections = projections;
-    if (basis === 'today' && startISO) {
+    if (deflateFrom) {
       displayProjections = new Map<number, MonthlyState[]>();
       for (const [id, states] of projections) {
-        displayProjections.set(id, toReal(states, inflation, startISO));
+        displayProjections.set(id, toReal(states, inflation, deflateFrom));
       }
     }
     const displayMilestones = toDisplayMilestones(milestones, basis, inflation);
@@ -392,7 +399,7 @@ export function useWhatIfBasisView(args: {
     return {
       basis,
       suffix: basisSuffix(basis),
-      chartCaption: whatIfChartCaption(basis, inflation),
+      chartCaption: whatIfChartCaption(deflateFrom ? 'today' : 'future', inflation),
       displayProjections,
       displayMilestones,
       netWorth30yFmt,

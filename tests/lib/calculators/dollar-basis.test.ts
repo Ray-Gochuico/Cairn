@@ -159,4 +159,25 @@ describe('useDollarBasis under explore mode (W4 pref ratchet)', () => {
     expect(__readInitialDollarBasisForTests(CALCULATORS_PAGE_ID)).toBe('today');
     expect(sessionStorage.getItem('explore.calc-basis:calculators')).toBe('future');
   });
+
+  // Review MINOR 8 (W5.1 P11): the explore ratchet is per-FILE (this module
+  // calls prefKey once), so a page-specific bypass in keyFor would stay green
+  // there. The What-If page id gets its own namespacing pin — write AND read.
+  it("the What-If page key is namespaced too: explore.calc-basis:whatif while exploring, reaped on exit", () => {
+    // A real-profile What-If choice already in the tab must not seed the explore read.
+    sessionStorage.setItem('calc-basis:whatif', 'future');
+    setExploreFlag();
+    expect(__readInitialDollarBasisForTests(WHATIF_PAGE_ID)).toBe('today');
+    sessionStorage.removeItem('calc-basis:whatif');
+
+    const { result } = renderHook(() => useDollarBasis(WHATIF_PAGE_ID));
+    act(() => result.current[1]('future'));
+    expect(sessionStorage.getItem('explore.calc-basis:whatif')).toBe('future');
+    expect(sessionStorage.getItem('calc-basis:whatif')).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(sessionStorage.getItem('explore.calc-basis:whatif')).toBeNull();
+    expect(__readInitialDollarBasisForTests(WHATIF_PAGE_ID)).toBe('today');
+  });
 });

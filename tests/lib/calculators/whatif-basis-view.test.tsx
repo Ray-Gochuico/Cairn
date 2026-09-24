@@ -99,6 +99,24 @@ describe('useWhatIfBasisView — the What-If arm of the ONE boundary (D-W51-1)',
     expect(result.current.displayProjections).toBe(PROJECTIONS);
   });
 
+  // Review MINOR 4 (D-W51-1 by mechanism): with no start month the chart's
+  // per-month deflation cannot run, so the chart map is the NOMINAL engine map.
+  // Its caption must follow THAT data — the shipped Future caption, never the
+  // today's-dollar one — even while the page basis reads Today. The 30-year
+  // recipe needs no start month, so the scoreboard strings stay deflated under
+  // their own today's mark (each phrase matches its own math).
+  it("null startISO under Today: the caption follows the pass-through data (Future caption), never today's-dollar prose over nominal rows", () => {
+    const { result } = renderHook(() => useWhatIfBasisView({ ...ARGS, startISO: null }));
+    const v = result.current;
+    expect(v.basis).toBe('today');
+    expect(v.displayProjections).toBe(PROJECTIONS); //        nominal, by reference
+    expect(v.chartCaption).toBe(WHATIF_FUTURE_CAPTION); //    the caption follows the rows
+    expect(v.chartCaption).not.toContain("today's dollars");
+    expect(v.netWorth30yFmt.get(1)).toBe('$1,117,962'); //    2,345,000 / 1.025^30 — deflated…
+    expect(v.suffix).toBe(TODAY_SUFFIX); //                   …and marked as such
+    expect(v.displayMilestones.get(1)!.basis).toBe('today');
+  });
+
   it('caption formatting kills float artifacts and trailing zeros (pctFromFraction)', () => {
     expect(whatIfChartCaption('today', 0.0275)).toBe("All lines in today's dollars — one deflator, 2.75% inflation.");
     expect(whatIfChartCaption('today', 0.07 - 0.04)).toBe("All lines in today's dollars — one deflator, 3% inflation.");

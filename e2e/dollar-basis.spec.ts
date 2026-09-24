@@ -56,7 +56,7 @@ test("calculators: Today's $ default; Future $ grows the Compound figures and fl
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
 
-test("what-if: Today's $ default; pinned FI number; caption flips; the key is page-scoped", async ({
+test("what-if: Today's $ default; pinned FI number; caption flips; the scoreboard's 30y NW grows; the key is page-scoped", async ({
   page,
 }) => {
   const errors = collectErrors(page);
@@ -73,11 +73,32 @@ test("what-if: Today's $ default; pinned FI number; caption flips; the key is pa
   await expect(fi).toContainText("in today's dollars");
   const fiText = await fi.textContent();
 
+  // Review MINOR 7: one CONVERTIBLE figure must actually move across the flip
+  // (the calculators flow's headline-grows twin) — captions and pinned figures
+  // alone pass with the data frozen in one basis. The Manage-scenarios 30y NW
+  // cell of the seeded Baseline (a positive projection; seeded inflation 2.4%).
+  // The modal is closed again before each toolbar click (it overlays the page).
+  const parse = (t: string | null) =>
+    Number((t ?? '').match(/\$[\d,]+/)?.[0]?.replace(/[$,]/g, '') ?? NaN);
+  const readNw30y = async (mark: string) => {
+    await page.getByRole('button', { name: 'Manage…', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    const cell = dialog.getByTestId('manage-nw30y').first();
+    await expect(cell).toContainText(mark);
+    const value = parse(await cell.textContent());
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    return value;
+  };
+  const nwToday = await readNw30y("(today's $)");
+  expect(nwToday).toBeGreaterThan(0);
+
   await page.getByRole('button', { name: 'Future $' }).click();
   await expect(page.getByTestId('whatif-chart-caption')).toHaveText(
     'All lines in future dollars — not adjusted for inflation.',
   );
   await expect(fi).toHaveText(fiText!); // a PINNED today's-dollar figure never moves
+  expect(await readNw30y('(future $)')).toBeGreaterThan(nwToday); // the CONVERTIBLE one does
   expect(await page.evaluate(() => sessionStorage.getItem('calc-basis:whatif'))).toBe('future');
   expect(await page.evaluate(() => sessionStorage.getItem('calc-basis:calculators'))).toBeNull();
 
