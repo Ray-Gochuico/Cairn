@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LeverBar from '@/components/whatif/LeverBar';
 
@@ -10,8 +10,10 @@ vi.mock('@/components/whatif/levers/ExtraLoanPaymentsPopover', () => ({
 vi.mock('@/components/whatif/levers/LumpSumsPopover', () => ({
   default: () => null,
 }));
+// C2: the Expenses popover reports its `open` prop so the openRequest
+// describe can see the dialog open and close; it still renders no UI.
 vi.mock('@/components/whatif/levers/ExpensePeriodsPopover', () => ({
-  default: () => null,
+  default: (props: { open: boolean }) => <div data-testid="expenses-popover" data-open={String(props.open)} />,
 }));
 vi.mock('@/components/whatif/levers/ReturnSchedulePopover', () => ({
   default: () => null,
@@ -307,5 +309,37 @@ describe('LeverBar — Contributions pill (Task β2: branched by surplus destina
     expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
     expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
     expect(screen.queryByTestId('contributions-cash-hint-icon')).not.toBeInTheDocument();
+  });
+});
+
+describe('LeverBar — C2 openRequest (the gaps card\'s Open Expenses →)', () => {
+  beforeEach(() => {
+    // The file's store mock: an active scenario whenever activeScenarioId is set.
+    activeScenarioId = 1;
+    activeScenarioOverride = null;
+    householdRate = 0.04;
+    returnsPayload = { defaultRate: 0.07, overrides: {} };
+    contributionsPayload = [];
+  });
+
+  it('a request opens the named lever\'s dialog; the SAME nonce re-rendered never re-opens it after the user closes it', () => {
+    const { rerender } = render(<LeverBar openRequest={null} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'true');
+    // the user closes it (the pill toggles) …
+    fireEvent.click(screen.getByRole('button', { name: 'Expenses' }));
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+    // … and an unrelated re-render with the same request object does not re-open it
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+    // a NEW nonce does
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 2 }} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('no request (the prop omitted, every pre-C2 caller) never opens a dialog', () => {
+    render(<LeverBar />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
   });
 });

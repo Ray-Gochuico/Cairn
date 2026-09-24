@@ -43,6 +43,7 @@ export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput
   contributions: [recentContribution],
   roadmapHasUnanswered: false,
   engineStartsAtZero: true,
+  expenseBases: [],
   sides: [
     { name: 'Baseline', payload: P() },
     { name: 'Aggressive payoff', payload: P() },
@@ -50,6 +51,10 @@ export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput
   todayIso: TODAY,
   ...over,
 });
+
+// C2 (G11) fixtures: one visible scenario at $0, one authoring spending.
+const AT_ZERO = { scenarioId: 1, name: 'Baseline', monthlyExpense: 0 };
+const SET = { scenarioId: 2, name: 'Aggressive payoff', monthlyExpense: 5_911.12 };
 
 describe('buildModelGaps — absence is the calm outcome', () => {
   it('fully-set household → zero rows (the card will not render)', () => {
@@ -350,6 +355,42 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     expect(buildModelGaps(settledInput({ settings: null, sides: [] })).rows.find((r) => r.id === 'G10')).toBeUndefined();
   });
 
+  // ── C2 — G11: a VISIBLE scenario whose authored expense is $0 while the household baseline is set ──
+  it('G11: one row per $0 scenario, CR-C2-1 verbatim, with the in-page Expenses action (never a route)', () => {
+    const rows = buildModelGaps(settledInput({ expenseBases: [AT_ZERO, SET] })).rows;
+    expect(rows).toEqual([{
+      id: 'G11:1',
+      text: "Baseline's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.",
+      cta: { label: 'Open Expenses →', scenarioId: 1, lever: 'expenses' },
+    }]);
+  });
+
+  it('G11: strip order, one row each, names interpolated verbatim', () => {
+    const rows = buildModelGaps(settledInput({
+      expenseBases: [{ scenarioId: 7, name: 'From calculators — Sep 24, 2026', monthlyExpense: 0 }, SET, AT_ZERO],
+    })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G11:7', 'G11:1']);
+    expect(rows[0].text).toBe("From calculators — Sep 24, 2026's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.");
+  });
+
+  it('G11 is SILENT with a $0 household baseline — G1 owns that moment (mutually exclusive by condition)', () => {
+    const rows = buildModelGaps(settledInput({
+      household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0 }),
+      expenseBases: [AT_ZERO],
+    })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G1']);
+  });
+
+  it('G11 is silent with no household and silent when every visible scenario authors spending', () => {
+    expect(buildModelGaps(settledInput({ household: null, expenseBases: [AT_ZERO] })).rows.filter((r) => r.id.startsWith('G11'))).toEqual([]);
+    expect(buildModelGaps(settledInput({ expenseBases: [SET] })).rows).toEqual([]);
+  });
+
+  it('G11 sits directly after G1\'s slot — before G2 (contract order)', () => {
+    const rows = buildModelGaps(settledInput({ expenseBases: [AT_ZERO], snapshots: [], contributions: [] })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G11:1', 'G2', 'G3', 'G4']);
+  });
+
   it('row order is the contract order (G1 → G10)', () => {
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
@@ -389,12 +430,15 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     // …plus the one row shape the all-rows fixture cannot reach: G10n, whose
     // text interpolates a scenario name (review MINOR 0 — the scan must cover
     // every row, not just the ones one fixture happens to produce).
+    // C2: the G11 shape (a scenario name interpolated) rides the same scan —
+    // it cannot co-fire with the all-rows fixture's $0 household (G1).
     const named = buildModelGaps(settledInput({
       settings: null,
+      expenseBases: [AT_ZERO],
       sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: seq }],
-    })).rows.filter((r) => r.id === 'G10');
+    })).rows.filter((r) => r.id === 'G10' || r.id.startsWith('G11'));
     expect(rows.length).toBeGreaterThanOrEqual(9);
-    expect(named).toHaveLength(1);
+    expect(named).toHaveLength(2);
     for (const r of [...rows, ...named]) {
       expect(r.text).not.toMatch(ADVICE_LEXICON);
       expect(r.cta.label).not.toMatch(ADVICE_LEXICON);

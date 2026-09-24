@@ -23,12 +23,21 @@ import { dateFromLocalISO } from '@/lib/dates';
 import type { LeverPayload } from '@/lib/scenarios';
 import type { Account, AccountSnapshot, AppSettings, Contribution, Household, Person } from '@/types/schema';
 
+/** A route CTA — the one-place-per-thing home of the missing input. */
+export interface ModelGapRowCta { label: string; to: string }
+/**
+ * C2: an in-page ACTION — the home is a lever on THIS page, not a route. The
+ * page supplies the handler (ModelGapsCard.onOpenLever); the lib names only
+ * the target. `lever` is the LeverBar pill key.
+ */
+export interface ModelGapRowLeverAction { label: string; scenarioId: number; lever: 'expenses' }
 export interface ModelGapRow {
-  /** 'G1'…'G10'; G8 rows are 'G8:{personId}', hourly persons 'G8h:{personId}'. */
+  /** 'G1'…'G11'; G8 rows are 'G8:{personId}', hourly persons 'G8h:{personId}'; G11 rows are 'G11:{scenarioId}'. */
   id: string;
   text: string;
-  cta: { label: string; to: string };
+  cta: ModelGapRowCta | ModelGapRowLeverAction;
 }
+export const isLeverAction = (cta: ModelGapRow['cta']): cta is ModelGapRowLeverAction => 'scenarioId' in cta;
 export interface ModelGapsModel { rows: ModelGapRow[] }
 
 export interface ModelGapsSide { name: string; payload: LeverPayload }
@@ -56,6 +65,11 @@ export interface ModelGapsInput {
   engineStartsAtZero: boolean;
   /** The compared pair (2 entries) or the only scenario (1). */
   sides: ModelGapsSide[];
+  /** C2 (G11): every VISIBLE scenario in the strip's order with its AUTHORED
+   *  month-0 monthly expense (resolved base + periods active in the start
+   *  month, obligations excluded — authoredMonthlyExpense, the engine's own
+   *  resolver). The page computes it; the lib never sees RealState. */
+  expenseBases: ReadonlyArray<{ scenarioId: number; name: string; monthlyExpense: number }>;
   /** 'YYYY-MM-DD' — injected (localTodayISO at the page layer, ONE clock per
    *  page); the lib never reads a clock and parses this LOCALLY, so the
    *  calendar day it reasons over is the same day every other monthly-pending
@@ -91,6 +105,25 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   });
   if (i.household != null && i.household.monthlyExpenseBaseline <= 0) {
     rows.push({ id: 'G1', text: "No monthly expense baseline — FI dates can't be computed, so they aren't shown.", cta: OPEN_HOUSEHOLD });
+  }
+  // C2 (G11): a scenario whose AUTHORED expense resolves to $0 while the
+  // household baseline is set. The engine then runs it on the household's
+  // recurring obligations alone (rent, leases — or on nothing), and the FI
+  // milestone is gated off for it (milestones.ts scenarioMonthlyExpenseBase)
+  // — this row is the one place that says why the strip reads "FI —".
+  // Mutually exclusive with G1 by construction (G1 needs a $0 household
+  // baseline; this row needs a positive one), so the two never double up.
+  // One row per scenario, strip order; the CTA is an in-page action (the
+  // Expenses lever on THIS page), never a route.
+  if (i.household != null && i.household.monthlyExpenseBaseline > 0) {
+    for (const b of i.expenseBases) {
+      if (b.monthlyExpense > 0) continue;
+      rows.push({
+        id: `G11:${b.scenarioId}`,
+        text: `${b.name}'s expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.`,
+        cta: { label: 'Open Expenses →', scenarioId: b.scenarioId, lever: 'expenses' },
+      });
+    }
   }
   // The CONDITION is the canonical provenance string (CI-26b); the second
   // guard keeps the CONSEQUENCE true — the engine seeds month 0 from a wider

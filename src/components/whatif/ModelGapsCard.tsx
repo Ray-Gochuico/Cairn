@@ -7,9 +7,21 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { buildModelGaps, type ModelGapsInput } from '@/lib/model-gaps';
+import { buildModelGaps, isLeverAction, type ModelGapsInput } from '@/lib/model-gaps';
 
-export function ModelGapsCard({ input }: { input: ModelGapsInput }) {
+// One class string for both CTA shapes — a route link and an in-page action
+// read identically (the register never distinguishes them visually).
+const CTA_CLASS = 'text-primary underline underline-offset-4 hover:text-primary/80 whitespace-nowrap';
+
+export function ModelGapsCard({
+  input,
+  onOpenLever,
+}: {
+  input: ModelGapsInput;
+  /** C2: the page's in-page handler for lever-action rows (G11). Absent →
+   *  the row states its fact and renders no control (never a dead button). */
+  onOpenLever?: (scenarioId: number, lever: 'expenses') => void;
+}) {
   const model = useMemo(() => buildModelGaps(input), [input]);
   if (model.rows.length === 0) return null;
   return (
@@ -22,17 +34,32 @@ export function ModelGapsCard({ input }: { input: ModelGapsInput }) {
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">
-            {model.rows.map((r) => (
-              <li key={r.id} className="text-sm flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span>{r.text}</span>
-                <Link
-                  to={r.cta.to}
-                  className="text-primary underline underline-offset-4 hover:text-primary/80 whitespace-nowrap"
-                >
-                  {r.cta.label}
-                </Link>
-              </li>
-            ))}
+            {model.rows.map((r) => {
+              const cta = r.cta;
+              return (
+                <li key={r.id} className="text-sm flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  {/* C2: a lever-action row (G11) names a $0 expense base — its text
+                      carries a testid so the page's W5.1 basis registry classifies
+                      that figure (invariant: $0 in either basis). */}
+                  <span data-testid={isLeverAction(cta) ? 'whatif-model-gap-expense-base' : undefined}>{r.text}</span>
+                  {isLeverAction(cta) ? (
+                    onOpenLever ? (
+                      <button
+                        type="button"
+                        className={CTA_CLASS}
+                        onClick={() => onOpenLever(cta.scenarioId, cta.lever)}
+                      >
+                        {cta.label}
+                      </button>
+                    ) : null
+                  ) : (
+                    <Link to={cta.to} className={CTA_CLASS}>
+                      {cta.label}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </CardContent>
       </section>

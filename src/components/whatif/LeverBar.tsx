@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
@@ -14,9 +14,20 @@ import SwrLeverPill from '@/components/whatif/SwrLeverPill';
 import { useSurplusFlowPreview } from '@/components/whatif/useSurplusFlowPreview';
 import { formatCompactCurrency } from '@/lib/format';
 
-type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
+export type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
 
-export default function LeverBar() {
+export interface LeverBarProps {
+  /**
+   * C2: an in-page request to open one lever's dialog (the gaps card's
+   * "Open Expenses →"). Keyed on the NONCE — a fresh nonce per request, so
+   * the same lever can be requested twice and a re-render never re-opens a
+   * dialog the user has closed. The page activates the target scenario
+   * BEFORE raising it, so the dialog opens on that scenario. null = none.
+   */
+  openRequest?: { lever: LeverKey; nonce: number } | null;
+}
+
+export default function LeverBar({ openRequest = null }: LeverBarProps = {}) {
   const scenarios = useScenariosStore((s) => s.scenarios);
   const updateLever = useScenariosStore((s) => s.updateLever);
   const household = useHouseholdStore((s) => s.household);
@@ -29,6 +40,13 @@ export default function LeverBar() {
   // default since migration 0029). Hook is called unconditionally before the
   // early return below to keep React's rules of hooks happy.
   const surplus = useSurplusFlowPreview(active?.leverPayload ?? null);
+
+  // C2: honor an in-page open request once per nonce (see LeverBarProps).
+  const requestNonce = openRequest?.nonce ?? null;
+  const requestLever = openRequest?.lever ?? null;
+  useEffect(() => {
+    if (requestNonce != null && requestLever != null) setOpenLever(requestLever);
+  }, [requestNonce, requestLever]);
 
   if (!active) {
     return (

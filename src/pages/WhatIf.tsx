@@ -12,7 +12,7 @@ import { useLoadGate } from '@/lib/use-load-gate';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import FiCards from '@/components/whatif/FiCards';
-import LeverBar from '@/components/whatif/LeverBar';
+import LeverBar, { type LeverKey } from '@/components/whatif/LeverBar';
 import MilestoneStrip from '@/components/whatif/MilestoneStrip';
 import ProjectionChart from '@/components/whatif/ProjectionChart';
 import ScenariosPanel from '@/components/whatif/ScenariosPanel';
@@ -54,6 +54,7 @@ import {
   type Milestones,
   type MonthlyState,
 } from '@/lib/scenarios';
+import { authoredMonthlyExpense } from '@/lib/scenarios/expense-base';
 import { localTodayISO } from '@/lib/dates';
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
@@ -140,7 +141,12 @@ export default function WhatIf() {
   // W10 M34: "Edit Levers" was a shipped no-op stub. The LeverBar always
   // edits the ACTIVE scenario, so editing scenario X = activate X, then put
   // focus on the bar (rAF: after the activation re-render commits).
-  const openLeversFor = useCallback((scenarioId: number) => {
+  // C2: the gaps card's "Open Expenses →" also opens the lever's dialog —
+  // AFTER activation, so it edits the named scenario. The request is keyed on
+  // a counter nonce (never a clock) so the same lever can be asked for twice.
+  const leverNonceRef = useRef(0);
+  const [leverRequest, setLeverRequest] = useState<{ lever: LeverKey; nonce: number } | null>(null);
+  const openLeversFor = useCallback((scenarioId: number, lever?: LeverKey) => {
     void useScenariosStore
       .getState()
       .setActive(scenarioId)
@@ -149,6 +155,7 @@ export default function WhatIf() {
           const bar = document.getElementById('whatif-lever-bar');
           bar?.scrollIntoView({ block: 'nearest' });
           bar?.focus();
+          if (lever) setLeverRequest({ lever, nonce: ++leverNonceRef.current });
         });
       });
   }, []);
@@ -243,6 +250,21 @@ export default function WhatIf() {
 
   const real = useRealState();
 
+  // C2 — ONE resolution per VISIBLE scenario of its authored month-0 monthly
+  // expense (resolved base + periods active in the start month; the
+  // household's obligations excluded), through the resolver the engine itself
+  // uses (expense-base.ts). Feeds the per-scenario FI gate below and the G11
+  // register rows — the two can never disagree. Visible only: the strip's set.
+  const authoredExpenseById = useMemo(() => {
+    const m = new Map<number, number>();
+    if (!real) return m;
+    for (const s of scenarios) {
+      if (s.id == null || !s.visible) continue;
+      m.set(s.id, authoredMonthlyExpense(s.leverPayload, real.expenseBasis, real.startISO));
+    }
+    return m;
+  }, [real, scenarios]);
+
   const { projections, milestones } = useMemo(() => {
     if (!real) {
       return {
@@ -258,11 +280,15 @@ export default function WhatIf() {
         withdrawalRate: effectiveSwr(scenario, household),
         // Round-3 M2: zero baseline → no FI milestone (chips render "FI —").
         monthlyExpenseBaseline: household?.monthlyExpenseBaseline,
+        // C2: a scenario whose AUTHORED month-0 expense is $0 would cross "FI"
+        // against rent alone — gated per scenario (milestones.ts), from the
+        // same resolution G11 reads.
+        scenarioMonthlyExpenseBase: authoredExpenseById.get(id),
       };
       ms.set(id, detectMilestones(states, params));
     }
     return { projections: projs, milestones: ms };
-  }, [real, scenarios, projectedScenarios, horizonMonths, household]);
+  }, [real, scenarios, projectedScenarios, horizonMonths, household, authoredExpenseById]);
 
   // W5.1 (D-W51-1): the page's ONLY basis reader — ONE bundle carries the
   // already-based chart map, the branded milestones, the scoreboard strings
@@ -382,8 +408,16 @@ export default function WhatIf() {
     sides: [comparePair.a, comparePair.b]
       .filter((s): s is NonNullable<typeof s> => s != null)
       .map((s) => ({ name: s.name, payload: s.leverPayload })),
+    // C2 (G11): visible scenarios in the strip's order with their authored
+    // month-0 expense — the rows name the ones at $0. Empty without `real`
+    // (the page's setup state renders no card).
+    expenseBases: real
+      ? scenarios
+          .filter((s) => s.visible && s.id != null)
+          .map((s) => ({ scenarioId: s.id as number, name: s.name, monthlyExpense: authoredExpenseById.get(s.id as number) ?? 0 }))
+      : [],
     todayIso,
-  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, todayIso]);
+  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, real, scenarios, authoredExpenseById, todayIso]);
 
   // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
   // above this early return. Hooks must always run in the same order
@@ -504,7 +538,7 @@ export default function WhatIf() {
         />
       </div>
 
-      <LeverBar />
+      <LeverBar openRequest={leverRequest} />
 
       {pillsPosition === FiPillsPosition.ABOVE ? (
         <>
@@ -549,7 +583,7 @@ export default function WhatIf() {
             onSelectA={onSelectA}
             onSelectB={onSelectB}
           />
-          <ModelGapsCard input={gapsInput} />
+          <ModelGapsCard input={gapsInput} onOpenLever={openLeversFor} />
         </>
       )}
 
@@ -637,4 +671,7 @@ export default function WhatIf() {
 /** W5.1 test-only registration: the page's own literal $ prose (inventory #18). */
 export const WHATIF_PAGE_BASIS_FIGURES: RegisteredFigure[] = [
   { testId: 'whatif-projection-footnote', cls: 'invariant' },
+  // C2 (G11): "{name}'s expense base is $0 — …" — a $0 fact, the same in
+  // either basis (ModelGapsCard stamps the row text with this testid).
+  { testId: 'whatif-model-gap-expense-base', cls: 'invariant' },
 ];

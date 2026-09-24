@@ -158,6 +158,12 @@ vi.mock('@/stores/scenarios-store', () => {
           contributions: [],
           retirementAgeOverride: null,
           swrOverride: scenarioOverride,
+          // C2: the scenario AUTHORS the $4,000/mo its projected states spend
+          // (and the household baseline states). Without the Feature-B keys the
+          // payload resolves custom/$0 — the hazard shape — and the page's
+          // per-scenario FI gate would (correctly) read no FI date at all.
+          expenseSource: 'custom',
+          customMonthly: 4000,
         },
         createdAt: '',
         updatedAt: '',
