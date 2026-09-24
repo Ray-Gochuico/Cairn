@@ -4,7 +4,7 @@ import type { ClassTargetRow } from '@/lib/allocation-hierarchy';
 import type { PositionsResult } from '@/lib/positions';
 import PositionsSection from '@/components/investments/PositionsSection';
 import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatSignedPercent } from '@/lib/format';
 
 /**
  * "Allocation & positions" card body (D-P5 rename; card id stays `drift` —
@@ -65,7 +65,7 @@ function DriftCardImpl({ classRows, positions, scopeCaption }: DriftCardProps) {
                       <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
                       <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
                       <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                        {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
+                        {r.targetPct == null ? '—' : formatSignedPercent(r.driftPct, 1)}
                       </td>
                     </tr>
                   ))}

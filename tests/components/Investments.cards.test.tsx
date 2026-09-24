@@ -597,4 +597,23 @@ describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () =>
     render(<DriftCard classRows={[]} positions={emptyPositions} />);
     expect(screen.queryByText(/household-level; Actual/)).not.toBeInTheDocument();
   });
+
+  it('B3 (D-B3-1): the drift column renders a negative with a TRUE MINUS and a positive with an explicit plus', async () => {
+    const { default: DriftCard } = await import('@/components/investments/DriftCard');
+    // driftPct −0.05 → "−5.0%"; +0.025 → "+2.5%" (B3 plan Appendix D.8). US_TOTAL_MARKET stands in
+    // for the plan's "US_STOCK" (not an AssetClass key; the row testid is class-row-${assetClass}).
+    render(
+      <DriftCard
+        classRows={[
+          { assetClass: 'US_BONDS', actualValue: 10_000, actualPct: 0.1, targetPct: 0.15, targetValue: 15_000, driftPct: -0.05 },
+          { assetClass: 'US_TOTAL_MARKET', actualValue: 90_000, actualPct: 0.9, targetPct: 0.875, targetValue: 87_500, driftPct: 0.025 },
+        ] as never}
+        positions={emptyPositions}
+      />,
+    );
+    const bonds = screen.getByTestId('class-row-US_BONDS');
+    expect(bonds).toHaveTextContent('−5.0%');
+    expect(bonds.textContent).not.toContain('-5.0%');
+    expect(screen.getByTestId('class-row-US_TOTAL_MARKET')).toHaveTextContent('+2.5%');
+  });
 });
