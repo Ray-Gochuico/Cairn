@@ -106,6 +106,22 @@ describe('currentAge', () => {
       process.env.TZ = 'America/Los_Angeles';
       expect(currentAge('1990-06-15', new Date('2026-06-15T12:00:00Z'))).toBe(36);
     });
+
+    // B3 review: the pin above cannot tell an honoured `now` from an ignored one (the clock
+    // also reads 36). Here the clock is pinned at 36 and `now` sits in 2000, so an ignored
+    // `now` reads 36, and a `now` read on its UTC day misses the Auckland arm.
+    it('injectable now is honoured: a `now` whose age differs from the clock reads `now`\'s LOCAL-day age', () => {
+      vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+      // 2000-06-15T12:00Z is Jun 15 05:00 in Los Angeles (PDT); 2000-06-14T12:00Z is Jun 14 05:00.
+      process.env.TZ = 'America/Los_Angeles';
+      expect(currentAge('1990-06-15', new Date('2000-06-15T12:00:00Z'))).toBe(10);
+      expect(currentAge('1990-06-15', new Date('2000-06-14T12:00:00Z'))).toBe(9);
+      // Auckland (NZST, UTC+12 in June): 2000-06-14T12:00Z is already Jun 15 00:00 locally — the
+      // birthday (10); 2000-06-13T12:00Z is Jun 14 00:00 — the day before (9).
+      process.env.TZ = 'Pacific/Auckland';
+      expect(currentAge('1990-06-15', new Date('2000-06-14T12:00:00Z'))).toBe(10);
+      expect(currentAge('1990-06-15', new Date('2000-06-13T12:00:00Z'))).toBe(9);
+    });
   });
 });
 

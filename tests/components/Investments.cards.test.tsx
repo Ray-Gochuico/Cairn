@@ -607,6 +607,8 @@ describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () =>
         classRows={[
           { assetClass: 'US_BONDS', actualValue: 10_000, actualPct: 0.1, targetPct: 0.15, targetValue: 15_000, driftPct: -0.05 },
           { assetClass: 'US_TOTAL_MARKET', actualValue: 90_000, actualPct: 0.9, targetPct: 0.875, targetValue: 87_500, driftPct: 0.025 },
+          // B3 review: an on-target class (driftPct exactly 0) — the signed register's zero.
+          { assetClass: 'CASH', actualValue: 0, actualPct: 0, targetPct: 0, targetValue: 0, driftPct: 0 },
         ] as never}
         positions={emptyPositions}
       />,
@@ -615,5 +617,40 @@ describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () =>
     expect(bonds).toHaveTextContent('−5.0%');
     expect(bonds.textContent).not.toContain('-5.0%');
     expect(screen.getByTestId('class-row-US_TOTAL_MARKET')).toHaveTextContent('+2.5%');
+    const zeroCell = screen.getByTestId('class-row-CASH').querySelector('td:last-child') as HTMLElement;
+    expect(zeroCell.textContent).toBe('+0.0%');
+    expect(zeroCell.className).toContain('text-muted-foreground');
+  });
+
+  it('B3 review: the drift cell\'s colour follows its RENDERED figure — a figure that reads zero is neutral, whichever sign the register prints', async () => {
+    const { default: DriftCard } = await import('@/components/investments/DriftCard');
+    // 0.3 − (0.1 + 0.2) = −5.55e-17: float noise from actualPct − targetPct. It renders
+    // "−0.0%" (StressTestCard.signedPct's bytes); the raw-fraction colour rule painted it
+    // destructive, and a zero drift success, though both read as no drift.
+    const noise = 0.3 - (0.1 + 0.2);
+    render(
+      <DriftCard
+        classRows={[
+          { assetClass: 'US_BONDS', actualValue: 10_000, actualPct: 0.1, targetPct: 0.15, targetValue: 15_000, driftPct: -0.05 },
+          { assetClass: 'US_TOTAL_MARKET', actualValue: 90_000, actualPct: 0.9, targetPct: 0.875, targetValue: 87_500, driftPct: 0.025 },
+          { assetClass: 'CASH', actualValue: 0, actualPct: 0, targetPct: 0, targetValue: 0, driftPct: 0 },
+          { assetClass: 'INTL_DEVELOPED', actualValue: 30_000, actualPct: 0.3, targetPct: 0.3, targetValue: 30_000, driftPct: noise },
+        ] as never}
+        positions={emptyPositions}
+      />,
+    );
+    const cell = (assetClass: string) =>
+      screen.getByTestId(`class-row-${assetClass}`).querySelector('td:last-child') as HTMLElement;
+    const TONES = ['text-destructive-soft-foreground', 'text-success-foreground', 'text-muted-foreground'];
+    const toneOf = (el: HTMLElement) => TONES.filter((t) => el.className.split(/\s+/).includes(t));
+
+    expect(cell('US_BONDS').textContent).toBe('−5.0%');
+    expect(toneOf(cell('US_BONDS'))).toEqual(['text-destructive-soft-foreground']);
+    expect(cell('US_TOTAL_MARKET').textContent).toBe('+2.5%');
+    expect(toneOf(cell('US_TOTAL_MARKET'))).toEqual(['text-success-foreground']);
+    expect(cell('CASH').textContent).toBe('+0.0%');
+    expect(toneOf(cell('CASH'))).toEqual(['text-muted-foreground']);
+    expect(cell('INTL_DEVELOPED').textContent).toBe('−0.0%');
+    expect(toneOf(cell('INTL_DEVELOPED'))).toEqual(['text-muted-foreground']);
   });
 });

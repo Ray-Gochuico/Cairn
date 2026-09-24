@@ -8,6 +8,7 @@ import {
   formatMonth,
   formatCurrencyCents,
 } from '@/lib/format';
+import { pctFromFraction } from '@/lib/calculators/scenario-assumptions';
 
 describe('formatDate', () => {
   it('renders a calendar-day ISO string as Mon D, YYYY', () => {
@@ -142,5 +143,28 @@ describe('formatSignedPercent (B3 — the StressTestCard signedPct register, sha
     // (Math.abs(pctFromFraction(f)).toFixed(d) — the same 1e-8 round).
     expect(formatSignedPercent(-0.0295, 1)).toBe('−3.0%');
     expect(formatSignedPercent(0.0055, 1)).toBe('+0.6%');
+  });
+
+  it('decides the sign on the RAW fraction, as StressTestCard.signedPct does — a float-noise negative reads "−0.0%", not "+0.0%" (B3 review)', () => {
+    // StressTestCard.tsx signedPct, reproduced as the parity oracle:
+    //   `${fraction < 0 ? '−' : '+'}${Math.abs(pctFromFraction(fraction)).toFixed(digits)}%`
+    const signedPct = (fraction: number, digits: number): string =>
+      `${fraction < 0 ? '−' : '+'}${Math.abs(pctFromFraction(fraction)).toFixed(digits)}%`;
+    // 0.3 − (0.1 + 0.2) is −5.551115123125783e-17 (DriftCard's actualPct − targetPct lands in
+    // this window): its 1e-8 pre-round is −0, and `-0 < 0` is false — a sign read off the
+    // pre-rounded value printed "+0.0%".
+    const noise = 0.3 - (0.1 + 0.2);
+    expect(noise).toBeLessThan(0);
+    expect(formatSignedPercent(noise, 1)).toBe('−0.0%');
+    expect(formatSignedPercent(noise, 1)).toBe(signedPct(noise, 1));
+    expect(formatSignedPercent(-1e-11, 0)).toBe('−0%');
+    expect(formatSignedPercent(0.1 + 0.2 - 0.3, 1)).toBe('+0.0%');
+    expect(formatSignedPercent(-0, 1)).toBe('+0.0%'); // −0 is not < 0: the zero register's "+"
+    // Byte-for-byte over a sweep (0 and 1 digits) including the (−5e-11, 0) window.
+    const fractions = [noise, -1e-11, -4.9e-11, -1e-17, 1e-17, -0, 0, Number.MIN_VALUE, -Number.MIN_VALUE];
+    for (let i = -3000; i <= 3000; i++) fractions.push(i / 100_000);
+    for (const f of fractions) {
+      for (const d of [0, 1]) expect(formatSignedPercent(f, d)).toBe(signedPct(f, d));
+    }
   });
 });

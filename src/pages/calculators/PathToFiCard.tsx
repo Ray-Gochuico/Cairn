@@ -241,6 +241,13 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   // non-rate reason — the register replaces the KEEP lock and the per-scenario
   // lock note is suppressed (the meaning already says why).
   const noInvestment = nothingInvested(engine.portfolio, engine.annualContribution);
+  // The per-scenario note follows the MODE's contribution (B3 review): STOP
+  // solves with none, so a $0 portfolio is unreachable there for the same
+  // non-rate reason even when the bar carries contributions.
+  const rateNoteSuppressed = nothingInvested(
+    engine.portfolio,
+    mode === 'KEEP' ? engine.annualContribution : 0,
+  );
   const coastFloored = (coastRows ?? []).some((r) => r.realRate < 0);
 
   // Chart series/markers styling stays card-local; the DATA is the bundle's
@@ -488,7 +495,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               );
             })}
           </CalcTable>
-          {anyUnreachable && !noInvestment && (
+          {anyUnreachable && !rateNoteSuppressed && (
             <p role="note" className="text-xs text-muted-foreground">
               Returns at or below inflation — this scenario never reaches the target in real
               terms.

@@ -911,6 +911,39 @@ describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D
     ).toBeNull();
   });
 
+  it('STOP (B3 review): a $0 portfolio WITH contributions at a POSITIVE real rate — the stop-today solve has nothing to grow, so the rate-lock note is suppressed; KEEP on the same bar solves', async () => {
+    // 6% at 3% (real +2.9%), pv $0, $24,000/yr. STOP solves with annualContribution 0, so every
+    // STOP row is unreachable for the same non-rate reason as the $0/$0 case — the note's
+    // "returns at or below inflation" would be false. The suppression follows the MODE's
+    // contribution (0 in STOP), not the bar's.
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+    });
+    renderCard();
+    expect(screen.getByTestId('path-to-fi-headline').textContent).toMatch(/36\.\d years/); // KEEP: t* = 36.12 (Appendix D.5)
+    expect(screen.queryByText(/Returns at or below inflation/)).toBeNull();
+    await toStop();
+    expect(screen.getByTestId('path-to-fi-headline')).toHaveTextContent('0% of CoastFI');
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull(); // the register stays KEEP-only (D-B3-3)
+    expect(
+      screen.queryByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeNull();
+  });
+
+  it('STOP (B3 review): a positive portfolio at a rate at or below inflation keeps the per-scenario note (the rate IS the reason)', async () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard();
+    await toStop();
+    expect(
+      screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeInTheDocument();
+  });
+
   it('$0 portfolio WITH contributions is a normal solve — no register, no lock', () => {
     primeStores({
       scenarios: [{ label: 'Moderate', rate: 0.06 }],

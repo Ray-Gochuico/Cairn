@@ -35,9 +35,11 @@ export function utcNoonOf(isoDay: string): Date {
  * side (UTC noon) compare on one calendar with no T6 regression. The previous
  * shape passed the wall-clock instant straight through, i.e. read the UTC day
  * — the neighbouring day between local midnight and UTC midnight — so a
- * birthday ticked a day early east of Greenwich and a day late west of it,
- * and the calculators' age could disagree with the interview kernel's
- * local-day age. `now` is injectable for tests; production callers omit it.
+ * birthday ticked a day late east of Greenwich (the local morning is still the
+ * previous UTC day) and a day early west of it (the local evening is already
+ * the next UTC day), and the calculators' age could disagree with the
+ * interview kernel's local-day age. `now` is injectable for tests; production
+ * callers omit it.
  */
 export function currentAge(dob: string, now: Date = new Date()): number {
   return currentAgeAsOf(dob, utcNoonOf(localTodayISO(now)));

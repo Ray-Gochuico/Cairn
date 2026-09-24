@@ -33,11 +33,14 @@ export const formatPercent = (n: number): string => {
  * StressTestCard's headline and "vs start" cells, shared (B3). The 1e-8
  * pre-round is pctFromFraction's (scenario-assumptions.ts), inlined so this
  * module stays a leaf — 0.0295 × 100 is 2.9499999999999997 in IEEE-754 and
- * must still read "3.0" (the percent the fraction stands for is 2.95).
+ * must still read "3.0" (the percent the fraction stands for is 2.95). The
+ * sign is decided on the RAW fraction, as signedPct does: a float-noise
+ * negative (0.3 − (0.1 + 0.2)) pre-rounds to −0, and reading the sign there
+ * would print "+0.0%" where the Stress card prints "−0.0%".
  */
 export function formatSignedPercent(fraction: number, digits: number): string {
   const pct = Math.round(fraction * 100 * 1e8) / 1e8;
-  return `${pct < 0 ? TRUE_MINUS : '+'}${Math.abs(pct).toFixed(digits)}%`;
+  return `${fraction < 0 ? TRUE_MINUS : '+'}${Math.abs(pct).toFixed(digits)}%`;
 }
 
 /**

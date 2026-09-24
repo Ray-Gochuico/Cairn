@@ -214,6 +214,8 @@ interface GoalProjection extends GoalProgressResult {
  */
 function MiniGoalCard({ projection }: { projection: GoalProjection }) {
   const { goal } = projection;
+  // The bar, aria-valuenow and the percent label share one [0, 1] clamp (B3
+  // review): an imported negative balance reads "0% complete", never U+2212.
   const pct = Math.min(1, Math.max(0, projection.percentComplete));
   const valuenow = Math.round(pct * 100);
   const onTrack = projection.onTrack;
@@ -256,7 +258,7 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
         />
       </div>
       <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-        {formatPercent(projection.percentComplete)} complete
+        {formatPercent(pct)} complete
       </div>
     </Link>
   );
