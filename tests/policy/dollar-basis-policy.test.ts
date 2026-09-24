@@ -46,9 +46,6 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
   'src/lib/financial-independence.ts',
   // Real-only by plan law (interview CI-33; anchor $13,538 / anti $18,194).
   'src/lib/interview/effects.ts',
-  // LEGACY: What-If's private basis. W5.1 migrates What-If and DELETES this
-  // entry (the shrink-only rule) — see the W5.1 chip.
-  'src/components/whatif/FiCards.tsx',
   // LEGACY (2026-09-01, coordinator ruling A): W1 landed before this ratchet;
   // uses realRateOfUnfloored for rate arithmetic only (no $ converter);
   // migrate onto the basis boundary then shrink by one — chip.
@@ -57,12 +54,6 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
   // uses realRateOfUnfloored for rate arithmetic only (no $ converter);
   // migrate onto the basis boundary then shrink by one — chip.
   'src/pages/calculators/EarliestRetirementCard.tsx',
-  // LEGACY (2026-09-02, ruling A reasoning — the snapshot at the commit that
-  // WIDENS the pattern is the true offender set; shrink-only binds forward):
-  // What-If's own deflator consumers, brought under the ratchet by adding
-  // `toReal`. W5.1 migrates What-If onto the basis boundary and DELETES both.
-  'src/components/whatif/ProjectionChart.tsx',
-  'src/lib/scenarios/index.ts', // the scenarios barrel re-exports toReal
 ]);
 
 /**
@@ -71,7 +62,9 @@ const CONVERTER_ALLOWLIST: ReadonlySet<string> = new Set([
  * offender-plus-entry drive-by fail CI instead of passing both halves.
  * shrink-only: LOWER this number when you prune; never raise it.
  */
-const CONVERTER_ALLOWLIST_CEILING = 9;
+// W5.1 Task 5: ProjectionChart + the scenarios barrel came off — 9 → 7.
+// W5.1 Task 6: FiCards came off — 7 → 6. Remaining LEGACY: the two W1 cards (ruling A chip).
+const CONVERTER_ALLOWLIST_CEILING = 6;
 
 async function converterOffenders(): Promise<string[]> {
   const files = await collectSourceFiles(SRC_DIR);
@@ -119,7 +112,7 @@ describe('dollar-basis policy — converter imports are boundary-only', () => {
     const stale = [...CONVERTER_ALLOWLIST].filter((f) => !offenders.has(f));
     expect(
       stale,
-      'prune these from CONVERTER_ALLOWLIST in the same PR (W5.1 prunes FiCards.tsx)',
+      'prune these from CONVERTER_ALLOWLIST in the same PR (shrink-only)',
     ).toEqual([]);
   });
 });
@@ -162,10 +155,17 @@ describe('dollar-basis policy — one store, pinned readers', () => {
 
 // Split-concat so this file never matches its own hunt patterns.
 const DOOMED_RE = new RegExp(
-  ['useChart' + 'DisplayMode', 'RealNominal' + 'Toggle', 'calc-display' + '-mode'].join('|'),
+  [
+    'useChart' + 'DisplayMode',
+    'RealNominal' + 'Toggle',
+    'calc-display' + '-mode',
+    // W5.1: What-If's private basis is dead too (src AND tests, stripped of comments).
+    'dollar' + 'Mode',
+    'Dollar' + 'Mode',
+  ].join('|'),
 );
 
-describe('dollar-basis policy — the per-card toggle stays dead', () => {
+describe("dollar-basis policy — the per-card toggle and What-If's private basis stay dead", () => {
   it('zero references in src/ and tests/ (stripped of comments)', async () => {
     const files = [
       ...(await collectSourceFiles(SRC_DIR)),
@@ -178,7 +178,8 @@ describe('dollar-basis policy — the per-card toggle stays dead', () => {
     }
     expect(
       offenders,
-      'useChartDisplayMode/RealNominalToggle/calc-display-mode were deleted in W5',
+      'useChartDisplayMode/RealNominalToggle/calc-display-mode were deleted in W5'
+        + '; ' + 'dollar' + 'Mode' + '/' + 'Dollar' + 'Mode' + ' were deleted in W5.1',
     ).toEqual([]);
   });
 });

@@ -5,15 +5,17 @@
  * every sentence from these fields alone):
  *   Y1            one RealState per render feeds projectedScenarios(real);
  *                 realFingerprint keys the cache; taxBrackets frozen at start
- *   Y2            scenarios-store dollarMode + horizonMonths (store-level,
- *                 shared by every plotted line)
+ *   Y2            scenarios-store horizonMonths + the page basis
+ *                 (useDollarBasis('whatif') via the boundary) — store-level,
+ *                 shared by every plotted line
  *   Y3 (+a/b)     WhatIf displayInflation (effectiveBaselineInflation) vs
  *                 each side's engineBaselineInflationOf (engine.ts:196-201)
  *   Y4            computeAssumptionParity over the ASSUMPTION_LEVER_KEYS
  *   BL1/BL2/TR-FI Milestones.financialIndependenceISO (detectMilestones)
- *   BL3/TR-NW     Milestones.netWorth30y, displayed via the fmtNetWorth30y
- *                 recipe (ManageScenariosModal.tsx:39-44); floor = the
- *                 briefing NET_WORTH_FLOOR recipe over the display values
+ *   BL3/TR-NW     Milestones.netWorth30y ALREADY in the display basis
+ *                 (BasedMilestones from toDisplayMilestones — the one 30-year
+ *                 recipe); floor = the briefing NET_WORTH_FLOOR recipe over
+ *                 those display values
  *   BL4/TR-DEBT   Milestones.debtFreeISO
  *   BL5           canonicalJson payload equality (identical payload + same
  *                 RealState ⇒ identical cache key ⇒ identical states)
@@ -29,10 +31,12 @@
  */
 import { formatCurrency } from '@/lib/format';
 import { NET_WORTH_FLOOR_ABS, NET_WORTH_FLOOR_PCT } from '@/lib/briefing';
-import type { LeverPayload, Milestones, MonthlyState } from '@/lib/scenarios';
+import type { LeverPayload, MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 import type { AppSettings, Household } from '@/types/schema';
-import type { DollarMode } from '@/stores/scenarios-store';
+import type { DollarBasis } from '@/lib/calculators/dollar-basis';
+import type { BasedMilestones } from '@/lib/calculators/basis-view';
+import { TODAY_SUFFIX, FUTURE_SUFFIX } from '@/lib/calculators/basis-vocabulary';
 import { canonicalJson, type AssumptionParity, type LeverDiff } from './lever-diff';
 
 // ── model shapes (briefing.ts BriefingRowPart precedent) ────────────────────
@@ -56,13 +60,15 @@ export interface CompareSide {
   name: string;
   payload: LeverPayload;
   states: MonthlyState[];
-  milestones: Milestones;
+  /** W5.1: ALREADY in the page's display basis — the boundary's toDisplayMilestones output. */
+  milestones: BasedMilestones;
 }
 
 export interface PlanReviewInput {
   a: CompareSide;
   b: CompareSide;
-  dollarMode: DollarMode;
+  /** W5.1 (D-T11): the page basis. Every side's milestones must carry the same brand. */
+  basis: DollarBasis;
   horizonMonths: number;
   deflator: { rate: number; sourceLabel: string };
   parity: AssumptionParity;
@@ -119,8 +125,8 @@ export const TEMPLATES = {
     parts: [t(`${s.earlierName} is debt-free `), em(nMonths(s.months)), t(' earlier — '), em(s.earlierLabel), t(' vs '), em(s.laterLabel), t('.')],
   }),
   BL5: (): ReviewLine => ({ parts: [t('These two scenarios are identical — their lines overlap.')] }),
-  BL6: (s: { floor: string }): ReviewLine => ({
-    parts: [t('These plans end within '), em(s.floor), t(' of each other over this horizon.')],
+  BL6: (s: { floor: string; basisSuffix: string }): ReviewLine => ({
+    parts: [t('These plans end within '), em(s.floor), t(` of each other over this horizon${s.basisSuffix}.`)],
   }),
   TR_DEBT1: (s: { yesName: string; monthLabel: string; noName: string }): ReviewLine => ({
     parts: [t(`${s.yesName} is debt-free by `), em(s.monthLabel), t(`; ${s.noName} still carries debt at the end of the horizon.`)],
@@ -173,17 +179,17 @@ function nwDelta(i: PlanReviewInput): NwDelta | null {
   const na = i.a.milestones.netWorth30y;
   const nb = i.b.milestones.netWorth30y;
   if (na == null || nb == null) return null;
-  // The fmtNetWorth30y display recipe (ManageScenariosModal.tsx:39-44) —
-  // parity with the scoreboard column, D-W3-4 / D-W3-P7.
-  const disp = (n: number): number => (i.dollarMode === 'real' ? n / Math.pow(1 + i.deflator.rate, 30) : n);
-  // …and to WHOLE DOLLARS, the way that column prints them (formatCurrency =
+  // W5.1 (D-W51-2): both sides arrive ALREADY in the display basis — this lib
+  // deflates nothing (the ONE 30-year recipe is toDisplayMilestones, and the
+  // scoreboard column reads the same bundle, so parity is structural now).
+  // Round each side to WHOLE DOLLARS, the way that column prints them (formatCurrency =
   // Intl with maximumFractionDigits: 0). The delta is the difference between
   // the two figures the user can read off the modal, so each side is rounded
   // FIRST and then subtracted. Subtracting the raw halves and rounding the
   // result put the card $1 below the scoreboard (smoke M1, 2026-09-02:
   // $3,822,730 on the card vs $3,822,729 across the columns).
-  const da = Math.round(disp(na));
-  const db = Math.round(disp(nb));
+  const da = Math.round(na);
+  const db = Math.round(nb);
   return {
     floor: Math.max(NET_WORTH_FLOOR_ABS, NET_WORTH_FLOOR_PCT * Math.max(Math.abs(da), Math.abs(db))),
     absDelta: Math.abs(da - db),
@@ -191,7 +197,9 @@ function nwDelta(i: PlanReviewInput): NwDelta | null {
   };
 }
 
-const basisSuffix = (i: PlanReviewInput): string => (i.dollarMode === 'real' ? " (today's dollars)" : '');
+/** A2/A3 (W5's short register, imported — never retyped). */
+const basisSuffix = (i: PlanReviewInput): string =>
+  ` ${i.basis === 'today' ? TODAY_SUFFIX : FUTURE_SUFFIX}`;
 
 function debtPairBoth(i: PlanReviewInput): Chosen | null {
   const da = i.a.milestones.debtFreeISO ?? null;
@@ -217,7 +225,7 @@ function chooseBottomLine(i: PlanReviewInput): Chosen {
   if (canonicalJson(i.a.payload) === canonicalJson(i.b.payload)) {
     return { id: 'BL5', line: TEMPLATES.BL5() };
   }
-  return { id: 'BL6', line: TEMPLATES.BL6({ floor: money(nw ? nw.floor : NET_WORTH_FLOOR_ABS) }) };
+  return { id: 'BL6', line: TEMPLATES.BL6({ floor: money(nw ? nw.floor : NET_WORTH_FLOOR_ABS), basisSuffix: basisSuffix(i) }) };
 }
 
 const firstDrawYm = (states: MonthlyState[]): string | null =>
@@ -316,7 +324,19 @@ function deflatorLine(i: PlanReviewInput): ReviewLine {
 }
 
 export function buildPlanReview(i: PlanReviewInput): PlanReviewModel {
-  const basis = i.dollarMode === 'real' ? "real (today's dollars)" : 'nominal';
+  // W5.1 structural guard (D-T5): a side based for a different page basis IS
+  // the nominal-on-real blend — refuse it rather than narrate it.
+  for (const s of [i.a, i.b]) {
+    if (s.milestones.basis !== i.basis) {
+      throw new Error(
+        `plan-review: mixed-basis input — ${s.name} milestones are ${s.milestones.basis}, page basis is ${i.basis}`,
+      );
+    }
+  }
+  // A1: symmetric parentheticals — the glossary teaches nominal <-> Future $,
+  // real <-> Today's $, so a user who pressed "Future $" never reads a bare
+  // "nominal" with nothing to hold it against.
+  const basis = i.basis === 'today' ? "real (today's dollars)" : 'nominal (future dollars)';
   const y2 = TEMPLATES.Y2({ basis, horizon: horizonPhrase(i.horizonMonths) });
   const aEmpty = i.a.states.length === 0;
   const bEmpty = i.b.states.length === 0;
@@ -331,7 +351,7 @@ export function buildPlanReview(i: PlanReviewInput): PlanReviewModel {
     };
   }
   const yardstick: ReviewLine[] = [TEMPLATES.Y1(), y2];
-  if (i.dollarMode === 'real') yardstick.push(deflatorLine(i));
+  if (i.basis === 'today') yardstick.push(deflatorLine(i));
   yardstick.push(i.parity.equal ? TEMPLATES.Y4_EQUAL() : TEMPLATES.Y4_DIFFER({ list: i.parity.differences.join('; ') }));
   const bottom = chooseBottomLine(i);
   return {

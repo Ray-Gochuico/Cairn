@@ -36,7 +36,7 @@ function resetStores() {
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} } as any);
   useScenariosStore.setState({
     scenarios: [], isLoading: false, error: null,
-    horizonMonths: 360, dollarMode: 'nominal',
+    horizonMonths: 360,
     inflation: 0.025, defaultReturnRate: 0.07,
   });
   useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
@@ -105,7 +105,7 @@ describe('useRealState', () => {
     } as any);
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360, dollarMode: 'nominal',
+      horizonMonths: 360,
       inflation: 0.025, defaultReturnRate: 0.07,
     });
     const { result } = renderHook(() => useRealState(), { wrapper });
@@ -135,7 +135,7 @@ describe('useRealState', () => {
     } as any);
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360, dollarMode: 'nominal',
+      horizonMonths: 360,
       inflation: 0.025, defaultReturnRate: 0.07,
     });
     const { result } = renderHook(() => useRealState(), { wrapper });
@@ -165,7 +165,7 @@ describe('useRealState', () => {
     } as any);
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360, dollarMode: 'nominal',
+      horizonMonths: 360,
       inflation: 0.025, defaultReturnRate: 0.07,
     });
     const { result } = renderHook(() => useRealState(), { wrapper });
@@ -194,7 +194,7 @@ describe('useRealState', () => {
     } as any);
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360, dollarMode: 'nominal',
+      horizonMonths: 360,
       inflation: 0.025, defaultReturnRate: 0.07,
     });
     const { result } = renderHook(() => useRealState(), { wrapper });

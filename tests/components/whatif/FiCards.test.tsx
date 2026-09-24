@@ -1,7 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import FiCards from '@/components/whatif/FiCards';
+import FiCards, { WHATIF_FI_BASIS_FIGURES } from '@/components/whatif/FiCards';
+import { expectBasisDiscipline } from '../../helpers/basis-discipline';
+import {
+  WHATIF_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import type { MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
@@ -545,5 +551,46 @@ describe('FiCards', () => {
     );
     const fiProgress = screen.getByTestId('whatif-fi-number-progress');
     expect(fiProgress).toHaveTextContent('$600,000');
+  });
+});
+
+describe("W5.1 — FI + Coast FI are PINNED today's-dollar figures (spec F10 class; never page-flipped)", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+    // DOB 1990-01-01 at 2026-05-14 → age 36 → 65 − 36 = 29 years (the coast-fi-cross-card idiom).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const projections = () => new Map<number, MonthlyState[]>([[1, seedState(200_000, 50_000)]]);
+
+  it("ANCHOR PAIR: $1,200,000 / $453,214 carry 'in today's dollars' in BOTH bases; re-inflated + nominal-rate anti-pins never render", () => {
+    const { container } = renderWithRouter(
+      <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} />,
+    );
+    const fi = screen.getByTestId('whatif-fi-number-target');
+    const coast = screen.getByTestId('whatif-coastfi-number-target');
+    // fiTarget = 4000 × 12 / 0.04 ; coast = 1,200,000 / (1.06/1.025)^29 = 453,213.93
+    expect(fi.textContent).toBe("$1,200,000 in today's dollars");
+    expect(coast.textContent).toBe("$453,214 in today's dollars");
+    act(() => useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'future'));
+    expect(fi.textContent).toBe("$1,200,000 in today's dollars");
+    expect(coast.textContent).toBe("$453,214 in today's dollars");
+    // ×1.025^29 re-inflation ($2,455,689 / $927,460) and the nominal-rate coast ($221,468) are the blend class.
+    for (const wrong of ['$2,455,689', '$927,460', '$221,468']) expect(container.textContent).not.toContain(wrong);
+    // The T17 explainer keeps its RATE vocabulary byte-for-byte (rates are not dollar bases).
+    expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation), 29y to retirement');
+  });
+
+  it('sweep: pinned targets + invariant progress rows; no unregistered $ on the cards', () => {
+    expectBasisDiscipline(
+      <MemoryRouter>
+        <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} />
+      </MemoryRouter>,
+      { figures: WHATIF_FI_BASIS_FIGURES, charts: [] },
+      { pageId: WHATIF_PAGE_ID },
+    );
   });
 });

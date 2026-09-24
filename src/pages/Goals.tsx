@@ -28,6 +28,7 @@ import { useViewScope } from '@/lib/use-view-scope';
 import { partitionHidden } from '@/lib/view-scope';
 import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import type { RegisteredFigure } from '@/lib/calculators/basis-view';
 import GoalForm, { DEFAULT_GOAL, GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { EditDrawer } from '@/components/layout/EditDrawer';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -104,7 +105,7 @@ function latestSnapshotPerAccount(snapshots: AccountSnapshot[]): Map<number, num
 
 
 
-interface GoalProjection extends GoalProgressResult {
+export interface GoalProjection extends GoalProgressResult {
   goal: Goal;
   recentMonthlyContribution: number;
 }
@@ -123,7 +124,7 @@ interface GoalProgressCardProps {
   onEdit: () => void;
 }
 
-function GoalProgressCard({
+export function GoalProgressCard({
   projection,
   accountInfoById,
   onUpdateBalance,
@@ -175,7 +176,9 @@ function GoalProgressCard({
           </CardTitle>
           <div className="text-xs text-muted-foreground mt-1">
             {GOAL_TYPE_LABELS[goal.type]} · target{' '}
-            <span className="tabular-nums">{formatCurrency(goal.targetAmount)}</span>{' '}
+            <span className="tabular-nums" data-testid="goal-target-amount">
+              {formatCurrency(goal.targetAmount)}
+            </span>{' '}
             by {formatDate(goal.targetDate)}
           </div>
         </div>
@@ -195,7 +198,10 @@ function GoalProgressCard({
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
             <span>
-              <span className="tabular-nums">{formatCurrency(projection.currentSaved)}</span> saved
+              <span className="tabular-nums" data-testid="goal-current-saved">
+                {formatCurrency(projection.currentSaved)}
+              </span>{' '}
+              saved
             </span>
             <span className="tabular-nums">{formatPercent(Math.min(1, projection.percentComplete))}</span>
           </div>
@@ -223,22 +229,29 @@ function GoalProgressCard({
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
               Monthly needed
             </dt>
-            <dd className="tabular-nums font-medium">{monthlyNeededDisplay}</dd>
+            <dd className="tabular-nums font-medium" data-testid="goal-monthly-needed">
+              {monthlyNeededDisplay}
+            </dd>
             <dd className="text-xs text-muted-foreground mt-0.5">
               {/* Wave A C21: the Moderate rate is a household setting in
-                  every view — say so. */}
-              at the household growth scenario · vs <span className="tabular-nums">{formatCurrency(projection.recentMonthlyContribution)}</span> recent
+                  every view — say so.
+                  W5.1 (F8, D-W51-8): a nominal annuity — phrase it as future dollars. */}
+              at the household growth scenario, in future dollars · vs{' '}
+              <span className="tabular-nums" data-testid="goal-recent-contribution">
+                {formatCurrency(projection.recentMonthlyContribution)}
+              </span>{' '}
+              recent
             </dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
               Projected at target
             </dt>
-            <dd className="tabular-nums font-medium">
+            <dd className="tabular-nums font-medium" data-testid="goal-projected">
               {formatCurrency(projection.projectedAtTarget)}
             </dd>
             <dd className="text-xs text-muted-foreground mt-0.5">
-              {projection.monthsUntilTarget} mo to target
+              {projection.monthsUntilTarget} mo to target · in future dollars
             </dd>
           </div>
         </dl>
@@ -648,3 +661,13 @@ export default function Goals() {
     </PageContainer>
   );
 }
+
+/** W5.1 test-only registration (F8): the projections are PINNED future dollars
+ *  (no inflation enters computeGoalProgress); the rest are year-0 inputs. */
+export const GOALS_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'goal-target-amount', cls: 'invariant' },
+  { testId: 'goal-current-saved', cls: 'invariant' },
+  { testId: 'goal-monthly-needed', cls: 'pinned', pinnedBasis: 'future' },
+  { testId: 'goal-recent-contribution', cls: 'invariant' },
+  { testId: 'goal-projected', cls: 'pinned', pinnedBasis: 'future' },
+];

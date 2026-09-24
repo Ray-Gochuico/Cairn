@@ -1,5 +1,4 @@
 export { projectScenario, type MonthlyState, type Horizon } from './engine';
-export { toReal } from './real';
 export { detectMilestones, type Milestones, type FinancialIndependenceParams } from './milestones';
 export { captureRealState, type RealState, type RealStateInputs, type AppSettingsSlice } from './state-snapshot';
 export { effectiveSwr } from './effective-swr';

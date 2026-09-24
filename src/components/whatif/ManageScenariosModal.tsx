@@ -8,47 +8,38 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useScenariosStore, type DollarMode } from '@/stores/scenarios-store';
+import { useScenariosStore } from '@/stores/scenarios-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { summarizeLevers } from '@/lib/whatif/lever-summary';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
 import { SaveCurrentDialog } from './SaveCurrentDialog';
 import type { Milestones } from '@/lib/scenarios';
-import { formatCurrency } from '@/lib/format';
+import type { RegisteredFigure } from '@/lib/calculators/basis-view';
 
 interface ManageScenariosModalProps {
+  /** Dates (basis-invariant) — the engine's milestones as computed. */
   milestones: Map<number, Milestones>;
   onClose: () => void;
   onEditLevers?: (scenarioId: number) => void;
   /**
-   * The page's dollar toggle + the same inflation the chart uses. The modal
-   * sits ON the What-If page whose chart obeys this toggle, so the "30y NW"
-   * column must follow it too — a modal number 2.1× the chart's is exactly the
-   * nominal-on-real class this app has shipped before (T17).
+   * W5.1: the 30y NW column comes ALREADY based + formatted from the page's
+   * WhatIfBasisView (D-T5 guarantee 3) with the matching short suffix — the
+   * modal can no longer disagree with the chart by 2.1× (the T17 class).
    */
-  dollarMode: DollarMode;
-  inflation: number;
+  netWorth30yFmt: Map<number, string>;
+  basisSuffix: string;
 }
 
 function fmtMilestone(iso?: string): string {
   return iso ?? '—';
 }
 
-/** 30-year net worth in the page's chosen basis: deflated to today's dollars
- *  in real mode, nominal otherwise. */
-function fmtNetWorth30y(n: number | undefined, dollarMode: DollarMode, inflation: number): string {
-  if (n == null) return '—';
-  return dollarMode === 'real'
-    ? formatCurrency(n / Math.pow(1 + inflation, 30))
-    : formatCurrency(n);
-}
-
 export function ManageScenariosModal({
   milestones,
   onClose,
   onEditLevers,
-  dollarMode,
-  inflation,
+  netWorth30yFmt,
+  basisSuffix,
 }: ManageScenariosModalProps) {
   const { scenarios, duplicate, remove } = useScenariosStore();
   const { loans } = useLoansStore();
@@ -85,15 +76,14 @@ export function ManageScenariosModal({
                 <th className="py-1 pr-2">Levers Applied</th>
                 <th className="py-1 pr-2">Debt-free</th>
                 <th className="py-1 pr-2">FI</th>
-                <th className="py-1 pr-2">
-                  30y NW {dollarMode === 'real' ? "(today's $)" : '(nominal)'}
-                </th>
+                <th className="py-1 pr-2">30y NW</th>
                 <th className="py-1 pr-2 w-44">Actions</th>
               </tr>
             </thead>
             <tbody>
               {scenarios.map((s) => {
                 const ms = s.id != null ? milestones.get(s.id) : undefined;
+                const nw = s.id != null ? netWorth30yFmt.get(s.id) : undefined;
                 return (
                   <tr key={s.id} className="border-b last:border-0">
                     <td className="py-2 pr-2 align-top">
@@ -108,13 +98,20 @@ export function ManageScenariosModal({
                         </span>
                       )}
                     </td>
-                    <td className="py-2 pr-2 align-top text-xs">
+                    <td className="py-2 pr-2 align-top text-xs" data-testid="manage-levers">
                       {summarizeLevers(s.leverPayload, { loanNames })}
                     </td>
                     <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.debtFreeISO)}</td>
                     <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.financialIndependenceISO)}</td>
-                    <td className="py-2 pr-2 align-top tabular-nums">
-                      {fmtNetWorth30y(ms?.netWorth30y, dollarMode, inflation)}
+                    {/* WI-7 (D-W51-7): a CONVERTIBLE cell carries its own mark. */}
+                    <td className="py-2 pr-2 align-top tabular-nums" data-testid="manage-nw30y">
+                      {nw ? (
+                        <>
+                          {nw} <span className="text-xs text-muted-foreground">{basisSuffix}</span>
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="py-2 pr-2 align-top">
                       <div className="flex gap-1 flex-wrap">
@@ -191,5 +188,12 @@ export function ManageScenariosModal({
     </Dialog>
   );
 }
+
+/** W5.1 test-only registration. `manage-nw30y` repeats per row — convertible
+ *  (the sweep applies the class to every node); the levers cell is input $. */
+export const MANAGE_SCENARIOS_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'manage-nw30y', cls: 'convertible' }, // inventory #3
+  { testId: 'manage-levers', cls: 'invariant' },  // #4
+];
 
 export default ManageScenariosModal;

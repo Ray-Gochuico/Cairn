@@ -25,18 +25,21 @@ import {
 import {
   buildLeverDiff, computeAssumptionParity, type EngineContext,
 } from '@/lib/whatif/lever-diff';
-import type { Milestones, MonthlyState } from '@/lib/scenarios';
+import type { MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 import type { Household } from '@/types/schema';
-import type { DollarMode } from '@/stores/scenarios-store';
+import type { DollarBasis } from '@/lib/calculators/dollar-basis';
+import type { BasedMilestones, RegisteredFigure } from '@/lib/calculators/basis-view';
 
 interface CompareScenariosCardProps {
   scenarios: Scenario[];
   projections: Map<number, MonthlyState[]>;
-  milestones: Map<number, Milestones>;
+  /** W5.1: ALREADY based + branded by the page's WhatIfBasisView (D-T5). */
+  displayMilestones: Map<number, BasedMilestones>;
   household: Household | null;
   engineContext: EngineContext;
-  dollarMode: DollarMode;
+  /** W5.1 (D-T11): the page basis; every side's brand must match it. */
+  basis: DollarBasis;
   horizonMonths: number;
   displayInflation: number;
   deflatorSourceLabel: string;
@@ -46,9 +49,9 @@ interface CompareScenariosCardProps {
   onSelectB: (id: number) => void;
 }
 
-function ReviewLineText({ line }: { line: ReviewLine }) {
+function ReviewLineText({ line, testId }: { line: ReviewLine; testId: string }) {
   return (
-    <p className="text-sm leading-relaxed">
+    <p className="text-sm leading-relaxed" data-testid={testId}>
       {line.parts.map((p, idx) =>
         p.emphasis
           ? <span key={idx} className="font-medium tabular-nums">{p.text}</span>
@@ -61,8 +64,8 @@ function ReviewLineText({ line }: { line: ReviewLine }) {
 const SELECT_CLS = 'h-7 rounded-md border border-input bg-background px-1 text-sm';
 
 export function CompareScenariosCard({
-  scenarios, projections, milestones, household, engineContext,
-  dollarMode, horizonMonths, displayInflation, deflatorSourceLabel,
+  scenarios, projections, displayMilestones, household, engineContext,
+  basis, horizonMonths, displayInflation, deflatorSourceLabel,
   loanNames, pair, onSelectA, onSelectB,
 }: CompareScenariosCardProps) {
   const [saveOpen, setSaveOpen] = useState(false);
@@ -75,12 +78,14 @@ export function CompareScenariosCard({
       name: s.name,
       payload: s.leverPayload,
       states: projections.get(s.id as number) ?? [],
-      milestones: milestones.get(s.id as number) ?? ({} as Milestones),
+      // A side without a milestone entry is still BRANDED — the lib's guard
+      // needs the basis, never a naked {}.
+      milestones: displayMilestones.get(s.id as number) ?? ({ basis } as BasedMilestones),
     });
     return buildPlanReview({
       a: sideOf(a),
       b: sideOf(b),
-      dollarMode,
+      basis,
       horizonMonths,
       deflator: { rate: displayInflation, sourceLabel: deflatorSourceLabel },
       parity: computeAssumptionParity(a.leverPayload, b.leverPayload, household, engineContext),
@@ -88,7 +93,7 @@ export function CompareScenariosCard({
       // one plan per person on file — from the same context the parity uses.
       leverDiff: buildLeverDiff(a.leverPayload, b.leverPayload, { loanNames, personCount: engineContext.persons.length }),
     });
-  }, [scenarios.length, a, b, projections, milestones, dollarMode, horizonMonths, displayInflation, deflatorSourceLabel, household, engineContext, loanNames]);
+  }, [scenarios.length, a, b, projections, displayMilestones, basis, horizonMonths, displayInflation, deflatorSourceLabel, household, engineContext, loanNames]);
 
   if (scenarios.length === 0) return null;
 
@@ -181,17 +186,17 @@ export function CompareScenariosCard({
         <CardContent className="space-y-3">
           <div className="rounded-md border border-border/50 p-3 space-y-1" data-testid="compare-yardstick">
             <div className="text-xs font-medium text-foreground/80">Same yardstick</div>
-            {model.yardstick.map((l, idx) => <ReviewLineText key={idx} line={l} />)}
+            {model.yardstick.map((l, idx) => <ReviewLineText key={idx} line={l} testId="compare-yardstick-line" />)}
           </div>
           <div>
             <div className="text-xs font-medium text-foreground/80">Bottom line</div>
-            <ReviewLineText line={model.bottomLine} />
+            <ReviewLineText line={model.bottomLine} testId="compare-bottom-line" />
           </div>
           {model.tradeoffs.length > 0 && (
             <div>
               <div className="text-xs font-medium text-foreground/80">Tradeoffs</div>
               <ul className="list-disc pl-5 space-y-1">
-                {model.tradeoffs.map((l, idx) => <li key={idx}><ReviewLineText line={l} /></li>)}
+                {model.tradeoffs.map((l, idx) => <li key={idx}><ReviewLineText line={l} testId="compare-tradeoff" /></li>)}
               </ul>
             </div>
           )}
@@ -199,7 +204,7 @@ export function CompareScenariosCard({
             <div>
               <div className="text-xs font-medium text-foreground/80">Main difference</div>
               <ul className="space-y-1">
-                {model.mainDifference.map((l, idx) => <li key={idx}><ReviewLineText line={l} /></li>)}
+                {model.mainDifference.map((l, idx) => <li key={idx}><ReviewLineText line={l} testId="compare-main-difference" /></li>)}
               </ul>
             </div>
           )}
@@ -211,5 +216,23 @@ export function CompareScenariosCard({
     </Card>
   );
 }
+
+/** W5.1 test-only registration (frozen W5 contract). The bottom line's class
+ *  depends on which ladder rung fires, so the registries are RUNG-SPECIFIC
+ *  (P6); yardstick lines are basis STATEMENTS (Y2/Y3 flip as prose) and stay
+ *  unregistered — the $-completeness scan still guards them. */
+export const COMPARE_BASIS_FIGURES_BL3: RegisteredFigure[] = [
+  { testId: 'compare-bottom-line', cls: 'convertible' },   // inventory #5 (BL3)
+  { testId: 'compare-main-difference', cls: 'invariant' }, // #8
+];
+export const COMPARE_BASIS_FIGURES_BL1_TRNW: RegisteredFigure[] = [
+  { testId: 'compare-bottom-line', cls: 'invariant' },     // BL1 — dates only
+  { testId: 'compare-tradeoff', cls: 'convertible' },      // #5 (TR-NW)
+  { testId: 'compare-main-difference', cls: 'invariant' }, // #8 (lever $)
+];
+export const COMPARE_BASIS_FIGURES_BL6: RegisteredFigure[] = [
+  { testId: 'compare-bottom-line', cls: 'convertible' },   // #6 (BL6 floor)
+  { testId: 'compare-main-difference', cls: 'invariant' },
+];
 
 export default CompareScenariosCard;

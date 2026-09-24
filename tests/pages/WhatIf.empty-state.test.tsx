@@ -136,7 +136,6 @@ vi.mock('@/stores/scenarios-store', () => {
         load: vi.fn(),
         projectedScenarios: () =>
           new Map<number, ReturnType<typeof makeZeroState>[]>([[1, __projectionState.rows]]),
-        dollarMode: 'nominal',
         inflation: 0.025,
         horizonMonths: 360,
         toggleVisibility: vi.fn(),

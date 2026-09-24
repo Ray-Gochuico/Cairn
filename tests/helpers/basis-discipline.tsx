@@ -136,13 +136,33 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *  - completeness: no unregistered $-figure anywhere outside chart subtrees.
  * Fixture contract: positive figures, inflation > 0, all registered nodes
  * rendered. Renders once, flips the page basis live, restores today.
+ *
+ * W5.1 (D-W51-9) adds PLUMBING only — `opts.pageId` (which page's basis to
+ * flip) and `opts.root` (collect from document.body when the fixture portals,
+ * e.g. a Radix Dialog). The per-class assertions above are byte-untouched and
+ * every landed two-argument call keeps its meaning.
  */
-export function expectBasisDiscipline(el: ReactElement, registry: BasisRegistry): void {
+export interface BasisSweepOptions {
+  /** Which page's basis to flip (default: the calculators page). W5.1 sweeps
+   *  /what-if with WHATIF_PAGE_ID. */
+  pageId?: string;
+  /** Root to collect from (default: the render container). Portaled content
+   *  (Radix Dialog) lives on document.body — pass it explicitly. */
+  root?: HTMLElement;
+}
+
+export function expectBasisDiscipline(
+  el: ReactElement,
+  registry: BasisRegistry,
+  opts: BasisSweepOptions = {},
+): void {
+  const pageId = opts.pageId ?? CALCULATORS_PAGE_ID;
   const view = render(el);
-  const today = collect(view.container, registry);
-  act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
-  const future = collect(view.container, registry);
-  act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'today'));
+  const root = opts.root ?? view.container;
+  const today = collect(root, registry);
+  act(() => useDollarBasisStore.getState().setBasis(pageId, 'future'));
+  const future = collect(root, registry);
+  act(() => useDollarBasisStore.getState().setBasis(pageId, 'today'));
 
   const problems: string[] = [];
   for (const f of registry.figures) {

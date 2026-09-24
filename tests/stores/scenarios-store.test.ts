@@ -13,7 +13,6 @@ const resetStore = () => {
     isLoading: false,
     error: null,
     horizonMonths: 360,
-    dollarMode: 'nominal',
     inflation: 0.025,
     defaultReturnRate: 0.07,
   });
@@ -37,7 +36,6 @@ describe('useScenariosStore — load + baseline auto-creation', () => {
     expect(s.isLoading).toBe(false);
     expect(s.error).toBeNull();
     expect(s.horizonMonths).toBe(360);
-    expect(s.dollarMode).toBe('nominal');
     expect(s.inflation).toBeCloseTo(0.025, 4);
     expect(s.defaultReturnRate).toBeCloseTo(0.07, 4);
   });
@@ -198,12 +196,6 @@ describe('useScenariosStore — UI-state mutators', () => {
     expect(useScenariosStore.getState().horizonMonths).toBe(240);
   });
 
-  it('setDollarMode flips between nominal and real', () => {
-    expect(useScenariosStore.getState().dollarMode).toBe('nominal');
-    useScenariosStore.getState().setDollarMode('real');
-    expect(useScenariosStore.getState().dollarMode).toBe('real');
-  });
-
   it('toggleVisibility persists the visible flag through the DB', async () => {
     const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
     expect(useScenariosStore.getState().scenarios.find((s) => s.id === baselineId)?.visible).toBe(true);
@@ -312,13 +304,16 @@ describe('useScenariosStore.projectedScenarios — memoization', () => {
     expect(after.length).toBe(120);
   });
 
-  it('dollar-mode toggle does NOT re-project — toReal is applied at the chart layer', () => {
+  it('W5.1: the display basis lives OUTSIDE this store — the private basis field is gone and projections are basis-blind', () => {
     const real = sampleRealState();
     const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
     const nominal = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
-    useScenariosStore.getState().setDollarMode('real');
-    const stillNominal = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
-    expect(stillNominal).toBe(nominal);
+    // Split-concat so this assertion cannot itself trip the grep-zero ratchet
+    // (tests/policy/dollar-basis-policy.test.ts scans tests/ too) — the same
+    // idiom DOOMED_RE uses to name a dead identifier without resurrecting it.
+    expect(('dollar' + 'Mode') in useScenariosStore.getState()).toBe(false);
+    expect(('setDollar' + 'Mode') in useScenariosStore.getState()).toBe(false);
+    expect(useScenariosStore.getState().projectedScenarios(real).get(baselineId)).toBe(nominal);
   });
 });
 

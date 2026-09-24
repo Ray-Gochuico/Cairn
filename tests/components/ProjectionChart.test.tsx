@@ -66,6 +66,8 @@ const variant: Scenario = {
   createdAt: 't', updatedAt: 't',
 };
 
+const FUTURE_CAPTION = 'All lines in future dollars — not adjusted for inflation.';
+
 const fixtureStates = (offset = 0): MonthlyState[] => {
   const out: MonthlyState[] = [];
   for (let i = 0; i < 12; i++) {
@@ -94,11 +96,9 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variant]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -115,11 +115,9 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variant]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -135,11 +133,9 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, { ...variant, visible: false }]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -157,11 +153,9 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -178,11 +172,9 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, { ...variant, visible: false }]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -193,11 +185,9 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variant]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -223,11 +213,9 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -244,11 +232,9 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variant]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -285,11 +271,9 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -315,11 +299,9 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, { ...variant, visible: false }]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -340,11 +322,9 @@ describe('ProjectionChart — milestone reference lines', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -361,11 +341,9 @@ describe('ProjectionChart — milestone reference lines', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -382,11 +360,9 @@ describe('ProjectionChart — milestone reference lines', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
         detailLevel="single"
         accounts={[]}
         />
@@ -427,11 +403,9 @@ describe('ProjectionChart — detail level rendering', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="single"
           accounts={mockAccounts}
         />
@@ -450,11 +424,9 @@ describe('ProjectionChart — detail level rendering', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="tax_bucket"
           accounts={mockAccounts}
         />
@@ -480,11 +452,9 @@ describe('ProjectionChart — detail level rendering', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="single"
           accounts={mockAccounts}
         />
@@ -504,11 +474,9 @@ describe('ProjectionChart — detail level rendering', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={mockAccounts}
         />
@@ -530,11 +498,9 @@ describe('ProjectionChart — detail level rendering', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variantScenario]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="tax_bucket"
           accounts={mockAccounts}
         />
@@ -557,11 +523,9 @@ describe('ProjectionChart — Y-axis domain anchored to data', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="single"
           accounts={[]}
         />
@@ -618,11 +582,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="single"
           accounts={toggleAccounts}
         />
@@ -638,11 +600,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="tax_bucket"
           accounts={toggleAccounts}
         />
@@ -658,11 +618,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={toggleAccounts}
         />
@@ -689,11 +647,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={toggleAccounts}
         />
@@ -721,11 +677,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={toggleAccounts}
         />
@@ -762,11 +716,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline, variantScenario]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={toggleAccounts}
         />
@@ -786,11 +738,9 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="per_account"
           accounts={noInvestmentAccounts}
         />
@@ -808,11 +758,9 @@ describe('ProjectionChart — humanized x-axis ticks (round-3 S9)', () => {
       <MemoryRouter>
         <ProjectionChart
           scenarios={[baseline]}
-          projections={projections}
+          displayProjections={projections}
           milestones={milestones}
-          dollarMode="nominal"
-          inflation={0.025}
-          startISO="2026-01"
+          basisCaption={FUTURE_CAPTION}
           detailLevel="single"
           accounts={[]}
         />

@@ -4,8 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
-import { coastFi } from '@/lib/coast-fi';
-import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
+import { buildWhatIfCoastLeg, TODAY_PHRASE, type RegisteredFigure } from '@/lib/calculators/basis-view';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
@@ -27,7 +26,6 @@ export interface FiCardsProps {
 interface ComputedRow {
   liquidNw: number;
   fiTarget: number;
-  coastFiTarget: number;
   yearsUntilRetirement: number;
   rate: number;
   rateLabel: string;
@@ -103,24 +101,18 @@ function computeCards(props: FiCardsProps, settings: AppSettings | null): Comput
   );
   const yearsUntilRetirement = Math.max(0, Math.min(...yearsByPerson));
 
-  // Coast FI: discount the today's-$ FI target by the REAL growth rate.
+  // Coast FI: computed behind the boundary (buildWhatIfCoastLeg) at the FLOORED
+  // real rate — discounting the today's-$ FI target by the REAL growth rate.
   // Mixing a real target with a nominal rate is the bug fixed in W7-Finance.
   // N1: resolve inflation through the CANONICAL chain (the same
   // effectiveBaselineInflation the dashboard FI/Coast cards now use) so both
   // surfaces produce identical coast numbers for the same household, and the
   // shared realRateOf() applies the same 0-floor on the negative-real edge.
   const inflation = effectiveBaselineInflation(ref, household, settings);
-  const realRate = realRateOf(rate.rate, inflation);
-  const coastFiTarget = coastFi({
-    requiredAtRetirement: fiTarget,
-    annualRate: realRate,
-    yearsUntilRetirement,
-  });
 
   return {
     liquidNw,
     fiTarget,
-    coastFiTarget,
     yearsUntilRetirement,
     rate: rate.rate,
     rateLabel: rate.label,
@@ -143,8 +135,14 @@ function FiCard({ testId, title, target, liquidNw, explainer }: FiCardProps) {
     <Card className="min-w-0 flex-1" data-testid={testId}>
       <CardContent className="py-4">
         <div className="text-sm text-muted-foreground">{title}</div>
-        <div className="text-xl sm:text-2xl font-semibold tabular-nums break-words">
-          {formatCurrency(target)}
+        {/* W5.1: a PINNED today's-dollar figure (spec F10 class) — the phrase
+            rides IN the value node in BOTH page bases (the Compound-headline idiom). */}
+        <div
+          className="text-xl sm:text-2xl font-semibold tabular-nums break-words"
+          data-testid={`${testId}-target`}
+        >
+          {formatCurrency(target)}{' '}
+          <span className="text-xs font-normal text-muted-foreground">{TODAY_PHRASE}</span>
         </div>
         <div className="text-xs text-muted-foreground mt-1">{explainer}</div>
         <div className="mt-2 text-xs tabular-nums" data-testid={`${testId}-progress`}>
@@ -437,13 +435,15 @@ export default function FiCards(props: FiCardsProps) {
   }
   if (!computed) return null;
 
-  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr, inflation } =
-    computed;
+  const { liquidNw, fiTarget, yearsUntilRetirement, rate, rateLabel, swr, inflation } = computed;
+  // W5.1: the coast leg (floored real-rate discounting) lives behind the ONE
+  // boundary — this file imports no converter (CONVERTER_ALLOWLIST pruned).
+  const coast = buildWhatIfCoastLeg({ fiTarget, rate, inflation, yearsUntilRetirement });
   const ratePct = (rate * 100).toFixed(1);
   const withdrawalPct = (swr * 100).toFixed(1);
   // T17: state BOTH bases so the modal/chart real-dollar numbers are legible —
   // "Moderate 7.0% nominal (≈4.4% real after 2.5% inflation)".
-  const realPct = (realRateOfUnfloored(rate, inflation) * 100).toFixed(1);
+  const realPct = (coast.realRateUnfloored * 100).toFixed(1);
   const inflationPct = (inflation * 100).toFixed(1);
 
   return (
@@ -473,7 +473,7 @@ export default function FiCards(props: FiCardsProps) {
               <TermTooltip term="COAST FI">Coast FI</TermTooltip> target today
             </>
           }
-          target={coastFiTarget}
+          target={coast.coastFiTarget}
           liquidNw={liquidNw}
           explainer={`${rateLabel} ${ratePct}% nominal (≈${realPct}% real after ${inflationPct}% inflation), ${yearsUntilRetirement}y to retirement`}
         />
@@ -484,3 +484,12 @@ export default function FiCards(props: FiCardsProps) {
     </div>
   );
 }
+
+/** W5.1 test-only registration (frozen W5 contract). Both targets are PINNED
+ *  today's-dollar figures; the progress rows compare a year-0 seed with them. */
+export const WHATIF_FI_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'whatif-fi-number-target', cls: 'pinned', pinnedBasis: 'today' },      // inventory #10
+  { testId: 'whatif-fi-number-progress', cls: 'invariant' },                       // #12
+  { testId: 'whatif-coastfi-number-target', cls: 'pinned', pinnedBasis: 'today' }, // #11
+  { testId: 'whatif-coastfi-number-progress', cls: 'invariant' },                  // #12
+];

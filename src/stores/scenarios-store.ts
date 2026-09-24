@@ -12,7 +12,6 @@ import {
 } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 
-export type DollarMode = 'nominal' | 'real';
 
 interface ProjectionCacheEntry {
   states: MonthlyState[];
@@ -36,7 +35,6 @@ interface ScenariosState {
   error: string | null;
 
   horizonMonths: number;
-  dollarMode: DollarMode;
   inflation: number;
   defaultReturnRate: number;
 
@@ -51,7 +49,6 @@ interface ScenariosState {
   toggleVisibility: (id: number) => Promise<void>;
   saveCurrentAsScenario: (newName: string) => Promise<number>;
   setHorizonMonths: (months: number) => void;
-  setDollarMode: (mode: DollarMode) => void;
 
   activeScenario: () => Scenario | undefined;
   visibleScenarioIds: () => number[];
@@ -75,7 +72,6 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
   isLoading: false,
   error: null,
   horizonMonths: 360,
-  dollarMode: 'nominal',
   inflation: 0.025,
   defaultReturnRate: 0.07,
 
@@ -171,10 +167,6 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     const clamped = Math.max(60, Math.min(480, Math.round(months)));
     projectionCache.clear();
     set({ horizonMonths: clamped });
-  },
-
-  setDollarMode: (mode) => {
-    set({ dollarMode: mode });
   },
 
   toggleVisibility: async (id) => {
