@@ -352,6 +352,17 @@ describe('PathToFiCard — Keep contributing (FI mode)', () => {
     expect(screen.getByText(/5% ≈ 1\.9% real/)).toBeInTheDocument();
   });
 
+  it('B3 (CR-B3-1c): a negative real rate renders a TRUE MINUS in the Rate column — 2% at 3% inflation reads "2% ≈ −1% real"', () => {
+    // real = 1.02 / 1.03 − 1 = −0.97087…% → "−1%". With $24k/yr against $200k the target is still
+    // reachable (t* ≈ 87.0 — the D-R4 parity test's fixture), so the table renders, no lock.
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.02 }] });
+    renderCard();
+    const cell = screen.getByText('2% ≈ −1% real');
+    expect(cell).toBeInTheDocument();
+    expect(cell.textContent).not.toContain('-');
+    expect(screen.queryByText(/≈ -1% real/)).toBeNull();
+  });
+
   it('numeric columns are right-aligned (CalcTable); Scenario stays left', () => {
     primeStores();
     renderCard();

@@ -396,6 +396,11 @@ describe('edge verdicts (the spec edge table)', () => {
     renderCard();
     const lock = screen.getByText('Returns at or below inflation — the target is never reached in real terms.');
     expect(lock.className).toContain('text-warning-foreground');
+    // B3 (CR-B3-1c): the criterion's "≈ x% real" slot carries a TRUE MINUS. (After B2 the <p>
+    // carries data-testid="retirement-age-criterion"; the text query works on both shapes.)
+    expect(screen.getByText(/^Holds means:/).textContent).toBe(
+      "Holds means: the projected portfolio at that age meets the target $1,500,000 = 12 × $5,000/mo ÷ 4% SWR — in today's dollars, at 2% ≈ −1% real.",
+    );
     expect(within(screen.getByTestId('retirement-age-probes')).getAllByRole('listitem')).toHaveLength(1);
     expect(screen.queryByTestId('retirement-age-verdict')).not.toBeInTheDocument();
   });
