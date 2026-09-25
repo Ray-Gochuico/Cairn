@@ -5,6 +5,107 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-09-25
+
+Honesty work across the Roadmap, What-If and the calculators: every
+spending figure now says how many months it rests on, What-If joins the
+Today's $ / Future $ switch, new What-If scenarios no longer start from a
+silent $0 of spending, the Roadmap gains a market-history card, and the
+sample household files the way it lives. Nothing leaves your machine. No
+database change.
+
+### Added
+
+- **Market stress on the Roadmap.** A new "Questions for you" card asks how
+  your portfolio is split between stocks and bonds and answers with the
+  five named historical windows from the Stress Test — the 1929 crash, the
+  1970s inflation run, the dot-com crash, 2008 and 2022 — replayed against
+  the portfolio you hold today, in today's dollars, on the Historical
+  Backtest's real-return basis. Each line states the deepest year-end, the
+  year the balance was back at today's value, and how many years later
+  your FI target would hold if your assumed path resumed from the window's
+  end. History that happened once — not a forecast, never ranked. The card
+  appears once a brokerage or retirement balance is on file.
+- **College start month.** The college question asks for a month and year
+  only — the dollar field it used to require was never read. Costs can
+  start this month, and the year list reaches a newborn's 18th birthday.
+
+### Changed
+
+- The Roadmap's spending average now uses complete months only and moves on
+  the 1st — the current month no longer counts. Emergency-fund targets may be
+  higher than before and a Done step may show as Active; each figure says how
+  many months of spending it used. On What-If the "12-month average" expense
+  source is now "Spending average" and shows the same count.
+- **What-If in today's dollars.** The What-If page uses the same Today's $ /
+  Future $ switch as the calculators, and Today's $ is the default. The chart,
+  the scenario scoreboard, Compare scenarios and the FI cards all follow it;
+  every figure says which dollars it is in. Goals and the 529 projection stay
+  in future dollars and now say so.
+- The Historical Backtest disclosure's acceptance checkbox now names all three
+  views it covers — the Backtest tool, the Stress Test card, and the History
+  view (version 1.5; the disclosure's text is unchanged), so you'll be asked to
+  re-read and re-accept it once. A disclosure prompt now shows its "What
+  changed" note only when you accepted an earlier version, and Settings →
+  Disclosures lists what changed under each document that has a history.
+- The "About the Frameworks" disclosure is at version 1.2: it now describes
+  the market-history replay behind the new card. You'll be asked to re-read
+  and re-accept it once — at the question bar or at the first card you
+  answer — and the "Questions for you" cards themselves are now behind that
+  same acceptance.
+- Compare scenarios names an assumption difference only when the projection
+  actually uses it — the cash rate your accounts earn, each person's
+  retirement age — and compares per-person entries across the people in your
+  household. Sending a scenario from the calculators lands with that scenario
+  in view, and "Open Contributions" lands on the Contributions tab. On the
+  Inflation lever, Reset now clears the lever back to your household setting.
+- What-If's "What the model doesn't know yet" card now says when someone is
+  paid hourly (the projection doesn't model hourly pay, so it carries no
+  income for them), and counts the Roadmap's "Questions for you" cards among
+  the questions you haven't answered.
+- Percentages now render a negative with a true minus sign (−1%, not -1%),
+  matching the dollar figures beside them on the calculators, and a rate that
+  rounds to zero reads 0%. Path to FI and Earliest Retirement say "Nothing
+  invested" when the portfolio and contributions are both zero instead of
+  blaming the return rate. The History view's holds line names the chart
+  horizon it counts over. Ages on the calculators now follow your local
+  calendar day. Goal progress reads between 0% and 100% on Goals and the
+  Dashboard alike.
+
+### Fixed
+
+- **New What-If scenarios start from your spending average.** Every new
+  scenario — the first Baseline, and a scenario sent from the calculators —
+  used to start with $0 of monthly expenses, so its projection spent nothing
+  each month and could show an FI date that a household paying only rent
+  would reach almost at once. New scenarios now use your spending average,
+  and the Expenses lever names the months it rests on; with no complete month
+  of transactions yet, the lever says so and offers your household expense
+  baseline in one tap. A scenario sent from the calculators now carries the
+  expense figure the calculators showed. Scenarios you already saved are not
+  changed: What the model doesn't know yet names any of them whose expense
+  base is $0 in every month, with a link to its Expenses lever, and an FI
+  date is shown only for months that carry an expense.
+- **The sample household files jointly.** The profile that "Explore with
+  sample data" opens is a two-earner household with a dependent and joint
+  accounts, but it had filed as Single since its first version — every
+  paycheck, What-If and IRA figure on the tour ran through the wrong
+  brackets. It now files Married Filing Jointly (the sample keeps no city:
+  no California city levies an income tax). The sample's month-end
+  snapshots now follow the sample's own reference day. Editing a
+  transaction now states whether it has been reimbursed, for how much, and
+  when.
+- Some Roadmap month labels and per-month savings figures computed on the
+  29th, 30th or 31st of a month were one month off — the emergency-fund
+  "fully funded by" month on the framework cards, and the vehicle card's
+  target month and both monthly figures — and now use the calendar month.
+  East of Greenwich, several Roadmap readings taken on the first of a
+  month used the prior UTC day, and an answer given late in the evening
+  west of Greenwich was dated by the next UTC month (the "Answered" banner
+  and the re-ask timing); all Roadmap dates now use your local day.
+- What-If's today's-dollar view deflated each month's withdrawal-tax figure
+  with the rest of the projection's flows; it had been left in future dollars.
+
 ## [1.6.0] - 2026-09-04
 
 Five additions drawn from a look at what a well-known planner does,
