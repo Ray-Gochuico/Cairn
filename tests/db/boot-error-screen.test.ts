@@ -382,6 +382,93 @@ describe('CR-U-9 — a double-click never both arms and confirms (U1-M3/M4); foc
   });
 });
 
+describe('CR-U-10 — while a restore is in flight, every button on the screen is disabled (U1-m12/m26)', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockImplementation(() => new Promise(() => {})); // never settles: the restore is in flight
+  });
+
+  it('failed-migration screen: after the confirm, Try again, Reveal, releases and the other row are all disabled', async () => {
+    const reload = vi.fn();
+    renderBootError(root, new MigrationFailedError(new Error('duplicate column name'), PRE.path), { reload, now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    const all = [...root.querySelectorAll('button')];
+    expect(all.map((b) => b.textContent)).toEqual(
+      ['Try again', armedLabel, 'Cancel', 'Restore', 'Reveal backups in Finder', 'Open the releases page'],
+    );
+    expect(all.every((b) => b.disabled)).toBe(true);
+    all[0].click();                                 // a disabled Try again does nothing
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('corrupt screen: the Reveal button outside the section is disabled too', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    expect([...root.querySelectorAll('button')].every((b) => b.disabled)).toBe(true);
+  });
+
+  it('a second row whose validation settles DURING the restore neither re-enables nor arms; a second restore never starts', async () => {
+    let resolveSecond: (v: typeof OK) => void = () => {};
+    mValidate.mockImplementation(async (path: string) =>
+      path === MANUAL.path ? new Promise<typeof OK>((r) => { resolveSecond = r; }) : OK);
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const second = rows(root)[1].querySelector('button')!;
+    second.click();                                  // validation pending on row 2
+    expect(second.disabled).toBe(true);              // the row-level disable during validation
+    // Let row 2's lazy import settle first: two CONCURRENT dynamic imports of a
+    // vi.mock'ed module can hand the second one the real module (a vitest
+    // mocker artifact; a browser returns the same module to both).
+    await vi.waitFor(() => expect(mValidate).toHaveBeenCalledWith(MANUAL.path));
+    const first = rows(root)[0].querySelector('button')!;
+    first.click();
+    await vi.waitFor(() => expect(first.textContent).toBe(armedLabel));
+    pastGuard();
+    first.click();                                   // restore in flight
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    resolveSecond(OK);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(second.disabled).toBe(true);
+    expect(second.textContent).toBe('Restore');
+    pastGuard();
+    second.click();
+    first.click();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).toHaveBeenCalledTimes(1);
+  });
+
+  it('the "Restore did not start" path re-enables every button on the screen', async () => {
+    mRestore.mockRejectedValue(new Error('close failed'));
+    renderBootError(root, new MigrationFailedError(new Error('x'), PRE.path), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
+    expect([...root.querySelectorAll('button')].every((b) => !b.disabled)).toBe(true);
+    expect(buttons(root)[0]).toBe('Try again');
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });

@@ -174,6 +174,11 @@ interface RestoreSectionOptions {
 /** Shared by every row of one restore section. */
 interface RestoreContext {
   section: HTMLElement;
+  /** The whole screen: every button in it is disabled while a restore is in
+   * flight (CR-U-10), not only the section's. */
+  screen: HTMLElement;
+  /** True from the confirm click until a 'Restore did not start' rejection. */
+  state: { restoring: boolean };
   /** The polite live region that announces an armed row (U1-m11). */
   status: HTMLElement;
   reload: () => void;
@@ -222,6 +227,8 @@ function appendRestoreSection(container: HTMLElement, opts: RestoreSectionOption
 
   const ctx: RestoreContext = {
     section,
+    screen: container,
+    state: { restoring: false },
     status,
     reload: opts.reload,
     now: opts.now,
@@ -267,9 +274,9 @@ async function hydrateRestoreList(list: HTMLUListElement, ctx: RestoreContext): 
  * Two-step confirm (critic c): click 1 validates (an invalid file shows the
  * validator's reason and never arms); a valid file re-labels the button, adds
  * Cancel, moves focus to Cancel and announces the armed state; click 2
- * disables the whole section and restores (the restore reloads on its way
- * out). A restore that rejects before the swap reports it and re-enables the
- * controls.
+ * disables EVERY button on the screen (CR-U-10) and restores (the restore
+ * reloads on its way out). Only a restore that rejects before the swap
+ * reports it and re-enables the screen.
  *
  * CR-U-9 (U1-M3/M4): the validation round trip is shorter than a human
  * double-click, so the armed branch ignores the second click of a
@@ -337,17 +344,22 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
   };
 
   row.addEventListener('keydown', (ev) => {
-    if (armed && ev.key === 'Escape') disarm();
+    if (armed && !ctx.state.restoring && ev.key === 'Escape') disarm();
   });
 
   restoreBtn.addEventListener('click', (ev) => {
     void (async () => {
+      // CR-U-10: nothing on the screen acts while a restore is in flight.
+      if (ctx.state.restoring) return;
       if (!armed) {
         setAlert(null);
         setButtonsDisabled(row, true);
         try {
           const { validateBackupFile } = await import('@/lib/backup-restore');
           const v = await validateBackupFile(entry.path);
+          // A restore started on another row while this one validated: stay
+          // disabled and never arm (the restore reloads the page).
+          if (ctx.state.restoring) return;
           if (!v.ok) {
             setAlert(v.reason ?? 'That file is not a valid Cairn backup.');
             return;
@@ -371,16 +383,19 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         } catch (err) {
           setAlert(`Could not read that file: ${messageOf(err)}`);
         } finally {
-          setButtonsDisabled(row, false);
-          // After the re-enable: a disabled button cannot take focus.
-          if (armed) cancel?.focus();
+          if (!ctx.state.restoring) {
+            setButtonsDisabled(row, false);
+            // After the re-enable: a disabled button cannot take focus.
+            if (armed) cancel?.focus();
+          }
         }
         return;
       }
       // CR-U-9: never the second click of a double-click, never inside the
       // arm window.
       if (ev.detail > 1 || ctx.now() - armedAt < ARM_GUARD_MS) return;
-      setButtonsDisabled(ctx.section, true);
+      ctx.state.restoring = true;
+      setButtonsDisabled(ctx.screen, true);
       try {
         const { restoreFromBackup } = await import('@/lib/backup-restore');
         // Boot path: the pool may never have been loaded (the generic screen),
@@ -388,8 +403,10 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         // way out once the swap has been attempted.
         await restoreFromBackup(entry.path, { tolerateNotLoaded: true, reload: ctx.reload });
       } catch (err) {
+        // The only path that re-enables the screen (CR-U-10).
+        ctx.state.restoring = false;
         setAlert(`Restore did not start: ${messageOf(err)}`);
-        setButtonsDisabled(ctx.section, false);
+        setButtonsDisabled(ctx.screen, false);
         disarm();
       }
     })();
