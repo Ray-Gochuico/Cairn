@@ -541,4 +541,24 @@ describe('expectBasisDiscipline — B2 markTestId (the statement is a declared e
       }),
     ).toThrow(/fig-far: markTestId is a pinned-figure option/);
   });
+
+  it('A-12 (v1.7.1): a mark element that itself carries a $ figure is covered ONLY when it is registered in its own right — an unregistered mark\'s $ is LOOSE (the rule "registered itself OR no $-digit text" holds by the completeness scan, no separate clause)', () => {
+    // The ERC shape: CP-31's criterion carries $ figures AND is the CP-32
+    // probes' mark — legal because the criterion is registered pinned itself.
+    // The same mark left unregistered is exactly what the scan must reject.
+    const WithDollar = mkMarkedCard(() => "All figures in today's dollars — from your $300 start.");
+    expect(() => expectBasisDiscipline(<WithDollar />, FAR_PINNED)).toThrow(
+      /UNREGISTERED dollar figure outside the registry: "All figures in today's dollars — from your \$300 start\."/,
+    );
+    cleanup();
+    expect(() =>
+      expectBasisDiscipline(<WithDollar />, {
+        figures: [
+          ...FAR_PINNED.figures,
+          { testId: 'basis-line', cls: 'pinned', pinnedBasis: 'today' }, // the mark registered in its own right (mark in the node)
+        ],
+        charts: [],
+      }),
+    ).not.toThrow();
+  });
 });
