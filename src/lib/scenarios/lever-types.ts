@@ -280,6 +280,18 @@ export const LeverPayloadSchema = z.object({
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
+/**
+ * The NEW-scenario factory (the first-boot Baseline, Send-to-What-If's start,
+ * every hand-built test payload). Design OD1 (2026-05-28): "custom prefilled
+ * from the best-available signal, or rolling12m only behind the empty-data
+ * guard. Never a silent $0." It shipped v1.0.0 → v1.6.0 as custom/0 — every
+ * new scenario projected $0 of spending, and a household paying only rent
+ * read a false FI date (C2, 2026-09-24). It is now the spending average:
+ * the popover's empty-data guard speaks when no complete month exists and
+ * offers the household baseline in one tap (never applied silently — OD3).
+ * The SCHEMA default above stays custom/0 for SAVED rows (B5) — the two
+ * defaults are different on purpose. The backtest pins its own custom/0.
+ */
 export function emptyLeverPayload(): LeverPayload {
   return {
     extraLoanPayments: [],
@@ -302,7 +314,7 @@ export function emptyLeverPayload(): LeverPayload {
     annualQualifiedDividends: 0,
     annualNonQualifiedDividends: 0,
     effectiveDrawdownTaxRate: 0,
-    expenseSource: 'custom',
+    expenseSource: 'rolling12m',
     customMonthly: 0,
   };
 }

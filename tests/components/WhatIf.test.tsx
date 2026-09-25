@@ -168,7 +168,9 @@ describe('WhatIf page', () => {
     await waitFor(() => expect(useScenariosStore.getState().scenarios.length).toBe(1));
     expect(screen.getByRole('button', { name: /loans/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /lump sums/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /expenses/i })).toBeInTheDocument();
+    // C2: exact label — a no-transaction Baseline (the factory's spending
+    // average resolves $0) also renders G11's "Open Expenses →" button.
+    expect(screen.getByRole('button', { name: 'Expenses' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /returns/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /income/i })).toBeInTheDocument();
   });

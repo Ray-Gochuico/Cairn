@@ -11,6 +11,7 @@ import {
   monthlyReturnFromAnnualWithFrequency,
   type LoanMonthlyContext,
 } from './apply-real';
+import { resolveExpenseBase } from './expense-base';
 import { CompoundingFrequency } from '@/types/enums';
 import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
@@ -49,6 +50,21 @@ export interface MonthlyState {
   netWorth: number;
   incomeAfterTax: number;
   expenses: number;
+  /**
+   * C2 review — the share of this month's `expenses` the SCENARIO authored:
+   * its resolved expense base plus the expense periods applied THIS month,
+   * with the household's recurring obligations (rent, vehicle leases)
+   * EXCLUDED. POST-inflation (nominal), like `expenses` and every sibling
+   * dollar field — `(expenseBase + periodDelta) × inflationFactor` — so
+   * `expenses − authoredExpenses` is the obligations' nominal share; toReal
+   * deflates it with the rest. The seed month (index 0) spends nothing and
+   * carries 0. Additive observability: no engine math reads it. The FI gate
+   * (milestones.ts) and the G11 register row read it per month, so a period
+   * that ends, starts mid-month or starts later is judged exactly as the
+   * engine spends it. Optional so hand-built MonthlyState literals compile;
+   * absent = not stamped (callers treat such states as ungated).
+   */
+  authoredExpenses?: number;
   savings: number;
   events: string[];
 
@@ -211,6 +227,9 @@ export function projectScenario(
     netWorth: 0,
     incomeAfterTax: 0,
     expenses: 0,
+    // C2 review: the seed spends nothing, so it authors nothing — stamped
+    // (not left absent) so a per-month scan reads every month.
+    authoredExpenses: 0,
     savings: 0,
     events: [],
   };
@@ -602,19 +621,18 @@ function stepMonth(
     real.vehicleLeases ?? [],
     `${monthISO}-15`,
   );
-  // Feature B — the recurring monthly base BEFORE additive period overlays.
-  // custom → customMonthly verbatim; data modes → the figure precomputed on
-  // RealState.expenseBasis at capture. `?? 0` keeps legacy fixtures that
-  // pre-date expenseBasis (and the back-compat custom/0 default) at a 0 base —
-  // byte-identical to the pre-Feature-B engine. The base is added INSIDE the
-  // same *inflationFactor term so it inflates exactly like periods + obligations.
-  const expenseSource =
-    (payload as { expenseSource?: 'latestMonth' | 'rolling12m' | 'custom' }).expenseSource ?? 'custom';
-  const expenseBase =
-    expenseSource === 'custom'
-      ? ((payload as { customMonthly?: number }).customMonthly ?? 0)
-      : (real.expenseBasis?.[expenseSource] ?? 0);
+  // Feature B — the recurring monthly base BEFORE additive period overlays,
+  // resolved by the ONE shared resolver (expense-base.ts, C2): custom →
+  // customMonthly verbatim; data modes → RealState.expenseBasis; `?? 0` keeps
+  // legacy fixtures and the back-compat custom/0 default at a 0 base. The base
+  // is added INSIDE the same *inflationFactor term so it inflates exactly like
+  // periods + obligations.
+  const expenseBase = resolveExpenseBase(payload, real.expenseBasis);
   s.expenses = (expenseBase + periodDelta + obligationDelta) * inflationFactor;
+  // C2 review: stamp the AUTHORED share (base + this month's periods;
+  // obligations excluded) in the same nominal dollars. Additive only — the
+  // line above is byte-untouched, and nothing below reads the stamp.
+  s.authoredExpenses = (expenseBase + periodDelta) * inflationFactor;
 
   // 5. Debt servicing
   let regularLoanPayments = 0;

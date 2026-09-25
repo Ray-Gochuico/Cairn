@@ -98,4 +98,15 @@ describe('toReal', () => {
     const real = toReal([s], 0.03, '2026-05')[0];
     for (const f of FLOWS) expect(real[f], f).toBeCloseTo(100 / 1.03, 6);
   });
+
+  // C2 review: the engine's per-month AUTHORED stamp is nominal like `expenses`
+  // (the authored share of it), so the today's-dollar view deflates it by the
+  // same factor — never a nominal figure inside a real-dollar map.
+  it('deflates authoredExpenses exactly like expenses; an absent stamp stays absent', () => {
+    const s: MonthlyState = { ...make('2027-05', 1), expenses: 5_150, authoredExpenses: 2_575 };
+    const real = toReal([s], 0.03, '2026-05')[0];
+    expect(real.expenses).toBeCloseTo(5_000, 6);
+    expect(real.authoredExpenses).toBeCloseTo(2_500, 6);
+    expect(toReal([make('2027-05', 1)], 0.03, '2026-05')[0].authoredExpenses).toBeUndefined();
+  });
 });

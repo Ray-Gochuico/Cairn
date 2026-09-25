@@ -1,4 +1,5 @@
-import { describe, it, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf, { WHATIF_PAGE_BASIS_FIGURES } from '@/pages/WhatIf';
 import { WHATIF_FI_BASIS_FIGURES } from '@/components/whatif/FiCards';
@@ -188,6 +189,10 @@ const state = (netWorth: number) => ({
   netWorth,
   incomeAfterTax: 0,
   expenses: 0,
+  // C2 review: the engine's per-month authored stamp — a custom/$0 scenario
+  // authors (and here spends) nothing, so the G11 row renders and its $0 rides
+  // this sweep (registered invariant in WHATIF_PAGE_BASIS_FIGURES).
+  authoredExpenses: 0,
   savings: 0,
   events: [],
 });
@@ -230,5 +235,10 @@ describe('W5.1 basis-audit sweep — the /what-if page (FI cards + Compare + pro
       },
       { pageId: WHATIF_PAGE_ID },
     );
+  });
+
+  it('C2 review: the G11 $0 rows render in this harness — the sweep above exercises their registration, never vacuously', () => {
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    expect(screen.getAllByTestId('whatif-model-gap-expense-base')).toHaveLength(2);
   });
 });

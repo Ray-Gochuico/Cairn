@@ -170,6 +170,15 @@ function runBacktest(
         // Real-dollar engine: zero inflation so CPI isn't re-applied
         // (InflationScheduleSchema: defaultRate in [-0.05,0.20] | null, overrides {}).
         inflation: { defaultRate: 0, overrides: {} },
+        // C2 (2026-09-24): the replay's spending is config.annualSpending as
+        // 12 expensePeriods slices above — NOTHING else. The factory default
+        // for NEW What-If scenarios is now the spending average (rolling12m),
+        // and this payload starts from that factory; the seed carries the
+        // household's expenseBasis (useRealState → captureRealState), so an
+        // inherited data mode would add the household's average spending to
+        // every replay year. Pinned custom/0 explicitly; BT-4 is the kill.
+        expenseSource: 'custom',
+        customMonthly: 0,
       };
 
       const yearReal: RealState = {

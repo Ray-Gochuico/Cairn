@@ -53,6 +53,42 @@ function liquidAssets(s: MonthlyState): number {
   return investments + (s.cash ?? 0);
 }
 
+/**
+ * C2 review — the per-month scenario gate, read off the engine's OWN stamp
+ * (MonthlyState.authoredExpenses: the resolved expense base plus the periods
+ * the engine applies THAT month, rent and vehicle leases excluded). A month
+ * whose authored share is $0 spends only the household's obligations, and a
+ * crossing against rent alone is not FI. Because the stamp is the engine's,
+ * a period that ends, starts mid-month or starts later is judged exactly as
+ * the engine spends it — no caller resolves a month-0 figure of its own.
+ * A state without the stamp (hand-built fixtures, callers outside the engine)
+ * is not gated — the pre-C2 behavior.
+ */
+function monthAuthorsSpending(s: MonthlyState): boolean {
+  return s.authoredExpenses === undefined || s.authoredExpenses > 0;
+}
+
+/** C2 review — the two facts the G11 register row needs about ONE scenario's projection. */
+export interface ProjectionSpending {
+  /** Some projected month spends something the scenario authored (the FI gate's own predicate). */
+  authorsSpending: boolean;
+  /** Some projected month spends anything at all — rent and vehicle leases included. */
+  spendsAnything: boolean;
+}
+
+/**
+ * C2 review — G11 reads the SAME per-month predicate the FI gate reads, so the
+ * row and the strip's "FI —" can never disagree: the row fires only when no
+ * projected month authors spending, and its wording follows what the engine
+ * does spend (obligations or nothing).
+ */
+export function projectionSpending(states: readonly MonthlyState[]): ProjectionSpending {
+  return {
+    authorsSpending: states.some(monthAuthorsSpending),
+    spendsAnything: states.some((s) => s.expenses > 0),
+  };
+}
+
 export function detectMilestones(
   states: MonthlyState[],
   params: FinancialIndependenceParams,
@@ -61,8 +97,11 @@ export function detectMilestones(
   let financialIndependenceISO: string | undefined;
   let retirementISO: string | undefined;
 
-  // Round-3 M2: a zero baseline means "no FI target", not "instant FI" —
-  // skip the crossing scan entirely so every consumer renders "FI —".
+  // Round-3 M2: a zero HOUSEHOLD baseline means "no FI target", not "instant
+  // FI" — skip the crossing scan entirely so every consumer renders "FI —".
+  // C2 (review): a month whose SCENARIO-authored spending is $0 means the
+  // same for THAT month — its expenses are rent/leases alone — so it is
+  // skipped per month below (monthAuthorsSpending), never judged from month 0.
   const fiScanEnabled =
     params.monthlyExpenseBaseline === undefined || params.monthlyExpenseBaseline > 0;
 
@@ -72,7 +111,7 @@ export function detectMilestones(
     if (!debtFreeISO && totalDebt === 0) {
       debtFreeISO = s.monthISO;
     }
-    if (fiScanEnabled && !financialIndependenceISO) {
+    if (fiScanEnabled && !financialIndependenceISO && monthAuthorsSpending(s)) {
       // Use LIQUID (investments + cash), not netWorth. Home equity does not
       // sustain a 4% SWR. The previous calculation inflated FI estimates by
       // years for homeowners.

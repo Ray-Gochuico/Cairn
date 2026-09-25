@@ -331,6 +331,7 @@ describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () =
           realPortfolio: 0,
           monthlyContribution: null,
           monthlyExpenses: null,
+          realMonthlyExpenses: 5000,
           swr: null,
           inflation: null,
           salaryByPersonIndex: [150000],
@@ -338,6 +339,11 @@ describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () =
         '2026-05-14',
       ),
     );
+    // C2: the sent scenario carries the bar's DISPLAYED expense figure (the
+    // household baseline, 5000 here) as a custom base — never What-If's default.
+    const sent = arg.leverPayload as { expenseSource: string; customMonthly: number };
+    expect(sent.expenseSource).toBe('custom');
+    expect(sent.customMonthly).toBe(5000);
     expect(await screen.findByTestId('whatif-page')).toBeInTheDocument();
   });
 });

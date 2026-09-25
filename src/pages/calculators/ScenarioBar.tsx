@@ -286,6 +286,8 @@ export function ScenarioBar() {
           monthlyExpenses: scenario.isEdited.monthlyExpenses
             ? scenario.values.monthlyExpenses
             : null,
+          // C2: the displayed figure travels with the scenario (household scope only — D-B6).
+          realMonthlyExpenses: scenario.defaults.monthlyExpenses,
           swr: scenario.isEdited.swrPct ? scenario.engine.swr : null,
           inflation: scenario.isEdited.inflationPct ? scenario.engine.inflation : null,
           salaryByPersonIndex: realPersons

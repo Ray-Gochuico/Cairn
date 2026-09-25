@@ -9,22 +9,40 @@ const untouched: ScenarioBarSnapshot = {
   realPortfolio: 200_000,
   monthlyContribution: null,
   monthlyExpenses: null,
+  realMonthlyExpenses: 4_000,
   swr: null,
   inflation: null,
   salaryByPersonIndex: [null, null],
 };
 
 describe('leverPayloadFromScenarioBar (Wave 18 D6)', () => {
-  it('an untouched bar maps to emptyLeverPayload() defaults (income normalized per person)', () => {
+  it('an untouched bar maps to emptyLeverPayload() defaults — except expenses, which ALWAYS carry the bar\'s displayed figure (C2)', () => {
     const p = leverPayloadFromScenarioBar(untouched, TODAY);
     const empty = emptyLeverPayload();
     // Two persons in the snapshot → two no-op income plans; everything else
-    // deep-equals the empty payload.
+    // deep-equals the empty payload — except the expense base: What-If has no
+    // "real data" of its own that matches the calculators, so an untouched
+    // Send used to arrive at the factory default and silently disagree with
+    // the bar it came from ($6,000 shown, $0 sent; C2 investigation §E).
     expect(p.income.perPerson).toEqual([
       { annualRaiseRate: 0, events: [] },
       { annualRaiseRate: 0, events: [] },
     ]);
-    expect({ ...p, income: empty.income }).toEqual(empty);
+    expect({ ...p, income: empty.income, expenseSource: empty.expenseSource, customMonthly: empty.customMonthly }).toEqual(empty);
+    expect(p.expenseSource).toBe('custom');
+    expect(p.customMonthly).toBe(4_000);
+  });
+
+  it('C2: the displayed figure is carried even when the factory default is a data mode (the sent scenario agrees with the calculators, not with What-If\'s default)', () => {
+    expect(emptyLeverPayload().expenseSource).toBe('rolling12m');   // the premise this mapping guards against
+    const p = leverPayloadFromScenarioBar({ ...untouched, realMonthlyExpenses: 6_000 }, TODAY);
+    expect(p.expenseSource).toBe('custom');
+    expect(p.customMonthly).toBe(6_000);
+  });
+
+  it('C2: a bar showing $0 (not set in Inputs) sends $0 — agreeing with the bar; a negative displayed figure clamps to 0', () => {
+    expect(leverPayloadFromScenarioBar({ ...untouched, realMonthlyExpenses: 0 }, TODAY).customMonthly).toBe(0);
+    expect(leverPayloadFromScenarioBar({ ...untouched, realMonthlyExpenses: -10 }, TODAY).customMonthly).toBe(0);
   });
 
   it('portfolio → a today-dated lump-sum DELTA into investments (signed; down edits work)', () => {
@@ -61,6 +79,7 @@ describe('leverPayloadFromScenarioBar (Wave 18 D6)', () => {
     const p = leverPayloadFromScenarioBar({ ...untouched, monthlyExpenses: 4_500 }, TODAY);
     expect(p.expenseSource).toBe('custom');
     expect(p.customMonthly).toBe(4_500);
+    expect(p.customMonthly).not.toBe(untouched.realMonthlyExpenses);
   });
 
   it('SWR + inflation map with schema clamps', () => {
@@ -101,6 +120,7 @@ describe('leverPayloadFromScenarioBar (Wave 18 D6)', () => {
         realPortfolio: 200_000,
         monthlyContribution: 1_500,
         monthlyExpenses: 5_200,
+        realMonthlyExpenses: 4_000,
         swr: 0.035,
         inflation: 0.03,
         salaryByPersonIndex: [110_000, 90_000],

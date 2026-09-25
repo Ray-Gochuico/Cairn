@@ -23,6 +23,11 @@ import type { ExpensePeriod } from '@/lib/scenarios';
 
 function resetStores(opts: { expensePeriods?: ExpensePeriod[] } = {}) {
   const payload = emptyLeverPayload();
+  // C2: the factory default is the spending average; the describes this
+  // helper feeds test the Custom / periods surface, so the fixture states
+  // its mode instead of inheriting one.
+  payload.expenseSource = 'custom';
+  payload.customMonthly = 0;
   if (opts.expensePeriods) payload.expensePeriods = opts.expensePeriods;
   useScenariosStore.setState({
     scenarios: [{
@@ -362,6 +367,114 @@ describe('ExpensePeriodsPopover — R1 count-stated base label (fake Date: local
       screen.getByTestId('expense-empty-data').textContent ?? '',
       ...screen.getAllByRole('tab').map((t) => t.textContent ?? ''),
     ].join(' ');
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    expect(text).not.toContain('!');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C2 — the factory default's face (Task 3) and the Custom tab at $0 (Task 7,
+// D-C2-7 ⚑ C2-F5).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ExpensePeriodsPopover — C2: a NEW scenario opens on Spending average; a custom $0 base offers the household prefill', () => {
+  function seedFactoryScenario(opts: { householdBaseline?: number } = {}) {
+    seedAllStores({ transactions: [], householdBaseline: opts.householdBaseline ?? 4_500 });
+    // The factory payload VERBATIM — not seedAllStores' explicit-custom fixture.
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'Baseline', isBaseline: true, color: '#4f86f7', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: emptyLeverPayload(),
+        createdAt: '', updatedAt: '',
+      } as Scenario],
+    });
+  }
+
+  it('a fresh scenario with no complete month opens on the Spending average tab with the empty-data guard (never a silent $0)', () => {
+    seedFactoryScenario();
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByRole('tab', { name: 'Spending average' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('No complete month of spending yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /use my \$4,500 expense baseline/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Custom monthly expense')).toBeNull();
+  });
+
+  it('a fresh scenario WITH a complete month reads its base from the spending average, count stated', () => {
+    // The R1 describe's clock idiom (fake Date only; local 2026-05-15 →
+    // startISO '2026-05'), and a day-5 row: the rolling average drops a FIRST
+    // month whose earliest row is past the grace day (7), so a day-10 row
+    // would be excluded as a partial month.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 4, 15, 12));
+      seedAllStores({
+        transactions: [{
+          id: 1, householdId: 1, date: '2026-04-05', amount: 3_000,
+          merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1,
+        }] as any,
+        expenseSource: 'rolling12m',
+      });
+      render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect(screen.getByRole('tab', { name: 'Spending average' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByTestId('expense-base')).toHaveTextContent('3,000');
+      expect(screen.getByTestId('expense-base-source')).toHaveTextContent('average of 1 complete month');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Custom tab, SAVED base $0, baseline on file → the one-tap prefill (CR-R1-7b\'s literal) sits under the field; tapping fills the field', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByText('No complete month of spending yet')).toBeNull();           // not the data-mode guard
+    const offer = screen.getByTestId('expense-custom-zero-prefill');
+    expect(offer).toHaveTextContent('Use my $4,500 expense baseline');
+    fireEvent.click(offer);
+    expect(screen.getByTestId('expense-base')).toHaveTextContent('4,500');
+    expect((screen.getByLabelText('Custom monthly expense') as HTMLInputElement).value).toBe('4500');
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();                // draft > 0 → the offer is gone
+  });
+
+  it('the offer is ABSENT when the saved base is positive (clearing the field to retype never flickers it in)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 6_000, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Custom monthly expense'), { target: { value: '' } });
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+  });
+
+  it('the offer is ABSENT with no household baseline (nothing to offer)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 0 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByTestId('expense-custom-zero-prefill')).toBeNull();
+  });
+
+  it('the prefill is a suggestion only: nothing persists until Apply, and Apply writes the tapped figure as custom', async () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const spy = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    fireEvent.click(screen.getByTestId('expense-custom-zero-prefill'));
+    expect(spy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(spy.mock.calls.at(-1)![1]).toMatchObject({ expenseSource: 'custom', customMonthly: 4_500 });
+  });
+
+  it('the Custom-tab offer\'s text is calm (lexicon + no exclamation)', () => {
+    seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0, householdBaseline: 4_500 });
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const text = screen.getByTestId('expense-custom-zero-prefill').textContent ?? '';
+    expect(text).not.toMatch(ADVICE_LEXICON);
+    expect(text).not.toContain('!');
+  });
+
+  it('every string on the C2 surfaces is calm (lexicon + no exclamation)', () => {
+    seedFactoryScenario();
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // The dialog portals out of the render container, so the scan reads the
+    // document body (the whole open dialog) — and proves it is non-empty.
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('No complete month of spending yet');
     expect(text).not.toMatch(ADVICE_LEXICON);
     expect(text).not.toContain('!');
   });

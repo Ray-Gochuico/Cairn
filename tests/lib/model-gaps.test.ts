@@ -43,6 +43,7 @@ export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput
   contributions: [recentContribution],
   roadmapHasUnanswered: false,
   engineStartsAtZero: true,
+  scenarioSpending: [],
   sides: [
     { name: 'Baseline', payload: P() },
     { name: 'Aggressive payoff', payload: P() },
@@ -50,6 +51,15 @@ export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput
   todayIso: TODAY,
   ...over,
 });
+
+// C2 (G11) fixtures — two facts the page reads off each visible scenario's OWN
+// projection (milestones.ts projectionSpending): does any month spend something
+// the scenario authored, and does any month spend anything at all?
+const AT_ZERO = { scenarioId: 1, name: 'Baseline', authorsSpending: false, spendsAnything: false };
+const AT_ZERO_RENT = { scenarioId: 1, name: 'Baseline', authorsSpending: false, spendsAnything: true };
+const SET = { scenarioId: 2, name: 'Aggressive payoff', authorsSpending: true, spendsAnything: true };
+const G11_NOTHING = (name: string) => `${name}'s expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.`;
+const G11_OBLIGATIONS = (name: string) => `${name}'s expense base is $0 — the projection counts only rent and vehicle leases as spending, so no FI date is shown.`;
 
 describe('buildModelGaps — absence is the calm outcome', () => {
   it('fully-set household → zero rows (the card will not render)', () => {
@@ -350,6 +360,58 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     expect(buildModelGaps(settledInput({ settings: null, sides: [] })).rows.find((r) => r.id === 'G10')).toBeUndefined();
   });
 
+  // ── C2 — G11: a VISIBLE scenario that authors $0 in EVERY projected month while the household baseline is set ──
+  it('G11: one row per $0 scenario — nothing on file → "assumes nothing is spent" verbatim, with the in-page Expenses action (never a route)', () => {
+    const rows = buildModelGaps(settledInput({ scenarioSpending: [AT_ZERO, SET] })).rows;
+    expect(rows).toEqual([{
+      id: 'G11:1',
+      text: "Baseline's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.",
+      cta: { label: 'Open Expenses →', scenarioId: 1, lever: 'expenses' },
+    }]);
+  });
+
+  it('G11: the engine spends rent or a lease → "counts only rent and vehicle leases as spending" verbatim (C2 review: the first variant would be false)', () => {
+    const rows = buildModelGaps(settledInput({ scenarioSpending: [AT_ZERO_RENT, SET] })).rows;
+    expect(rows).toEqual([{
+      id: 'G11:1',
+      text: "Baseline's expense base is $0 — the projection counts only rent and vehicle leases as spending, so no FI date is shown.",
+      cta: { label: 'Open Expenses →', scenarioId: 1, lever: 'expenses' },
+    }]);
+  });
+
+  it('G11: the variant is chosen PER SCENARIO by what its projection spends (obligations), never by the authored fact', () => {
+    const rows = buildModelGaps(settledInput({
+      scenarioSpending: [{ ...AT_ZERO_RENT, scenarioId: 4, name: 'Renting' }, { ...AT_ZERO, scenarioId: 5, name: 'Nothing' }],
+    })).rows;
+    expect(rows.map((r) => r.text)).toEqual([G11_OBLIGATIONS('Renting'), G11_NOTHING('Nothing')]);
+  });
+
+  it('G11: strip order, one row each, names interpolated verbatim', () => {
+    const rows = buildModelGaps(settledInput({
+      scenarioSpending: [{ ...AT_ZERO, scenarioId: 7, name: 'From calculators — Sep 24, 2026' }, SET, AT_ZERO],
+    })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G11:7', 'G11:1']);
+    expect(rows[0].text).toBe("From calculators — Sep 24, 2026's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.");
+  });
+
+  it('G11 is SILENT with a $0 household baseline — G1 owns that moment (mutually exclusive by condition)', () => {
+    const rows = buildModelGaps(settledInput({
+      household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0 }),
+      scenarioSpending: [AT_ZERO, AT_ZERO_RENT],
+    })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G1']);
+  });
+
+  it('G11 is silent with no household and silent when every visible scenario authors spending in some month', () => {
+    expect(buildModelGaps(settledInput({ household: null, scenarioSpending: [AT_ZERO] })).rows.filter((r) => r.id.startsWith('G11'))).toEqual([]);
+    expect(buildModelGaps(settledInput({ scenarioSpending: [SET] })).rows).toEqual([]);
+  });
+
+  it('G11 sits directly after G1\'s slot — before G2 (contract order)', () => {
+    const rows = buildModelGaps(settledInput({ scenarioSpending: [AT_ZERO], snapshots: [], contributions: [] })).rows;
+    expect(rows.map((r) => r.id)).toEqual(['G11:1', 'G2', 'G3', 'G4']);
+  });
+
   it('row order is the contract order (G1 → G10)', () => {
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
@@ -389,12 +451,16 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     // …plus the one row shape the all-rows fixture cannot reach: G10n, whose
     // text interpolates a scenario name (review MINOR 0 — the scan must cover
     // every row, not just the ones one fixture happens to produce).
+    // C2: both G11 shapes (a scenario name interpolated; the two variants) ride
+    // the same scan — they cannot co-fire with the all-rows fixture's $0
+    // household (G1).
     const named = buildModelGaps(settledInput({
       settings: null,
+      scenarioSpending: [AT_ZERO, { ...AT_ZERO_RENT, scenarioId: 2, name: 'Renting' }],
       sides: [{ name: 'Baseline', payload: P() }, { name: 'Aggressive payoff', payload: seq }],
-    })).rows.filter((r) => r.id === 'G10');
+    })).rows.filter((r) => r.id === 'G10' || r.id.startsWith('G11'));
     expect(rows.length).toBeGreaterThanOrEqual(9);
-    expect(named).toHaveLength(1);
+    expect(named).toHaveLength(3);
     for (const r of [...rows, ...named]) {
       expect(r.text).not.toMatch(ADVICE_LEXICON);
       expect(r.cta.label).not.toMatch(ADVICE_LEXICON);
