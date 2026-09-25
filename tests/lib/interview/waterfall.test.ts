@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { splitAmount } from '@/lib/interview/waterfall';
 import { computeBucketGaps, avalancheOrder } from '@/lib/interview/gaps';
 import { AccountType, ContributionSource } from '@/types/enums';
 import { makeHousehold, makePerson, makeAccount, makeLoan } from '../../factories';
-import { fixtureCtx } from './fixture';
+import { fixtureCtx, snap } from './fixture';
 
 const rowsOf = (s: ReturnType<typeof splitAmount>) =>
   s.rows.map((r) => [r.bucket, r.amountCents]);
@@ -216,5 +216,26 @@ describe('sub-floor baselines: no self-contradictory EF skip (review m2)', () =>
     const s = splitAmount({ amountCents: 1_000_000, cadence: 'one-time' }, 'aggressive', fixtureCtx());
     expect(s.skipped.find((k) => k.bucket === 'ef_target')!.reason)
       .toBe('Emergency fund already at 5.0× monthly expenses — skipped.');
+  });
+});
+
+describe('U2 — debt phase months follow the LOCAL day (cross-zone invariance: Pacific/Auckland reads what UTC reads)', () => {
+  // R4 plan-premise correction (see effects.test.ts U3): the fixture Visa pays
+  // on the 1st, so the local 1st and the 15th are different schedules in every
+  // zone; the oracle is the UTC zone, where the UTC day IS the local day.
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  const phaseMonthsAt = (tz: string, day: number) => {
+    process.env.TZ = tz;
+    const ctx = fixtureCtx({ today: new Date(2026, 8, day), snapshots: [snap(1, 40000), snap(2, 8000)] });
+    return splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'aggressive', ctx).phases.map((p) => p.months);
+  };
+  it('local Sep 1, Sep 2 and Sep 15 yield the same schedule in Auckland as in UTC', () => {
+    for (const day of [1, 2, 15]) expect(phaseMonthsAt('Pacific/Auckland', day)).toEqual(phaseMonthsAt('UTC', day));
+    // Non-vacuity: the local 1st is a payment day, so a one-day shift changes the schedule.
+    expect(phaseMonthsAt('UTC', 1)).not.toEqual(phaseMonthsAt('UTC', 2));
   });
 });

@@ -4,6 +4,7 @@ import { compareStrategies } from '@/lib/debt-payoff-comparison';
 import type { Loan } from '@/types/schema';
 import { computeBucketGaps, type BucketGaps } from './gaps';
 import { computeMatchSummary } from './match-value';
+import { todayIsoOf } from './kernel-dates';
 import type { Cadence, InterviewContext } from '@/types/interview';
 
 export type BucketId =
@@ -150,7 +151,7 @@ export function splitAmount(
   }
 
   // ── per-month: phase schedule (design §3.3) ───────────────────────────────
-  const todayIso = ctx.today.toISOString().slice(0, 10);
+  const todayIso = todayIsoOf(ctx);
   const match = computeMatchSummary(ctx);
   let matchCarve = 0;
   if (match.state === 'active') {

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { computeEffect, computeFiMonthlyDelta } from '@/lib/interview/effects';
+import { describe, it, expect, afterEach } from 'vitest';
+import { computeEffect, computeFiMonthlyDelta, kernelScenario } from '@/lib/interview/effects';
 import { splitAmount } from '@/lib/interview/waterfall';
 import { makeHousehold, makeAccount, makeLoan } from '../../factories';
 import { AccountType } from '@/types/enums';
-import { fixtureCtx } from './fixture';
+import { fixtureCtx, snap } from './fixture';
 import { ADVICE_LEXICON } from '../../helpers/advice-lexicon';
 
 const GROWTH = [
@@ -201,5 +201,81 @@ describe('computeEffect — count-stated basis phrase (R1 K1)', () => {
       expect(headlineFor(n)).not.toMatch(ADVICE_LEXICON);
       expect(headlineFor(n)).not.toContain('!');
     }
+  });
+});
+
+describe('kernelScenario — the kernel\'s one scenario/real-rate seam (R4 D-R4-6)', () => {
+  it('todayIso is the LOCAL day; realRate is the unfloored Fisher rate of the moderate scenario', () => {
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 6000, inflationAssumption: 0.03, growthScenarios: GROWTH }),
+    });
+    const k = kernelScenario(ctx);
+    expect(k.todayIso).toBe('2026-08-01');
+    expect(k.defaults.returnPct).toBe(6);
+    expect(k.defaults.inflationPct).toBe(3);
+    expect(k.realRate).toBeCloseTo(1.06 / 1.03 - 1, 12);
+    expect(k.defaults.portfolio).toBe(30_000); // savings 22k + checking 8k — FI-eligible (cash counts)
+    expect(k.provenance.annualContribution).toBe('no contributions in the last 12 months');
+    expect(k.provenance.portfolio).toBe('from your account snapshots');
+  });
+});
+
+describe('CI-28 EF funded date — the day-31 overflow arm (ruling 1: every zone, not only east of Greenwich)', () => {
+  it('Jan 31 + ONE EF month reads February 2026 (the shipped setUTCMonth idiom read "March 2026")', () => {
+    // Baseline $1,000, reserve $5,000: the 1× floor is covered; the 6× target
+    // ($6,000, assumed — jobStability null) leaves a $1,000 gap → ONE ef_target
+    // month at $1,000/mo; then ongoing invest. cumulative = 1.
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 1000 }),
+      snapshots: [snap(1, 5000)], loans: [], today: new Date(2026, 0, 31),
+    });
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'conservative', ctx);
+    expect(s.phases.map((p) => [p.months, p.rows.map((r) => r.bucket)])).toEqual([
+      [1, ['ef_target']],
+      [null, ['invest']],
+    ]);
+    const e = computeEffect(s, ctx);
+    expect(e.headline).toContain('Emergency fund fully funded by February 2026 at this pace');
+    expect(e.headline).not.toContain('March');
+  });
+
+  it('Aug 31 + SIX EF months reads February 2027 (shipped: Feb 31 → Mar 3 → "March 2027")', () => {
+    // Baseline $1,000, no reserve: floor $1,000 → 1 month; target 6× → $5,000 more → 5 months; cumulative 6.
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 1000 }),
+      snapshots: [], loans: [], today: new Date(2026, 7, 31),
+    });
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'conservative', ctx);
+    expect(s.phases.map((p) => p.months)).toEqual([1, 5, null]);
+    expect(computeEffect(s, ctx).headline).toContain('Emergency fund fully funded by February 2027 at this pace');
+  });
+});
+
+describe('U3 — the payoff month follows the LOCAL day (cross-zone invariance: Pacific/Auckland reads what UTC reads)', () => {
+  // R4 plan-premise correction: the plan's "local Sep 1 equals local Sep 15"
+  // invariance is false on this fixture — the Visa pays on the 1st, so the
+  // local 1st and the 15th are different schedules in EVERY zone. The honest
+  // oracle is the UTC zone, where the UTC day of a local-midnight Date IS the
+  // local day (the shipped code was already right there): the same LOCAL day
+  // must read the same line in Auckland, whose UTC day is the PRIOR day.
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  const headlineAt = (tz: string, day: number): string => {
+    process.env.TZ = tz;
+    // Reserve $48,000 ≥ 6× $36,000 → every EF bucket skipped; Aggressive
+    // per-month $1,000 → phase 1 is the Visa (22%) → perMonthDebtLine is the headline.
+    const ctx = fixtureCtx({ today: new Date(2026, 8, day), snapshots: [snap(1, 40000), snap(2, 8000)] });
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'aggressive', ctx);
+    return computeEffect(s, ctx).headline;
+  };
+  it('local Sep 1, Sep 2 and Sep 15: the Auckland headline equals the UTC headline', () => {
+    expect(headlineAt('Pacific/Auckland', 1)).toMatch(/paid off [A-Z][a-z]+ \d{4} — your 1 loan at 8% or more/);
+    for (const day of [1, 2, 15]) expect(headlineAt('Pacific/Auckland', day)).toBe(headlineAt('UTC', day));
+    // Non-vacuity: a ONE-day shift moves the payoff month (Sep 1 → Sep 2 crosses
+    // the Visa's payment day), so the prior-UTC-day read reds the Sep 2 arm.
+    expect(headlineAt('UTC', 2)).not.toBe(headlineAt('UTC', 1));
   });
 });

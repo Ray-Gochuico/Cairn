@@ -1,10 +1,13 @@
 import { buildScenarioDefaults } from '@/lib/calculators/scenario-assumptions';
+import type { ScenarioDefaultsResult } from '@/lib/calculators/scenario-assumptions';
+import { realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { compoundInterestSeries, toRealSummary } from '@/lib/compound-interest';
 import { compareStrategies } from '@/lib/debt-payoff-comparison';
 import { formatCurrency } from '@/lib/format';
 import type { InterviewContext } from '@/types/interview';
 import type { Loan } from '@/types/schema';
+import { addMonthsYm, monthYearLabel, todayIsoOf } from './kernel-dates';
 import { computeMatchSummary } from './match-value';
 import type { BucketId, FrameworkSplit, SplitRow } from './waterfall';
 
@@ -17,16 +20,35 @@ export interface EffectResult {
 
 const BUCKET_ORDER: BucketId[] = ['ef_floor', 'match', 'high_rate_debt', 'ef_target', 'mid_rate_debt', 'invest'];
 
+/**
+ * R4 (D-R4-6): the kernel's ONE scenario/real-rate seam. effects.ts is the
+ * kernel's listed converter consumer (tests/policy/dollar-basis-policy.test.ts
+ * CONVERTER_ALLOWLIST) — no other kernel module may import a converter. The
+ * as-of day is the LOCAL day (U4); the rate is the UNFLOORED Fisher rate of the
+ * moderate scenario (the Earliest Retirement / Stress Test solve basis).
+ */
+export interface KernelScenario {
+  defaults: ScenarioDefaultsResult['defaults'];
+  provenance: ScenarioDefaultsResult['provenance'];
+  realRate: number;
+  todayIso: string;
+}
+
+export function kernelScenario(ctx: InterviewContext): KernelScenario {
+  const todayIso = todayIsoOf(ctx);
+  const { defaults, provenance } = buildScenarioDefaults({
+    household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
+    snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso,
+  });
+  return {
+    defaults, provenance, todayIso,
+    realRate: realRateOfUnfloored(defaults.returnPct / 100, defaults.inflationPct / 100),
+  };
+}
+
 const fmtPct = (fraction: number): string => {
   const n = Number((fraction * 100).toFixed(2));
   return `${n}%`;
-};
-const monthYear = (d: Date): string =>
-  d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-const addMonths = (today: Date, months: number): Date => {
-  const d = new Date(today.getTime());
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
 };
 
 /** D-GI9: one-time → largest allocated share (ties → earlier bucket); per-month → largest row of phase 1. */
@@ -74,7 +96,10 @@ function efLine(split: FrameworkSplit, ctx: InterviewContext, allocCents: number
     if (m == null) return null;
     cumulative += m;
   }
-  return `Emergency fund fully funded by ${monthYear(addMonths(ctx.today, cumulative))} at this pace — ${basis}.`;
+  // U5 (R4, ruling 1): 'YYYY-MM' string arithmetic from the LOCAL month — the
+  // shipped setUTCMonth overflowed the day on the 29th–31st in every zone.
+  const fundedYm = addMonthsYm(todayIsoOf(ctx).slice(0, 7), cumulative);
+  return `Emergency fund fully funded by ${monthYearLabel(fundedYm)} at this pace — ${basis}.`;
 }
 
 function matchLine(ctx: InterviewContext): string {
@@ -107,7 +132,7 @@ function perMonthDebtLine(
   ctx: InterviewContext,
   band: 'high' | 'mid',
 ): string {
-  const todayIso = ctx.today.toISOString().slice(0, 10);
+  const todayIso = todayIsoOf(ctx);
   const cmp = compareStrategies(loans, extraCents / 100, todayIso);
   const a = cmp.avalanche;
   if (a.anyCapped || a.savingsCapped || a.payoffDate == null) {
@@ -115,16 +140,12 @@ function perMonthDebtLine(
   }
   const bandDesc = band === 'high' ? `${ctx.thresholds.high}% or more` : `${ctx.thresholds.low}–${ctx.thresholds.high}%`;
   const n = loans.length;
-  const payoff = monthYear(new Date(`${a.payoffDate}T12:00:00Z`));
+  const payoff = monthYearLabel(a.payoffDate.slice(0, 7));
   return `≈ ${formatCurrency(a.savedVsMinimums)} less interest and paid off ${payoff} — your ${n} ${n === 1 ? 'loan' : 'loans'} at ${bandDesc}, highest rate first, vs. minimum payments.`;
 }
 
 function investLine(split: FrameworkSplit, ctx: InterviewContext, investCents: number): string {
-  const todayIso = ctx.today.toISOString().slice(0, 10);
-  const { defaults } = buildScenarioDefaults({
-    household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
-    snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso,
-  });
+  const { defaults } = kernelScenario(ctx);
   const investDollars = investCents / 100;
   const isLump = split.cadence === 'one-time';
   const fiComputable = defaults.monthlyExpenses > 0 && defaults.swrPct > 0;
@@ -203,7 +224,7 @@ function lineFor(bucket: BucketId, split: FrameworkSplit, ctx: InterviewContext)
 
 // ── Wave T3: standalone per-month FI two-solve (D-T3-16) ────────────────────
 // Mirrors investLine's per-month recipe EXACTLY (same defaults, same target,
-// same moderate-scenario solve — including its toISOString todayIso, which
+// same moderate-scenario solve — through the same kernelScenario seam, which
 // parity with the shipped line requires) without touching the shipped,
 // review-hardened investLine. The parity test in effects.test.ts pins the
 // two together — if investLine's recipe ever changes, that test fails and
@@ -214,11 +235,7 @@ export type FiMonthlyDelta =
   | { kind: 'not-computable' };
 
 export function computeFiMonthlyDelta(ctx: InterviewContext, monthlyDollars: number): FiMonthlyDelta {
-  const todayIso = ctx.today.toISOString().slice(0, 10);
-  const { defaults } = buildScenarioDefaults({
-    household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
-    snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso,
-  });
+  const { defaults } = kernelScenario(ctx);
   if (!(defaults.monthlyExpenses > 0 && defaults.swrPct > 0)) return { kind: 'not-computable' };
   const targetFv = (defaults.monthlyExpenses * 12) / (defaults.swrPct / 100);
   const scenarios = [{ label: 'moderate', rate: defaults.returnPct / 100 }];
