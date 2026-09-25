@@ -8,6 +8,11 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { seedResolvedStores } from '../helpers/seed-resolved-stores';
 
 /**
@@ -36,5 +41,14 @@ export function seedWhatIfRealStores(): void {
     { store: useContributionsStore, collections: { contributions: [] } },
     { store: useCategoriesStore, collections: { categories: [] } },
     { store: useRoadmapOverridesStore, collections: { overridesByNodeId: new Map() } },
+    // R4 (D-R4-9): the gate grew by five — the four interview-context slices
+    // useInterview() adds for the G9 census, plus settings (now page-loaded).
+    // Settings seeds NO collection: callers prime `settings` themselves
+    // (setSettings) before or after this, and it must survive either order.
+    { store: useTickersStore, collections: { tickers: [] } },
+    { store: useDependentsStore, collections: { dependents: [] } },
+    { store: useHousingPaymentsStore, collections: { housingPayments: [] } },
+    { store: useInterviewAnswersStore, collections: { answersByKey: new Map() } },
+    { store: useSettingsStore, collections: {} },
   ]);
 }
