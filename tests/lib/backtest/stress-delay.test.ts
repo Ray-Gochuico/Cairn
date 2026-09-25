@@ -94,6 +94,33 @@ describe('solver states and per-window past-max (ruling 2)', () => {
     expect(d90.windows[0].troughBalance).toBeCloseTo(592_050.17, 2); // the replay still runs
   });
 
+  it('the exact cap boundary (R4 review UPHELD 1): a window is past-max — and leaves the uniform-row derivation — iff solveAge ≥ MAX_SOLVE_AGE (ruling 2 / D-R4-P4)', () => {
+    // The 1970s window (n 9) across 89 / 90 / 91 while the other four stay
+    // in range and not-by-max. At 90 it is past-max and EXCLUDED, so the four
+    // in-range not-by-max windows still make the uniform 'not-by-max' state;
+    // counting it in range (a `<=` boundary) would read 'ok'.
+    const probe = (ageNow: number) => {
+      const d = at(ageNow);
+      return [d.windows[1].solveAge, d.windows[1].verdictA, d.solverState];
+    };
+    expect([80, 81, 82].map(probe)).toEqual([
+      [MAX_SOLVE_AGE - 1, 'not-by-max', 'not-by-max'],
+      [MAX_SOLVE_AGE, 'past-max', 'not-by-max'],
+      [MAX_SOLVE_AGE + 1, 'past-max', 'not-by-max'],
+    ]);
+    const d81 = at(81);
+    expect(d81.windows.map((w) => w.solveAge)).toEqual([84, 90, 84, 82, 82]);
+    expect(d81.windows.map((w) => w.verdictA)).toEqual(['not-by-max', 'past-max', 'not-by-max', 'not-by-max', 'not-by-max']);
+    // The other side, on the n = 1 windows (2008, 2022): at 88 they sit at 89
+    // and are the ONLY in-range windows — their not-by-max IS the state (an
+    // exclusion at 89 would leave nothing in range → 'ok'); at 89 they sit at
+    // 90, nothing is in range, and the state is 'ok' with every line 3g.
+    expect(at(88).windows.slice(3).map((w) => [w.solveAge, w.verdictA])).toEqual([[MAX_SOLVE_AGE - 1, 'not-by-max'], [MAX_SOLVE_AGE - 1, 'not-by-max']]);
+    expect(at(88).solverState).toBe('not-by-max');
+    expect(at(89).windows.slice(3).map((w) => [w.solveAge, w.verdictA])).toEqual([[MAX_SOLVE_AGE, 'past-max'], [MAX_SOLVE_AGE, 'past-max']]);
+    expect(at(89).solverState).toBe('ok');
+  });
+
   it('age 81 with $1,500,000: the 1970s window is past-max while the others are found (A) / not-by-max (B) — the per-window state', () => {
     // t* = ln(1.8/1.5)/ln(1.03515625) ≈ 5.3; 1929: legA 1,663,807 → tA 3 ≤ tMax 6; legB 949,795 → tB 19 > 6.
     const d = at(81, { pv: 1_500_000 });

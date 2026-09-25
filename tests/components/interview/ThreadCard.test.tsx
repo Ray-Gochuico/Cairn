@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { z } from 'zod';
 import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { ThreadCard } from '@/components/interview/ThreadCard';
@@ -225,6 +225,34 @@ describe('CI-34 "Still true" re-persists the PARSED value (R4 D-R4-P11 — the c
       value: '2030-09', questionVersion: 1,
     });
   });
+
+  it('the re-confirm keeps the row\'s pinned basis FACTS (R4 review MINOR 0) — the value gains the new shape, basis_json keeps { branch, ...facts }', async () => {
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 6000, inflationAssumption: 0.03, growthScenarios: [{ label: 'moderate', rate: 0.05 }] }),
+      properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })],
+      accounts: [makeAccount({ id: 9, type: AccountType.ACCOUNT_529, name: 'College 529' })],
+      snapshots: [snap(9, 10_000)],
+      interviewAnswers: new Map([
+        [answerKey('college_vs_retirement', 'q_target_year', ''), {
+          id: 1, householdId: 1, threadId: 'college_vs_retirement', questionId: 'q_target_year', subjectKey: '',
+          valueJson: '{"amountDollars":123,"targetMonth":"2030-09"}', questionVersion: 1, answeredAt: '2024-01-01T12:00:00.000Z',
+          // d_dependents' pinned basis as the ask state writes it: { branch, ...facts }.
+          basisJson: '{"branch":"no-dependents-529","dependentCount":0,"count529":1}',
+        }],
+        [answerKey('college_vs_retirement', 'q_monthly_amount', ''), {
+          id: 2, householdId: 1, threadId: 'college_vs_retirement', questionId: 'q_monthly_amount', subjectKey: '',
+          valueJson: '500', questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z',
+          basisJson: '{"branch":"has-529","accountCount":1,"hasSnapshot":true}',
+        }],
+      ]),
+    });
+    render(<InterviewThreads ctx={ctx} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Still true' }));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    const arg = saveAnswer.mock.calls[0][0];
+    expect(arg).toMatchObject({ questionId: 'q_target_year', value: '2030-09', questionVersion: 1 });
+    expect(arg.basis).toEqual({ branch: 'no-dependents-529', dependentCount: 0, count529: 1 });
+  });
 });
 
 describe('the strip gate (R4 D-R4-7 / D-R4-P6) — the bar\'s modal semantics on every thread; the reply RENDER is gated too', () => {
@@ -272,6 +300,33 @@ describe('the strip gate (R4 D-R4-7 / D-R4-P6) — the bar\'s modal semantics on
     await waitFor(() => expect(acceptDisclaimer).toHaveBeenCalledWith('interview', DISCLOSURES.interview.version));
     await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
     expect(saveAnswer.mock.calls[0][0]).toMatchObject({ questionId: 'q_keep_horizon', value: 'no-plans' });
+  });
+
+  it('a deferred save that REJECTS after accept says so under the prompt — the shipped fallback, never the raw error (R4 review MINOR 7)', async () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    saveAnswer.mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'));
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    const card = screen.getByTestId('thread-vehicle_replacement-vehicle:7');
+    await waitFor(() => expect(within(card).getByRole('alert')).toHaveTextContent('Could not save your answer.'));
+    expect(within(card).getByRole('alert').textContent).toBe('Could not save your answer.');
+    expect(screen.queryByText('About the Frameworks')).toBeNull(); // the modal is gone; the card carries the message
+    expect(screen.getByText('Are there plans to replace Old Wagon?')).toBeInTheDocument(); // the ask is still there to retry
+  });
+
+  it('a deferred save that RESOLVES after accept renders no error line', async () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    await act(async () => {}); // let the awaited save settle
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Could not save your answer.')).toBeNull();
   });
 
   it('a household that accepted 1.1 is re-gated at 1.2 and reads the "What changed" box with the interview diff (R3\'s rule)', () => {

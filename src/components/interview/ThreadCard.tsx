@@ -6,6 +6,7 @@ import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import type { InterviewContext, InterviewThread, SubjectKey, ThreadEvaluation } from '@/types/interview';
+import { answerKey } from '@/types/interview';
 import { AnswerPrompt } from './AnswerPrompt';
 import { HouseGoalCta } from './HouseGoalCta';
 import { recordUpcomingPurchase, type HouseTarget } from '@/domain/interview/threads/home-purchase';
@@ -14,6 +15,28 @@ import { priorAnswerLabel } from '@/lib/interview/prior-answer-label';
 
 /** U10 (R4): the LOCAL month of the answered_at instant. */
 const answeredMonth = (iso: string): string => monthYearLabel(localDayOfInstant(iso).slice(0, 7));
+
+/** The shipped save-failure fallback (AnswerPrompt / DecisionPrompt). */
+const SAVE_FAILED = 'Could not save your answer.';
+
+/** R4 review MINOR 0: the stored row's basis exactly as the ask state wrote it
+ *  ({ branch, ...facts }). The evaluation's StoredAnswerView keeps the branch
+ *  alone (the frozen kernel reads nothing else), so writing it back on a
+ *  re-confirm would drop the pinned facts. Same acceptance rule as the
+ *  kernel's read: a JSON object with a string branch, else null. */
+function storedBasis(raw: string | null | undefined): Record<string, unknown> | null {
+  if (raw == null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      && typeof (parsed as { branch?: unknown }).branch === 'string') {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // unparseable → null, as the kernel's read
+  }
+  return null;
+}
 
 /** One thread instance: ask state → AnswerPrompt (with CI-36/CI-37
  *  preambles), reply state → lines + assumes + per-answer CI-34 stale
@@ -37,6 +60,10 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
   const [gateOpen, setGateOpen] = useState(false);
   const pendingRef = useRef<(() => Promise<void>) | null>(null);
+  // R4 review MINOR 7: the deferred save runs after the modal has closed, so
+  // neither the modal's nor AnswerPrompt's inline error can show its failure —
+  // the card holds it and renders the shipped fallback under the prompt.
+  const [deferredError, setDeferredError] = useState<string | null>(null);
   if (evaluation.state === 'hidden') return null;
 
   const modal = gateOpen && gate.state === 'needs-acceptance' ? (
@@ -49,7 +76,13 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
         setGateOpen(false);
         const pending = pendingRef.current;
         pendingRef.current = null;
-        if (pending) await pending(); // the deferred ask-state save
+        if (pending) {
+          try {
+            await pending(); // the deferred ask-state save
+          } catch {
+            setDeferredError(SAVE_FAILED);
+          }
+        }
       }}
       onCancel={() => { pendingRef.current = null; setGateOpen(false); }}
     />
@@ -92,8 +125,9 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
             // D-GI16) and BEFORE the gate: an invalid value errors inline and
             // never opens the modal. Failure surfaces through AnswerPrompt's
             // existing inline error path; the message is its shipped fallback.
+            setDeferredError(null);
             const parsed = node.valueSchema.safeParse(value);
-            if (!parsed.success) throw new Error('Could not save your answer.');
+            if (!parsed.success) throw new Error(SAVE_FAILED);
             if (gate.state === 'needs-acceptance') {
               pendingRef.current = () => persist(parsed.data);
               setGateOpen(true);
@@ -102,6 +136,9 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
             await persist(parsed.data);
           }}
         />
+        {deferredError && (
+          <div className="text-xs text-destructive-soft-foreground" role="alert">{deferredError}</div>
+        )}
         {modal}
       </Card>
     );
@@ -139,11 +176,13 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
               // R4 (D-R4-P11): re-confirm re-persists the PARSED value — a
               // legacy-shaped row (the college compound object) lands in the
               // current shape with a fresh answered_at; the tolerant read retires.
+              // The basis is the row's own ({ branch, ...facts } — review MINOR 0).
               const parsed = node.valueSchema.safeParse(answer.value);
+              const row = ctx.interviewAnswers.get(answerKey(thread.id, node.id, subject));
               void saveAnswer({
                 threadId: thread.id, questionId: node.id, subjectKey: subject,
                 value: parsed.success ? parsed.data : answer.value,
-                questionVersion: node.version, basis: answer.basis,
+                questionVersion: node.version, basis: storedBasis(row?.basisJson) ?? answer.basis,
               });
             }}>
             Still true

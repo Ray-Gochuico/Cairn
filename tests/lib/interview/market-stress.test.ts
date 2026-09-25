@@ -8,6 +8,11 @@ import { flatPathEnd } from '@/lib/backtest/replay';
 import { MAX_SOLVE_AGE, projectedFv } from '@/lib/calculators/retirement-age-solver';
 import { AccountType } from '@/types/enums';
 import type { InterviewContext } from '@/types/interview';
+import { computeStressDelays, type StressDelayInput } from '@/lib/backtest/stress-delay';
+import { buildScenarioDefaults, toEngineAssumptions } from '@/lib/calculators/scenario-assumptions';
+import { realRateView } from '@/lib/calculators/basis-view';
+import { pickModerateEntry } from '@/lib/growth-scenario';
+import { currentAge } from '@/lib/dates';
 import { makeAccount, makeHousehold, makePerson } from '../../factories';
 import { fixtureCtx, snap } from './fixture';
 import { ADVICE_LEXICON } from '../../helpers/advice-lexicon';
@@ -120,6 +125,91 @@ describe('market-stress — the seeded shape at stocks-75 (Appendix A; re-derive
   });
 });
 
+describe('two persons: the OLDER person caps the search in either listing order (R4 review UPHELD 0)', () => {
+  // Every other fixture lists Avery (the older) first, so "older" and "first"
+  // were indistinguishable. These arms list the YOUNGER person first.
+  const JORDAN = makePerson({ id: 2, name: 'Jordan Sample', dateOfBirth: '1990-09-03' });
+  const youngerFirst = (averyDob: string) =>
+    seedCtx({ persons: [JORDAN, makePerson({ id: 1, name: 'Avery Sample', dateOfBirth: averyDob })] });
+
+  it('Jordan (35) listed before Avery (38): Avery caps the search and CI-MS-8b names Avery — every string equals the Avery-first render', () => {
+    const res = computeMarketStress(youngerFirst('1988-04-12'), 'stocks-75');
+    expect(res).toMatchObject({ olderName: 'Avery Sample', ageNow: 38, personCount: 2, fiState: 'ok' });
+    expect(res.windows.map((w) => w.solveAge)).toEqual([41, 47, 41, 39, 39]);
+    const r = renderMarketStress(res);
+    expect(r.assumes).toContain(CI_MS_8B_SEED);
+    expect(r.lines).toEqual([SEED_CI_MS_1, ...SEED_LINES_75]);
+    expect(r).toEqual(render75(seedCtx())); // listing order changes nothing
+  });
+
+  it('Avery at 82 listed SECOND: ageNow 82 — the 1970s line carries CI-MS-3g, the rest not-by-max → one CI-MS-9e row; CI-MS-8b names Avery', () => {
+    const res = computeMarketStress(youngerFirst('1944-04-12'), 'stocks-75');
+    expect(res).toMatchObject({ olderName: 'Avery Sample', ageNow: 82, fiState: 'not-by-max' });
+    expect(res.windows.map((w) => w.solveAge)).toEqual([85, 91, 85, 83, 83]);
+    const r = renderMarketStress(res);
+    const pastMax = r.lines.filter((l) => l.endsWith(' This window runs past age 90 — no retirement reading here.'));
+    expect(pastMax).toHaveLength(1);
+    expect(pastMax[0].startsWith('The 1970s inflation run (1973–1981):')).toBe(true);
+    expect(fiClauses(r.lines)).toEqual(pastMax);
+    expect(r.assumes.filter((a) => a === CI_MS_9E)).toHaveLength(1);
+    expect(r.assumes).toContain(CI_MS_8B_SEED);
+    expect(r).toEqual(render75(withAvery('1944-04-12'))); // the Avery-first twin
+  });
+});
+
+describe('card parity (R4 review MINOR 2): the Stress Test card\'s future input path agrees with this thread when the inputs coincide', () => {
+  // The B3b card will feed computeStressDelays from the Calculators path:
+  // useScenarioAssumptions (buildScenarioDefaults → toEngineAssumptions, no
+  // scenario-bar edits so values = defaults) + EarliestRetirementCard's rate
+  // (pickModerateEntry → realRateView), target (annualExpenses ÷ swr) and
+  // household age rule (two persons → the older; else the first). The hook
+  // omits todayIso (it reads the UTC day — MINOR 5, chipped), so the inputs
+  // coincide on the kernel's local day, passed here explicitly.
+  const cardInputs = (ctx: InterviewContext, stockPct: number): StressDelayInput => {
+    const { defaults } = buildScenarioDefaults({
+      household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
+      snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso: '2026-08-01',
+    });
+    const engine = toEngineAssumptions(defaults);
+    const moderate = pickModerateEntry(ctx.household!.growthScenarios)!;
+    const ages = ctx.persons.map((p) => currentAge(p.dateOfBirth, ctx.today));
+    const targetFv = engine.swr > 0 ? engine.annualExpenses / engine.swr : 0;
+    return {
+      pv: engine.portfolio, pmt: engine.annualContribution,
+      realRate: realRateView(moderate.rate, engine.inflation).realRate,
+      targetFv: targetFv <= 0 || engine.monthlyExpenses <= 0 ? null : targetFv,
+      ageNow: ages.length === 0 ? null : ages.length === 2 ? Math.max(...ages) : ages[0],
+      stockPct,
+    };
+  };
+
+  it('the seeded household, every mix: same inputs, same windows (verdicts, tA/tB, delays), same state', () => {
+    const ctx = seedCtx();
+    for (const o of MIX_OPTIONS) {
+      const thread = computeMarketStress(ctx, o.value);
+      const inputs = cardInputs(ctx, o.stockPct / 100);
+      expect(inputs).toEqual({ pv: thread.pv, pmt: thread.pmt, realRate: thread.realRate, targetFv: thread.targetFv, ageNow: thread.ageNow, stockPct: o.stockPct / 100 });
+      const card = computeStressDelays(inputs);
+      expect(card.windows, o.value).toEqual(thread.windows);
+      expect(card.solverState).toBe(thread.fiState); // 'ok' on the seed — the two vocabularies coincide there
+    }
+    expect(computeStressDelays(cardInputs(ctx, 0.75)).windows.map((w) => w.delay)).toEqual([17, 21, 12, 9, 7]); // non-vacuous: Appendix A.2
+  });
+
+  it('r < 0 with contributions that clear the target (unfloored on both paths): same windows', () => {
+    const ctx = seedCtx({
+      household: makeHousehold({ ...SEED_HOUSEHOLD, monthlyExpenseBaseline: 2000, growthScenarios: [{ label: 'Moderate', rate: 0.01 }] }),
+      persons: [makePerson({ id: 1, name: 'Solo', dateOfBirth: '1986-04-12' })],
+      accounts: [makeAccount({ id: 1, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' })],
+      snapshots: [snap(1, 100_000)],
+      contributions: [{ id: 1, accountId: 1, date: '2026-06-15', amount: 40_000 } as never],
+    });
+    const thread = computeMarketStress(ctx, 'stocks-75');
+    expect(thread.realRate).toBeLessThan(0);
+    expect(computeStressDelays(cardInputs(ctx, 0.75)).windows).toEqual(thread.windows);
+  });
+});
+
 describe('historical anchors — the real dataset (the nominal-on-real lesson)', () => {
   // ANCHOR A: $100,000 + $12,000/yr at stocks-75, one person aged 40, target
   // $600,000 (= 12 × $2,000 ÷ 4%). Re-derived from replay.test.ts's default-card
@@ -197,6 +287,33 @@ describe('solver verdicts, per line and per row (ruling 2 / MAJOR 2 / MAJOR 4)',
     expect(r.assumes).not.toContain(CI_MS_9D);
     expect(JSON.stringify(r)).not.toContain('not reachable');
     expect(r.assumes).not.toContain(CI_MS_12); // no delay-family clause on any line
+  });
+
+  it('the exact cap boundary (R4 review UPHELD 1; ruling 2: past-max iff ageNow + n ≥ 90): the 1970s window at solveAge 89 / 90 / 91 — rendered rows', () => {
+    // 80 → 89: in range, not-by-max like the other four → the uniform CI-MS-9e row, no clause on any line.
+    // 81 → 90 (=== MAX_SOLVE_AGE): past-max → CI-MS-3g on that line; the four in-range lines stay uniform → one 9e row, no 3e, no 12.
+    // 82 → 91: the same shape as 90.
+    const LINE_3G = ' This window runs past age 90 — no retirement reading here.';
+    const LINE_3E = " FI target not reached by age 90 on your assumed path from this window's end.";
+    const rows = [['1946-04-12', 80], ['1945-04-12', 81], ['1944-04-12', 82]].map(([dob, age]) => {
+      const res = computeMarketStress(withAvery(dob as string), 'stocks-75');
+      expect(res.ageNow).toBe(age);
+      const r = renderMarketStress(res);
+      return {
+        solveAge1970s: res.windows[1].solveAge,
+        fiState: res.fiState,
+        pastMaxLines: r.lines.filter((l) => l.endsWith(LINE_3G)).map((l) => l.split(' (')[0]),
+        clauses: fiClauses(r.lines).length,
+        mixed: r.lines.some((l) => l.endsWith(LINE_3E)),
+        nineE: r.assumes.filter((a) => a === CI_MS_9E).length,
+        twelve: r.assumes.includes(CI_MS_12),
+      };
+    });
+    expect(rows).toEqual([
+      { solveAge1970s: MAX_SOLVE_AGE - 1, fiState: 'not-by-max', pastMaxLines: [], clauses: 0, mixed: false, nineE: 1, twelve: false },
+      { solveAge1970s: MAX_SOLVE_AGE, fiState: 'not-by-max', pastMaxLines: ['The 1970s inflation run'], clauses: 1, mixed: false, nineE: 1, twelve: false },
+      { solveAge1970s: MAX_SOLVE_AGE + 1, fiState: 'not-by-max', pastMaxLines: ['The 1970s inflation run'], clauses: 1, mixed: false, nineE: 1, twelve: false },
+    ]);
   });
 
   it('ageNow 88: three windows past 90 (1929, 1970s, dot-com); 2008/2022 not-by-max → CI-MS-9e; no CI-MS-9d', () => {
