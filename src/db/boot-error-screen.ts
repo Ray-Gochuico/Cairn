@@ -49,7 +49,14 @@ type BackupEntry = import('@/lib/backup-restore').BackupEntry;
 export interface BootScreenOptions {
   /** Injectable for tests; defaults to `window.location.reload()`. */
   reload?: () => void;
+  /** Monotonic milliseconds for the arm guard (CR-U-9). Injectable for tests;
+   * defaults to `performance.now()`. */
+  now?: () => number;
 }
+
+/** CR-U-9: an armed row ignores clicks for this long after arming, so the
+ * second click of a double-click can never confirm. */
+const ARM_GUARD_MS = 500;
 
 const TEXT_COLOR = '#1f2937';
 const ERROR_COLOR = '#dc2626';
@@ -161,6 +168,18 @@ interface RestoreSectionOptions {
   reveal: boolean;
   releases: boolean;
   reload: () => void;
+  now: () => number;
+}
+
+/** Shared by every row of one restore section. */
+interface RestoreContext {
+  section: HTMLElement;
+  /** The polite live region that announces an armed row (U1-m11). */
+  status: HTMLElement;
+  reload: () => void;
+  now: () => number;
+  /** Disarm callbacks of the currently armed rows (at most one, CR-U-9). */
+  armed: Set<() => void>;
 }
 
 /**
@@ -184,15 +203,31 @@ function appendRestoreSection(container: HTMLElement, opts: RestoreSectionOption
 
   const list = document.createElement('ul');
   list.setAttribute('data-testid', 'boot-restore-list');
+  // listStyle none strips list semantics in WebKit (VoiceOver); keep them.
+  list.setAttribute('role', 'list');
   list.style.listStyle = 'none';
   list.style.padding = '0';
 
-  section.append(title, lead, list);
+  const status = document.createElement('p');
+  status.setAttribute('data-testid', 'boot-restore-status');
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.style.margin = '0';
+  status.style.lineHeight = '1.5';
+
+  section.append(title, lead, list, status);
   if (opts.reveal) section.append(makeRevealButton());
   if (opts.releases) section.append(makeReleasesButton());
   container.append(section);
 
-  void hydrateRestoreList(list, section, opts.reload);
+  const ctx: RestoreContext = {
+    section,
+    status,
+    reload: opts.reload,
+    now: opts.now,
+    armed: new Set(),
+  };
+  void hydrateRestoreList(list, ctx);
 }
 
 function setButtonsDisabled(scope: HTMLElement, disabled: boolean): void {
@@ -204,11 +239,7 @@ function setButtonsDisabled(scope: HTMLElement, disabled: boolean): void {
  * listing rejection, a non-array result or a throw while building rows all
  * end as the read-failure line — never an unhandled rejection.
  */
-async function hydrateRestoreList(
-  list: HTMLUListElement,
-  section: HTMLElement,
-  reload: () => void,
-): Promise<void> {
+async function hydrateRestoreList(list: HTMLUListElement, ctx: RestoreContext): Promise<void> {
   try {
     const { listBackups } = await import('@/lib/backup-restore');
     const entries: unknown = await listBackups();
@@ -224,7 +255,7 @@ async function hydrateRestoreList(
       ...all.filter((b) => b.kind === 'pre-update'),
       ...all.filter((b) => b.kind !== 'pre-update'),
     ];
-    const rows = ordered.map((entry) => makeRestoreRow(entry, section, reload));
+    const rows = ordered.map((entry) => makeRestoreRow(entry, ctx));
     list.append(...rows);
   } catch (err) {
     list.replaceWith(makeParagraph(`Could not read your backups: ${messageOf(err)}`));
@@ -234,17 +265,20 @@ async function hydrateRestoreList(
 /**
  * One row: the label, a Restore button, and an alert slot created on demand.
  * Two-step confirm (critic c): click 1 validates (an invalid file shows the
- * validator's reason and never arms); a valid file re-labels the button and
- * adds Cancel; click 2 disables the whole section and restores (the restore
- * reloads on its way out). A restore that rejects before the swap reports it
- * and re-enables the controls.
+ * validator's reason and never arms); a valid file re-labels the button, adds
+ * Cancel, moves focus to Cancel and announces the armed state; click 2
+ * disables the whole section and restores (the restore reloads on its way
+ * out). A restore that rejects before the swap reports it and re-enables the
+ * controls.
+ *
+ * CR-U-9 (U1-M3/M4): the validation round trip is shorter than a human
+ * double-click, so the armed branch ignores the second click of a
+ * double-click (`detail > 1`; keyboard activation has detail 0) and any click
+ * within ARM_GUARD_MS of arming. Arming one row disarms any other.
  */
-function makeRestoreRow(
-  entry: BackupEntry,
-  section: HTMLElement,
-  reload: () => void,
-): HTMLLIElement {
+function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement {
   const when = entry.takenAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const preUpdate = entry.kind === 'pre-update';
 
   const row = document.createElement('li');
   row.setAttribute('data-testid', 'boot-restore-row');
@@ -257,10 +291,16 @@ function makeRestoreRow(
 
   const label = document.createElement('span');
   label.style.marginRight = '8px';
-  label.textContent = entry.kind === 'pre-update' ? `Before update — ${when}` : when;
+  label.textContent = preUpdate ? `Before update — ${when}` : when;
 
+  // The accessible name names the backup (mirrors DataSection, CR-U1-28);
+  // the visible label stays the short 'Restore'.
+  const restoreName = preUpdate
+    ? `Restore the copy from before the update, ${when}`
+    : `Restore backup from ${when}`;
   const restoreBtn = makeButton('Restore');
   restoreBtn.style.marginBottom = '0';
+  restoreBtn.setAttribute('aria-label', restoreName);
   row.append(label, restoreBtn);
 
   let alertEl: HTMLParagraphElement | null = null;
@@ -282,15 +322,25 @@ function makeRestoreRow(
   };
 
   let armed = false;
+  let armedAt = 0;
   let cancel: HTMLButtonElement | null = null;
   const disarm = (): void => {
+    const hadFocus = cancel !== null && document.activeElement === cancel;
     armed = false;
+    ctx.armed.delete(disarm);
     restoreBtn.textContent = 'Restore';
+    restoreBtn.setAttribute('aria-label', restoreName);
+    if (hadFocus) restoreBtn.focus();
     cancel?.remove();
     cancel = null;
+    ctx.status.textContent = '';
   };
 
-  restoreBtn.addEventListener('click', () => {
+  row.addEventListener('keydown', (ev) => {
+    if (armed && ev.key === 'Escape') disarm();
+  });
+
+  restoreBtn.addEventListener('click', (ev) => {
     void (async () => {
       if (!armed) {
         setAlert(null);
@@ -302,30 +352,44 @@ function makeRestoreRow(
             setAlert(v.reason ?? 'That file is not a valid Cairn backup.');
             return;
           }
+          for (const other of [...ctx.armed]) other();
           armed = true;
+          armedAt = ctx.now();
+          ctx.armed.add(disarm);
           restoreBtn.textContent = 'Confirm restore — replaces your current data';
+          restoreBtn.removeAttribute('aria-label');
           const cancelBtn = makeButton('Cancel');
           cancelBtn.style.marginBottom = '0';
           cancelBtn.addEventListener('click', disarm);
           restoreBtn.after(cancelBtn);
           cancel = cancelBtn;
+          const subject = preUpdate
+            ? `the copy from before the update, ${when}`
+            : `the backup from ${when}`;
+          ctx.status.textContent =
+            `Ready to restore ${subject}. Confirm restore replaces your current data; Cancel keeps it.`;
         } catch (err) {
           setAlert(`Could not read that file: ${messageOf(err)}`);
         } finally {
           setButtonsDisabled(row, false);
+          // After the re-enable: a disabled button cannot take focus.
+          if (armed) cancel?.focus();
         }
         return;
       }
-      setButtonsDisabled(section, true);
+      // CR-U-9: never the second click of a double-click, never inside the
+      // arm window.
+      if (ev.detail > 1 || ctx.now() - armedAt < ARM_GUARD_MS) return;
+      setButtonsDisabled(ctx.section, true);
       try {
         const { restoreFromBackup } = await import('@/lib/backup-restore');
         // Boot path: the pool may never have been loaded (the generic screen),
         // so the exact not-loaded close rejection is tolerated. Reloads on its
         // way out once the swap has been attempted.
-        await restoreFromBackup(entry.path, { tolerateNotLoaded: true, reload });
+        await restoreFromBackup(entry.path, { tolerateNotLoaded: true, reload: ctx.reload });
       } catch (err) {
         setAlert(`Restore did not start: ${messageOf(err)}`);
-        setButtonsDisabled(section, false);
+        setButtonsDisabled(ctx.section, false);
         disarm();
       }
     })();
@@ -345,6 +409,7 @@ export function renderBootError(
   opts: BootScreenOptions = {},
 ): void {
   const reload = opts.reload ?? (() => window.location.reload());
+  const now = opts.now ?? (() => performance.now());
   const name = e instanceof Error ? e.name : '';
   const message = e instanceof Error ? e.message : String(e);
 
@@ -396,7 +461,7 @@ export function renderBootError(
       makeParagraph('Restoring a copy replaces the data in this newer file; Cairn does not keep it.'),
     );
     appendFailureNotice(container);
-    appendRestoreSection(container, { reveal: true, releases: true, reload });
+    appendRestoreSection(container, { reveal: true, releases: true, reload, now });
     root.replaceChildren(container);
     return;
   }
@@ -413,7 +478,7 @@ export function renderBootError(
       makeRevealButton(), // the FIRST button on this screen (pinned)
     );
     appendFailureNotice(container);
-    appendRestoreSection(container, { reveal: false, releases: false, reload });
+    appendRestoreSection(container, { reveal: false, releases: false, reload, now });
     container.append(makePre(message));
     root.replaceChildren(container);
     return;
@@ -438,7 +503,7 @@ export function renderBootError(
       makeReloadButton(reload), // the FIRST button on this screen
     );
     appendFailureNotice(container);
-    appendRestoreSection(container, { reveal: true, releases: true, reload });
+    appendRestoreSection(container, { reveal: true, releases: true, reload, now });
     root.replaceChildren(container);
     return;
   }
@@ -449,6 +514,6 @@ export function renderBootError(
   pre.style.fontSize = '';
   container.append(makeHeading('Database initialization failed'), pre);
   appendFailureNotice(container);
-  appendRestoreSection(container, { reveal: true, releases: false, reload });
+  appendRestoreSection(container, { reveal: true, releases: false, reload, now });
   root.replaceChildren(container);
 }

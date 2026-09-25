@@ -124,6 +124,16 @@ const OK = { ok: true, user_version: 53, max_supported_version: 55, reason: null
 const buttons = (root: HTMLElement) => [...root.querySelectorAll('button')].map((b) => b.textContent);
 const rows = (root: HTMLElement) => [...root.querySelectorAll('[data-testid="boot-restore-row"]')];
 const settled = (root: HTMLElement, n: number) => vi.waitFor(() => expect(rows(root)).toHaveLength(n));
+// CR-U-9: the arm guard reads an injectable clock (renderBootError's `now`).
+// A fixed, test-owned counter keeps this file off the real clock (test-clock
+// policy); `pastGuard()` steps it beyond the ~500 ms arm window.
+let clockMs = 0;
+const now = () => clockMs;
+const pastGuard = () => { clockMs += 1000; };
+const armedLabel = 'Confirm restore — replaces your current data';
+const whenOf = (d: Date) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const clickWith = (el: HTMLElement, detail: number) =>
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
 
 describe('v1.7.1 U2 — the restore section on every DB screen', () => {
   let root: HTMLElement;
@@ -156,7 +166,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
 
   it('two-step confirm (critic c): click 1 validates and re-labels; nothing restores until click 2', async () => {
     const reload = vi.fn();
-    renderBootError(root, new DatabaseCorruptError('x'), { reload });
+    renderBootError(root, new DatabaseCorruptError('x'), { reload, now });
     await settled(root, 2);
     const restoreBtn = rows(root)[0].querySelector('button')!;
     restoreBtn.click();
@@ -165,6 +175,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     await vi.waitFor(() => expect(restoreBtn.textContent).toBe('Confirm restore — replaces your current data'));
     const cancel = [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel');
     expect(cancel).toBeDefined();
+    pastGuard();
     restoreBtn.click();
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
     expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload });
@@ -195,11 +206,12 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
 
   it('a restore that rejects before the swap reports it in the row and re-enables the controls', async () => {
     mRestore.mockRejectedValue(new Error('close failed'));
-    renderBootError(root, new Error('x'));
+    renderBootError(root, new Error('x'), { now });
     await settled(root, 2);
     const btn = rows(root)[0].querySelector('button')!;
     btn.click();
     await vi.waitFor(() => expect(btn.textContent).toBe('Confirm restore — replaces your current data'));
+    pastGuard();
     btn.click();
     await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
     expect([...root.querySelectorAll('button')].every((b) => !b.disabled)).toBe(true);
@@ -273,6 +285,100 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     await settled(root, 2);
     [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reveal backups in Finder')!.click();
     await vi.waitFor(() => expect(mReveal).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('CR-U-9 — a double-click never both arms and confirms (U1-M3/M4); focus, announcement, names (U1-m11)', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    document.body.append(root); // focus needs a connected node
+    mList.mockResolvedValue([MANUAL, PRE]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+  afterEach(() => root.remove());
+
+  async function armFirstRow() {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    return btn;
+  }
+
+  it('the second click of a double-click (detail 2) after arming restores nothing, even past the arm window', async () => {
+    const btn = await armFirstRow();
+    pastGuard();
+    clickWith(btn, 2);
+    clickWith(btn, 3);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+    expect(btn.textContent).toBe(armedLabel); // still armed; a deliberate click can confirm
+  });
+
+  it('a click inside the ~500 ms arm window restores nothing; a deliberate click after it restores once', async () => {
+    const btn = await armFirstRow();
+    clockMs += 120;
+    clickWith(btn, 1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+    pastGuard();
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+  });
+
+  it('arming moves focus to Cancel and announces the armed state in a polite live region', async () => {
+    const btn = await armFirstRow();
+    const cancel = [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!;
+    expect(document.activeElement).toBe(cancel);
+    const status = root.querySelector('[data-testid="boot-restore-status"]')!;
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe(
+      `Ready to restore the copy from before the update, ${whenOf(PRE.takenAt)}. Confirm restore replaces your current data; Cancel keeps it.`,
+    );
+    expect(btn.getAttribute('aria-label')).toBeNull(); // the armed button's name is its visible label
+  });
+
+  it('Cancel (or Escape) disarms, returns focus to the row Restore and clears the announcement', async () => {
+    const btn = await armFirstRow();
+    [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
+    expect(document.activeElement).toBe(btn);
+    expect(root.querySelector('[data-testid="boot-restore-status"]')!.textContent).toBe('');
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    rows(root)[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(btn.textContent).toBe('Restore');
+    expect(document.activeElement).toBe(btn);
+    expect(mRestore).not.toHaveBeenCalled();
+  });
+
+  it('every row button has an accessible name that names its backup; the list keeps list semantics', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    expect(rows(root)[0].querySelector('button')!.getAttribute('aria-label')).toBe(
+      `Restore the copy from before the update, ${whenOf(PRE.takenAt)}`,
+    );
+    expect(rows(root)[1].querySelector('button')!.getAttribute('aria-label')).toBe(
+      `Restore backup from ${whenOf(MANUAL.takenAt)}`,
+    );
+    expect(root.querySelector('[data-testid="boot-restore-list"]')!.getAttribute('role')).toBe('list');
+  });
+
+  it('arming a second row disarms the first: one armed row, one Cancel on the screen', async () => {
+    const first = await armFirstRow();
+    const second = rows(root)[1].querySelector('button')!;
+    clickWith(second, 1);
+    await vi.waitFor(() => expect(second.textContent).toBe(armedLabel));
+    expect(first.textContent).toBe('Restore');
+    expect(buttons(root).filter((t) => t === 'Cancel')).toHaveLength(1);
+    expect(root.querySelector('[data-testid="boot-restore-status"]')!.textContent).toContain(
+      `the backup from ${whenOf(MANUAL.takenAt)}`,
+    );
   });
 });
 
