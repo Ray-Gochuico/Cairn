@@ -290,6 +290,14 @@ describe('DataSection — desktop (Tauri) path', () => {
     expect(await screen.findByText(/restore failed/i)).toHaveTextContent(/copy failed/);
   });
 
+  it('CR-U-15: after a put-back failure the Settings notice drops its "not changed" claim', async () => {
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderSection();
+    const line = await screen.findByText(/restore did not complete/i);
+    expect(line).toHaveTextContent('Restore did not complete: db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied).');
+    expect(line).not.toHaveTextContent(/data was not changed/i);
+  });
+
   it('surfaces a post-reload restore-failure notice from sessionStorage (M-4)', async () => {
     // Simulate the prior session's forced reload having stashed a reason.
     window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'disk full during restore');

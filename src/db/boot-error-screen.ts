@@ -46,7 +46,13 @@
  * list hydrator.
  */
 import { isWindows } from '@/lib/platform';
-import { clearUpdateHold, setSkipOnce, setUpdateHold, takeRestoreFailureNotice } from '@/lib/boot-notices';
+import {
+  clearUpdateHold,
+  restoreLeftDataUnchanged,
+  setSkipOnce,
+  setUpdateHold,
+  takeRestoreFailureNotice,
+} from '@/lib/boot-notices';
 import { RELEASES_URL } from '@/lib/releases-url';
 import { isExploreMode } from '@/lib/explore-mode';
 
@@ -162,8 +168,11 @@ function makeReloadButton(reload: () => void): HTMLButtonElement {
 function appendFailureNotice(container: HTMLElement): void {
   const reason = takeRestoreFailureNotice();
   if (reason !== null) {
+    // CR-U-15: the "not changed" claim only when db_restore put everything back.
     const notice = makeParagraph(
-      `The last restore did not finish: ${reason}. Your data was not changed.`,
+      restoreLeftDataUnchanged(reason)
+        ? `The last restore did not finish: ${reason}. Your data was not changed.`
+        : `The last restore did not finish: ${reason}.`,
     );
     notice.style.color = TEXT_COLOR;
     container.append(notice);

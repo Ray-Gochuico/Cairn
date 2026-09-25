@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   PRE_UPDATE_HOLD_KEY,
   PRE_UPDATE_NOTICE_KEY,
   PRE_UPDATE_SKIP_ONCE_KEY,
   RESTORE_FAILURE_NOTICE_KEY,
+  RESTORE_PUT_BACK_FAILED_PHRASE,
+  restoreLeftDataUnchanged,
   clearPostUpdateNotice,
   clearUpdateHold,
   peekPostUpdateNotice,
@@ -78,3 +82,18 @@ describe('boot notices (sessionStorage, Tauri-free)', () => {
     }
   });
 });
+
+describe('CR-U-15 — a failed restore claims "your data was not changed" only when that is true', () => {
+  it('a put-back failure (Rust reports it) is the one reason the claim is dropped for', () => {
+    expect(RESTORE_PUT_BACK_FAILED_PHRASE).toBe('could not be put back');
+    expect(restoreLeftDataUnchanged('db_restore: failed to finalize the restore (your data is unchanged): denied')).toBe(true);
+    expect(restoreLeftDataUnchanged('The backup failed an integrity check (quick_check returned "x"). It may be corrupt.')).toBe(true);
+    expect(restoreLeftDataUnchanged('db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)')).toBe(false);
+  });
+
+  it('cross-language parity: the Rust put-back message carries the exact phrase', () => {
+    const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
+    expect(rust).toContain(`Part of your current data ${RESTORE_PUT_BACK_FAILED_PHRASE}: {}`);
+  });
+});
+

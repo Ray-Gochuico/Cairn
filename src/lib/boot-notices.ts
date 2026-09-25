@@ -37,6 +37,20 @@ function take(key: string): string | null {
   return v;
 }
 
+/**
+ * CR-U-15: db_restore sets the replaced file's -wal/-shm aside and puts them
+ * back when the swap fails. When one cannot go back, its message says so with
+ * this exact phrase (src-tauri/src/db_backup.rs put_back_or_report; pinned
+ * across the two languages in tests/lib/boot-notices.test.ts), and the
+ * restore-failure notices must then NOT claim the data was not changed.
+ */
+export const RESTORE_PUT_BACK_FAILED_PHRASE = 'could not be put back';
+
+/** False only when db_restore reported a sidecar it could not put back. */
+export function restoreLeftDataUnchanged(reason: string): boolean {
+  return !reason.includes(RESTORE_PUT_BACK_FAILED_PHRASE);
+}
+
 export function stashRestoreFailureNotice(reason: string): void { write(RESTORE_FAILURE_NOTICE_KEY, reason); }
 export function takeRestoreFailureNotice(): string | null { return take(RESTORE_FAILURE_NOTICE_KEY); }
 

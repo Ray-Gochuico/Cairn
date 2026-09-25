@@ -257,8 +257,13 @@ export async function restoreFromBackup(
   // BOOT PATH (v1.7.1 U2, `tolerateNotLoaded`): on the generic boot-failure
   // screen Database.load itself may have thrown, so no pool was ever
   // registered and the plugin rejects with the exact not-loaded message —
-  // there is nothing to drain and the swap is safe. Only that exact message
-  // is tolerated; the default (Settings) path is unchanged.
+  // there is no pool of THIS session to drain. That does NOT make the old
+  // WAL checkpointed: no close ran, so a leftover -wal may hold committed
+  // frames. db_restore therefore sets the old -wal/-shm aside and puts them
+  // back if the swap fails (CR-U-15, src-tauri/src/db_backup.rs), and its
+  // error says so truthfully when one cannot go back. On success they go with
+  // the data the user chose to replace. Only that exact message is
+  // tolerated; the default (Settings) path is unchanged.
   // U4: closeLiveDatabase() will wrap this invoke — keep the tolerated branch
   // on its rejection.
   try {

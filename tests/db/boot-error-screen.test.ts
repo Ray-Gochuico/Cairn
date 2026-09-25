@@ -700,3 +700,14 @@ describe('boot-error-screen invariants (source pins, CR-U-7)', () => {
     expect(updater).toContain(`'${RELEASES_URL}'`);
   });
 });
+
+describe('CR-U-15 — the restore-failure notice drops its "not changed" claim after a put-back failure', () => {
+  it('a put-back failure reason renders without "Your data was not changed."', () => {
+    sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    const root = document.createElement('div');
+    renderBootError(root, dbInit('x'));
+    expect(root.textContent).toContain('The last restore did not finish: db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied).');
+    expect(root.textContent).not.toContain('Your data was not changed.');
+  });
+});
+
