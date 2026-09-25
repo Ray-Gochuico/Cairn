@@ -94,6 +94,8 @@ version — they point at the same files listed on the
 Check for updates**. Cairn downloads and installs the new version for
 you — no need to repeat any of the steps above.
 
+**Your data and updates:** updating never touches your data — the program and your database live in different places. Before an update that changes how data is stored, Cairn keeps a copy of your data, listed under **Settings → Data** as "Before update".
+
 ### Windows — after the download
 
 1. **Run the installer.** Open **File Explorer** (the yellow folder icon
@@ -123,6 +125,8 @@ a new version comes out, click the
 again and run it; it updates your existing install in place. If you have
 a (free) GitHub account, click **Watch → Custom → Releases** at the top
 of this page to get an email only when a new version ships.
+
+**Your data and updates:** updating never touches your data — the program and your database live in different places. Before an update that changes how data is stored, Cairn keeps a copy of your data, listed under **Settings → Data** as "Before update".
 
 ### Opening Cairn after installation
 

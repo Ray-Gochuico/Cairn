@@ -48,6 +48,9 @@ function formatTakenAt(takenAt: Date): string {
  * short "available in the desktop app" note is shown instead. The list simply
  * never loads in browser mode (the smoke runs there); only the live desktop
  * build exercises the real backup/restore.
+ *
+ * Pre-update copies (v1.7.1 U1) list beside manual backups with a 'Before
+ * update' caption; restore is the same funnel.
  */
 export function DataSection() {
   const tauri = isTauriRuntime();
@@ -197,7 +200,12 @@ export function DataSection() {
 
   /** Per-row Restore: hand the backup's path + formatted date to doRestore. */
   function handleRestoreEntry(b: BackupEntry) {
-    void doRestore(b.path, formatTakenAt(b.takenAt));
+    void doRestore(
+      b.path,
+      b.kind === 'pre-update'
+        ? `before the update (${formatTakenAt(b.takenAt)})`
+        : formatTakenAt(b.takenAt),
+    );
   }
 
   /** "Restore from a file…": pick a `.db` (defaulting INTO the hidden backups
@@ -238,6 +246,10 @@ export function DataSection() {
               recover everything — every account, transaction, and setting — if this
               computer is lost or the database is damaged. Backups are full, exact
               copies of your database.
+            </p>
+            <p className="text-muted-foreground">
+              Cairn also keeps a copy from before each update that changes how its
+              database is stored, listed here as &quot;Before update&quot;.
             </p>
           </div>
         </details>
@@ -296,11 +308,20 @@ export function DataSection() {
                     data-testid="backup-row"
                     className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    <span className="text-sm">{formatTakenAt(b.takenAt)}</span>
+                    <span className="text-sm">
+                      {formatTakenAt(b.takenAt)}
+                      {b.kind === 'pre-update' && (
+                        <span className="ml-2 text-xs text-muted-foreground">Before update</span>
+                      )}
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Restore backup from ${formatTakenAt(b.takenAt)}`}
+                      aria-label={
+                        b.kind === 'pre-update'
+                          ? `Restore the copy from before the update, ${formatTakenAt(b.takenAt)}`
+                          : `Restore backup from ${formatTakenAt(b.takenAt)}`
+                      }
                       onClick={() => handleRestoreEntry(b)}
                       disabled={!tauri || exploring || busy !== null}
                     >
