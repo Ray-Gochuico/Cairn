@@ -66,10 +66,12 @@ archive paths.
   alike (e.g. `E2E_PORT_BASE=1522 npx playwright test` in a worktree while the
   main checkout runs at the fixed 1422/1423). Unset, nothing moves. The tauri
   (1420) and browser (1421) roles never move; a value outside 1024–65534, or one
-  whose pair lands on 1420/1421, fails at once rather than falling back. The
-  port now follows the ROLE inside `vite.config.ts` (the two scripts pass no
-  `--port`), so a seed- or fresh-role server started by hand without `--port`
-  answers on 1422/1423; a `--port` on the command line still wins.
+  whose pair lands on 1420/1421, fails at once rather than falling back. A
+  browser-shim server's port now follows the ROLE inside `vite.config.ts` (the
+  two scripts pass no `--port`), so a seed- or fresh-role shim server started by
+  hand without `--port` answers on 1422/1423. A server without the shim
+  (`npm run dev`, `tauri dev`) stays on 1420 whatever `VITE_SEED_DEMO` or
+  `CAIRN_DEV_ROLE` the shell exports. A `--port` on the command line still wins.
 - **Load policy.** Above `0.7 × cores` 1-min load the suite runs serialized with
   a 120 s test timeout and says so; at or above `1.5 × cores` (local only) it
   refuses to run, once, with that one line. `E2E_LOAD_SOFT`, `E2E_LOAD_HARD`,

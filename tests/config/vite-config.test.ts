@@ -91,6 +91,20 @@ describe('vite.config.ts — the port follows the role (v1.7.1 A-6; CR-I-2: the 
     expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1', E2E_PORT_BASE: '1522' })).server?.port).toBe(1421);
   });
 
+  it('a leftover VITE_SEED_DEMO / CAIRN_DEV_ROLE export never moves the non-shim app off 1420 — `npm run dev` / `tauri dev`, whose devUrl tauri.conf.json pins (review I-m2)', async () => {
+    // The reviewer's scenario: a shell still exporting a hand smoke's
+    // CAIRN_DEV_ROLE=seed or VITE_SEED_DEMO=1 runs `npm run tauri dev` →
+    // beforeDevCommand `npm run dev` → plain `vite` (no shim). 971d0850 bound
+    // 1420 here; only a browser-shim server's port follows the role.
+    expect((await loadViteConfig({ VITE_SEED_DEMO: '1' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'seed' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'fresh' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'browser' })).server?.port).toBe(1420);
+    expect(
+      (await loadViteConfig({ CAIRN_DEV_ROLE: 'seed', VITE_SEED_DEMO: '1', E2E_PORT_BASE: '1622' })).server?.port,
+    ).toBe(1420);
+  });
+
   it('a bad E2E_PORT_BASE fails the config load — the CAIRN_DEV_ROLE typo precedent (Vite logs "failed to load config" once; expected)', async () => {
     await expect(
       loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh', E2E_PORT_BASE: '1420' }),
