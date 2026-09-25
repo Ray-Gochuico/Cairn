@@ -7,8 +7,9 @@
  * under the `cairn-pre-update-<from>-to-<to>-YYYYMMDD-HHMMSS.db` family
  * (src/lib/pre-update-names.ts), which manual rotation can never match.
  *
- * Order: mkdir -p → readDir → sweep (remove family files that no longer
- * validate; keep files too new for this build) → reuse (a partway chain's
+ * Order: mkdir -p → readDir → sweep (remove family files the validator
+ * definitively rejects; keep ones it could not open or check, and files too
+ * new for this build) → reuse (a partway chain's
  * ORIGIN copy, any day — D-U1-17; else a valid same-from/to copy taken TODAY,
  * local day) → db_backup (a rejection removes its own partial target) →
  * db_validate_backup (else remove + throw) → rotate the VALID family pool to
@@ -38,6 +39,27 @@ export class PreUpdateCopyError extends Error {
     this.cause = cause;
     Object.setPrototypeOf(this, PreUpdateCopyError.prototype);
   }
+}
+
+/**
+ * CR-U-11 (U1-m2/m10): true only when a validator rejection says the file is
+ * DEFINITIVELY not a valid Cairn database — its quick_check reported a
+ * problem, it is not a SQLite database, its image is malformed, or it has no
+ * schema_migrations table (the Rust reasons in src-tauri/src/db_backup.rs
+ * validate_backup_file; SQLite's NOTADB/CORRUPT texts ride inside sqlx's
+ * "(code: N) …" message). Any other rejection — the file could not be opened
+ * (a lock, a permission, an I/O error) or its check could not run — says
+ * nothing about the file, so the sweep KEEPS it. The phrases are pinned in
+ * tests/lib/pre-update-copy.test.ts with the real Rust formats.
+ */
+export function isDefinitivelyInvalidCopy(reason: string | null): boolean {
+  if (reason === null) return false;
+  return (
+    reason.startsWith('The backup failed an integrity check') ||
+    reason.includes('no schema_migrations table') ||
+    reason.includes('file is not a database') ||
+    reason.includes('database disk image is malformed')
+  );
 }
 
 export interface TakePreUpdateCopyArgs {
@@ -76,8 +98,12 @@ async function takeInner({ from, to, now, originFrom }: TakePreUpdateCopyArgs): 
   family.sort((a, b) => a.takenAt.getTime() - b.takenAt.getTime() || a.name.localeCompare(b.name));
 
   // Sweep + reuse. A file whose `from` exceeds this build's MAX was written by
-  // a newer build (a downgrade): keep it untouched (D-U1-6). Anything else
-  // that no longer validates is a leftover from a crashed VACUUM INTO.
+  // a newer build (a downgrade): keep it untouched (D-U1-6). A file the
+  // validator DEFINITIVELY rejects is a leftover from a crashed VACUUM INTO
+  // and is removed; one it merely could not open or check (a lock, a
+  // permission, an I/O error) is KEPT — out of reuse and rotation for this
+  // boot, never deleted: it may be a partway chain's only origin copy
+  // (CR-U-11).
   const valid: PreUpdateCopyName[] = [];
   const today = localTodayISO(now);
   for (const f of family) {
@@ -85,7 +111,9 @@ async function takeInner({ from, to, now, originFrom }: TakePreUpdateCopyArgs): 
     const path = await join(dir, f.name);
     const v = await validateBackupFile(path);
     if (!v.ok) {
-      try { await remove(path); } catch (e) { console.warn('[pre-update] could not remove an invalid copy:', e); } // eslint-disable-line no-console
+      if (isDefinitivelyInvalidCopy(v.reason)) {
+        try { await remove(path); } catch (e) { console.warn('[pre-update] could not remove an invalid copy:', e); } // eslint-disable-line no-console
+      }
       continue;
     }
     valid.push(f);

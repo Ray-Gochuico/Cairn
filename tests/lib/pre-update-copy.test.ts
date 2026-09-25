@@ -25,7 +25,11 @@ const DIR = `${BASE}/backups`;
 const NOW = new Date(2026, 8, 25, 10, 15, 0); // local 2026-09-25 10:15:00
 const file = (name: string) => ({ name, isFile: true, isDirectory: false, isSymlink: false });
 const OK = { ok: true, user_version: 53, max_supported_version: MAX_SCHEMA_VERSION, reason: null };
-const BAD = { ok: false, user_version: 0, max_supported_version: MAX_SCHEMA_VERSION, reason: 'Integrity check failed: page 3 is never used' };
+// A REAL Rust validator reason (db_backup.rs, the quick_check arm): definitive (CR-U-11).
+const BAD_REASON = 'The backup failed an integrity check (quick_check returned "*** in database main ***\nPage 3: never used"). It may be corrupt.';
+const BAD = { ok: false, user_version: 0, max_supported_version: MAX_SCHEMA_VERSION, reason: BAD_REASON };
+/** A validator rejection that says nothing about the file itself (CR-U-11). */
+const UNREADABLE = (reason: string) => ({ ok: false, user_version: 0, max_supported_version: MAX_SCHEMA_VERSION, reason });
 const MANUAL_POOL = Array.from({ length: 10 }, (_, i) => file(`cairn-202609${String(i + 10).padStart(2, '0')}-000000.db`));
 
 /** invoke fake: db_backup resolves; db_validate_backup answers per path from `verdicts` (default OK). */
@@ -72,7 +76,7 @@ describe('takePreUpdateCopy — the write', () => {
     wireInvoke({ [dest]: BAD });
     await expect(takePreUpdateCopy({ from: 53, to: 55, now: NOW })).rejects.toMatchObject({
       name: 'PreUpdateCopyError',
-      reason: 'Integrity check failed: page 3 is never used',
+      reason: BAD_REASON,
     });
     expect(removed()).toEqual([dest]);
   });
@@ -269,6 +273,70 @@ describe('takePreUpdateCopy — sweep, reuse, rotation', () => {
     await expect(takePreUpdateCopy({ from: 53, to: 55, now: NOW })).resolves.toMatchObject({ reused: false });
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe('CR-U-11 — the sweep deletes a family file ONLY on a definitive rejection (U1-m2/m10)', () => {
+  // The exact reasons validate_backup_file returns, probed with cargo on real
+  // files: a garbled page, a zero-length file, a garbage file, and a VACUUM
+  // INTO target truncated mid-write (the crashed-copy leftover the sweep is for).
+  const DEFINITIVE = [
+    BAD_REASON,
+    'The backup failed an integrity check (quick_check returned "*** in database main ***\nTree 2 page 2: btreeInitPage() returns error code 11"). It may be corrupt.',
+    'This does not look like a Cairn backup (no schema_migrations table).',
+    'Integrity check could not run: error returned from database: (code: 26) file is not a database',
+    'Integrity check could not run: error returned from database: (code: 11) database disk image is malformed',
+  ];
+  // (code: 14) is what cargo probed for a missing file and a mode-000 file.
+  const TRANSIENT = [
+    'This file could not be opened as a database: error returned from database: (code: 14) unable to open database file',
+    'Integrity check could not run: error returned from database: (code: 5) database is locked',
+    'This file could not be opened as a database: error communicating with database: Permission denied (os error 13)',
+    "Could not read the backup's schema version: error returned from database: (code: 10) disk I/O error",
+    'Could not open backup: invalid URL',
+    'Backup path is not valid UTF-8.',
+  ];
+
+  for (const reason of DEFINITIVE) {
+    it(`removes a family file rejected definitively: ${reason.slice(0, 60)}…`, async () => {
+      const f = 'cairn-pre-update-52-to-53-20260801-090000.db';
+      mockReadDir.mockResolvedValue([file(f)]);
+      wireInvoke({ [`${DIR}/${f}`]: UNREADABLE(reason) });
+      await takePreUpdateCopy({ from: 53, to: 55, now: NOW });
+      expect(removed()).toEqual([`${DIR}/${f}`]);
+    });
+  }
+
+  for (const reason of TRANSIENT) {
+    it(`KEEPS a family file the validator could not open or check: ${reason.slice(0, 60)}…`, async () => {
+      const f = 'cairn-pre-update-52-to-53-20260801-090000.db';
+      mockReadDir.mockResolvedValue([file(f)]);
+      wireInvoke({ [`${DIR}/${f}`]: UNREADABLE(reason) });
+      await takePreUpdateCopy({ from: 53, to: 55, now: NOW });
+      expect(mockRemove).not.toHaveBeenCalled();
+    });
+  }
+
+  it("a partway chain's ORIGIN copy that is briefly unreadable is kept on disk — never removed, not reused this boot", async () => {
+    const origin = 'cairn-pre-update-53-to-55-20260920-090000.db';
+    mockReadDir.mockResolvedValue([file(origin)]);
+    wireInvoke({ [`${DIR}/${origin}`]: UNREADABLE('Integrity check could not run: error returned from database: (code: 5) database is locked') });
+    const r = await takePreUpdateCopy({ from: 54, to: 55, now: NOW, originFrom: 53 });
+    expect(mockRemove).not.toHaveBeenCalled();
+    expect(r).toEqual({ path: `${DIR}/cairn-pre-update-54-to-55-20260925-101500.db`, reused: false });
+  });
+
+  it('a kept-but-unreadable file is outside the rotation pool: with three valid files it is never the one rotated out', async () => {
+    const unreadable = 'cairn-pre-update-49-to-50-20250101-000000.db'; // the OLDEST by time
+    mockReadDir.mockResolvedValue([
+      file(unreadable),
+      file('cairn-pre-update-50-to-51-20260301-000000.db'),
+      file('cairn-pre-update-51-to-52-20260601-000000.db'),
+      file('cairn-pre-update-52-to-53-20260801-000000.db'),
+    ]);
+    wireInvoke({ [`${DIR}/${unreadable}`]: UNREADABLE('Integrity check could not run: error returned from database: (code: 5) database is locked') });
+    await takePreUpdateCopy({ from: 53, to: 55, now: NOW });
+    expect(removed()).toEqual([`${DIR}/cairn-pre-update-50-to-51-20260301-000000.db`]);
   });
 });
 
