@@ -554,6 +554,22 @@ describe('replay rendering — deterministic pins (portfolio 100k)', () => {
       ),
     ).not.toBeInTheDocument();
   });
+
+  it('A-12 (v1.7.1, CR-C3-E): KEEP with $0/yr on a recovering window states the bare year — the "$0/yr contributions counted" qualifier never renders (the Roadmap thread\'s CI-MS-2r rule, card-side)', () => {
+    // 100% stocks, $100k, NO contributions: KEEP replays exactly the
+    // portfolio-only path (trough 2002 $60,858.41 → recovery 2013, the CP-13
+    // literal pinned above). Before this wave the KEEP arm printed
+    // "Back at its starting value: 2013 — with your $0/yr contributions counted."
+    // — a $0 qualifier the kernel thread (market-stress.ts CI-MS-2r) drops.
+    primePortfolio(100_000, 0);
+    renderCard();
+    setStockPct(100);
+    clickChip('The dot-com crash'); // KEEP default
+    expect(screen.getByTestId('stress-recovery').textContent).toBe('Back at its starting value: 2013.');
+    expect(screen.getByTestId('stress-recovery').textContent).not.toContain('$0/yr');
+    clickMode('Portfolio only');
+    expect(screen.getByTestId('stress-recovery').textContent).toBe('Back at its starting value: 2013.'); // CP-13, byte-identical
+  });
 });
 
 describe('chart series is a VIEW of the replay, clipped at the recovery (smoke fix)', () => {
