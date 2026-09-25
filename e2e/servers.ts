@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEV_ROLE_PORTS, type DevRole } from '../scripts/dev-servers';
+import { devPortsFromEnv, type DevPortEnv, type DevRole } from '../scripts/dev-servers';
 
 /** The tree Playwright was launched from — THE expected identity of both servers (D-I3). */
 export const E2E_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,26 +16,47 @@ export interface E2eServer {
   script: 'dev:browser:seed' | 'dev:browser:fresh';
 }
 
-/** Project [seeded]: disclosures accepted, demo data present. */
-export const SEEDED_SERVER: E2eServer = {
-  name: 'seeded',
-  role: 'seed',
-  port: DEV_ROLE_PORTS.seed,
-  url: `http://localhost:${DEV_ROLE_PORTS.seed}`,
-  seed: true,
-  shim: true,
-  script: 'dev:browser:seed',
-};
+export interface E2eServers {
+  seeded: E2eServer;
+  fresh: E2eServer;
+  all: readonly E2eServer[];
+}
 
-/** Project [onboarding]: a FRESH (unseeded) IndexedDB so boot lands on the disclaimer + setup path (T26, D-WF16). */
-export const FRESH_SERVER: E2eServer = {
-  name: 'fresh',
-  role: 'fresh',
-  port: DEV_ROLE_PORTS.fresh,
-  url: `http://localhost:${DEV_ROLE_PORTS.fresh}`,
-  seed: false,
-  shim: true,
-  script: 'dev:browser:fresh',
-};
+/**
+ * v1.7.1 A-6: the two servers for a given env. E2E_PORT_BASE unset → the fixed
+ * 1422 / 1423 (D-I12); set → base / base + 1. Pure over `env`, so the tests pin
+ * the literals on `e2eServersFor({})` whatever the developer's shell exports.
+ */
+export function e2eServersFor(env: DevPortEnv): E2eServers {
+  const ports = devPortsFromEnv(env);
+  /** Project [seeded]: disclosures accepted, demo data present. */
+  const seeded: E2eServer = {
+    name: 'seeded',
+    role: 'seed',
+    port: ports.seed,
+    url: `http://localhost:${ports.seed}`,
+    seed: true,
+    shim: true,
+    script: 'dev:browser:seed',
+  };
+  /** Project [onboarding]: a FRESH (unseeded) IndexedDB so boot lands on the disclaimer + setup path (T26, D-WF16). */
+  const fresh: E2eServer = {
+    name: 'fresh',
+    role: 'fresh',
+    port: ports.fresh,
+    url: `http://localhost:${ports.fresh}`,
+    seed: false,
+    shim: true,
+    script: 'dev:browser:fresh',
+  };
+  return { seeded, fresh, all: [seeded, fresh] };
+}
 
-export const E2E_SERVERS: readonly E2eServer[] = [SEEDED_SERVER, FRESH_SERVER];
+// This run's servers. Playwright evaluates playwright.config.ts in the main
+// process and again in every worker with the inherited env, and spawns each
+// webServer command with `{ ...process.env, ...env }` — so the base the config
+// derived these URLs from is the base vite.config.ts computes the port from.
+const THIS_RUN = e2eServersFor(process.env);
+export const SEEDED_SERVER: E2eServer = THIS_RUN.seeded;
+export const FRESH_SERVER: E2eServer = THIS_RUN.fresh;
+export const E2E_SERVERS: readonly E2eServer[] = THIS_RUN.all;
