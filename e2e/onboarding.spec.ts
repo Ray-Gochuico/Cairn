@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 /**
  * T26: the real onboarding happy path on a FRESH (unseeded) browser-shim DB.
@@ -15,7 +16,7 @@ test('fresh profile (form view): disclaimer → switch to form view → setup �
 
   // 1. The branded welcome frame (T23) above the app-wide disclaimer.
   await expect(page.getByRole('heading', { name: /welcome to cairn/i })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   await expect(page.getByRole('heading', { name: 'Disclaimer' })).toBeVisible();
 
@@ -67,13 +68,13 @@ test('fresh profile (form view): disclaimer → switch to form view → setup �
   // 6. Finish → the post-setup "You're set up" beat → into the app shell.
   await page.getByRole('button', { name: /finish setup/i }).click();
   await expect(page.getByRole('heading', { name: /you're set up/i })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   await page.getByRole('button', { name: /skip setup help/i }).click();
 
   // 7. The app shell (primary nav) renders — setup completed cleanly.
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
   expect(errors).toEqual([]);

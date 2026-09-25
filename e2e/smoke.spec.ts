@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 test('boot completes into the app shell; dashboard renders with a clean console', async ({ page }) => {
   const errors = collectErrors(page);
@@ -10,13 +11,13 @@ test('boot completes into the app shell; dashboard renders with a clean console'
   // so within the first 7 days of any month the designed new-month ritual
   // redirect fires (main.tsx maybeRedirectToMonthly, grace day 7). The
   // date-INDEPENDENT boot landmark is PageShell's primary nav…
-  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible({ timeout: bootTimeout() });
   // …and an in-app navigation then reaches the dashboard deterministically
   // (SPA navigation does not re-run the boot seam).
   await page.getByRole('link', { name: 'Dashboard' }).click();
   // W13: the briefing hero is the dashboard landmark now.
   const briefing = page.getByTestId('briefing-card');
-  await expect(briefing).toBeVisible({ timeout: 30_000 });
+  await expect(briefing).toBeVisible({ timeout: bootTimeout() });
   // Seeded household: month-close snapshots exist → a material positive row
   // (assets rose over the close; exact cents drift with the loan back-walk,
   // so assert shape, not the figure).
@@ -26,7 +27,7 @@ test('boot completes into the app shell; dashboard renders with a clean console'
   await expect(briefing).toContainText('Note — not a warning.');
   // The preserved pill row lives behind the Details disclosure:
   await page.getByTestId('dashboard-details-toggle').click();
-  await expect(page.getByTestId('dashboard-pill-grid')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('dashboard-pill-grid')).toBeVisible({ timeout: bootTimeout() });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
   expect(errors).toEqual([]);
 });
@@ -35,7 +36,7 @@ test('net-worth page renders the asset-value chart hero with a currency value', 
   const errors = collectErrors(page);
   await page.goto('/net-worth');
   const headerValue = page.getByTestId('asset-chart-header-value');
-  await expect(headerValue).toBeVisible({ timeout: 30_000 });
+  await expect(headerValue).toBeVisible({ timeout: bootTimeout() });
   // Seeded accounts guarantee a real dollar figure, not an empty state.
   await expect(headerValue).toContainText('$');
   expect(errors.join('\n')).not.toContain('Maximum update depth');
