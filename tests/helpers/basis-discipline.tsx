@@ -13,6 +13,12 @@ const TODAY_MARKS = ["in today's dollars", "(today's $)"] as const;
 const FUTURE_MARKS = ['in future dollars', '(future $)'] as const;
 /** $-followed-by-digit — control labels like "Today's $" don't match. */
 const DOLLAR_RE = /\$\s?\d/;
+/** A-13 (v1.7.1, CR-C3-3): glossary tooltip BODIES are out of the completeness
+ *  scan — the hook glossary-tooltip.tsx stamps on its PopoverPrimitive.Content.
+ *  ONLY this: portaled Radix Dialogs (the lever popovers, Manage scenarios)
+ *  and every other portal stay in (self-test "IN: a $ inside a portaled
+ *  Radix Dialog"). */
+const GLOSSARY_TOOLTIP_SELECTOR = '[data-glossary-tooltip]';
 
 function hasMark(text: string, basis: DollarBasis): boolean {
   return (basis === 'today' ? TODAY_MARKS : FUTURE_MARKS).some((m) => text.includes(m));
@@ -127,6 +133,7 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
     if (!DOLLAR_RE.test(text)) continue;
     const el = n.parentElement;
     if (!el) continue;
+    if (el.closest(GLOSSARY_TOOLTIP_SELECTOR)) continue; // glossary tooltip bodies: OUT (CR-C3-3)
     if (chartSelectors.some((s) => el.closest(s))) continue; // chart interiors: covered by caption + wiring pins
     if (figureSelectors.some((s) => el.closest(s))) continue;
     looseDollarTexts.push(text.trim());
@@ -165,7 +172,9 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *    inside the chart subtree is byte-identical across bases for pinned charts
  *    and differs for convertible ones — and carries at least one row in BOTH
  *    renders, so neither clause can be satisfied by an empty chart.
- *  - completeness: no unregistered $-figure anywhere outside chart subtrees.
+ *  - completeness: no unregistered $-figure anywhere outside chart subtrees
+ *    or glossary tooltip bodies (A-13, CR-C3-3 — the only excluded portal;
+ *    Dialogs stay in).
  * Fixture contract: positive figures, inflation > 0, all registered nodes
  * rendered. Renders once, flips the page basis live, restores today.
  *
