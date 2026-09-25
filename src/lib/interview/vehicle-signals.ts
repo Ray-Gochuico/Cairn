@@ -3,6 +3,7 @@ import { isRealSpending, effectiveSpendingAmount } from '@/lib/spending-analysis
 import { AssetSnapshotOwnerType } from '@/types/enums';
 import type { Category, Transaction } from '@/types/schema';
 import type { InterviewContext } from '@/types/interview';
+import { todayIsoOf } from './kernel-dates';
 
 /** Registry constants (design §4.2) — the thresholds ARE the policy. */
 export const CAR_AGE_YEARS_MIN = 10;
@@ -66,10 +67,11 @@ function repairSpend(
  * all three data-absent → 'unknown'; else 'quiet'. Pure; ctx.today only.
  */
 export function evaluateCarSignals(ctx: InterviewContext, vehicleId: number): CarSignalEvaluation {
-  const todayIso = ctx.today.toISOString().slice(0, 10);
+  // U7 (R4): ONE calendar — the window AND the model-year age from the LOCAL day.
+  const todayIso = todayIsoOf(ctx);
   const vehicle = ctx.vehicles.find((v) => v.id === vehicleId);
   const modelYear = vehicle?.year ?? null;
-  const ageYears = modelYear == null ? null : ctx.today.getFullYear() - modelYear;
+  const ageYears = modelYear == null ? null : Number(todayIso.slice(0, 4)) - modelYear;
 
   const snaps = ctx.assetValueSnapshots
     .filter((s) => s.ownerType === AssetSnapshotOwnerType.VEHICLE && s.ownerId === vehicleId)

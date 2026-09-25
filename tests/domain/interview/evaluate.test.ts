@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 import { evaluateThread, subjectsOf, monthsBetweenIso } from '@/domain/interview/evaluate';
 import { answerKey } from '@/types/interview';
@@ -12,7 +12,7 @@ function ctxWith(overrides: Partial<InterviewContext> = {}): InterviewContext {
     household: makeHousehold(), persons: [makePerson({ id: 1 })],
     accounts: [], loans: [], contributions: [], snapshots: [], transactions: [],
     categories: [], overrides: new Map(), thresholds: { low: 5, high: 8 },
-    taxYear: 2026, today: new Date('2026-08-01T12:00:00Z'),
+    taxYear: 2026, today: new Date(2026, 7, 1),
     vehicles: [], assetValueSnapshots: [], settings: null, holdings: [], tickers: [],
     interviewAnswers: new Map(),
     ...overrides,
@@ -22,7 +22,7 @@ function ctxWith(overrides: Partial<InterviewContext> = {}): InterviewContext {
 function storedRow(partial: Partial<InterviewAnswer>): InterviewAnswer {
   return {
     id: 1, householdId: 1, threadId: 't', questionId: 'q1', subjectKey: '',
-    valueJson: '"a"', questionVersion: 1, answeredAt: '2026-07-01T00:00:00.000Z',
+    valueJson: '"a"', questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z',
     basisJson: null, ...partial,
   };
 }
@@ -99,7 +99,7 @@ describe('evaluateThread', () => {
   it('an age-stale answer still reaches the reply, flagged for the CI-34 banner', () => {
     const answers = new Map([[
       answerKey('t', 'q1', ''),
-      storedRow({ questionVersion: 2, answeredAt: '2025-07-15T00:00:00.000Z' }), // 12+ months old
+      storedRow({ questionVersion: 2, answeredAt: '2025-07-15T12:00:00.000Z' }), // 12+ months old
     ]]);
     const r = evaluateThread(THREAD, ctxWith({ loans: [LOAN], interviewAnswers: answers }), '');
     expect(r.state).toBe('reply');
@@ -154,5 +154,30 @@ describe('evaluateThread', () => {
   it('monthsBetweenIso is whole calendar months', () => {
     expect(monthsBetweenIso('2025-07-15', '2026-08-01')).toBe(13);
     expect(monthsBetweenIso('2026-08-01', '2026-08-31')).toBe(0);
+  });
+});
+
+describe('U1 — staleness compares the LOCAL day to the LOCAL day of the instant (America/Los_Angeles)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { process.env.TZ = 'America/Los_Angeles'; });
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  const evalWith = (answeredAt: string, today: Date) => {
+    const answers = new Map([[answerKey('t', 'q1', ''), storedRow({ questionVersion: 2, answeredAt })]]);
+    return evaluateThread(THREAD, ctxWith({ loans: [LOAN], interviewAnswers: answers, today }), '');
+  };
+  it('an answer at 20:00 PDT on Aug 31 2026 (= 03:00Z Sep 1) is 12 months stale on local Aug 31 2027 — the UTC day read 11', () => {
+    const r = evalWith('2026-09-01T03:00:00.000Z', new Date(2027, 7, 31));
+    expect(r.state).toBe('reply');
+    if (r.state !== 'reply') return;
+    expect(r.staleAnswers.map((s) => s.node.id)).toEqual(['q1']);
+  });
+  it('control: on local Jul 31 2027 the same answer is 11 months old — not stale', () => {
+    const r = evalWith('2026-09-01T03:00:00.000Z', new Date(2027, 6, 31));
+    expect(r.state).toBe('reply');
+    if (r.state !== 'reply') return;
+    expect(r.staleAnswers).toEqual([]);
   });
 });

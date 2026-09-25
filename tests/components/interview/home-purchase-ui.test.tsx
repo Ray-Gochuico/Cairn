@@ -5,6 +5,8 @@ import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useGoalsStore } from '@/stores/goals-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DISCLOSURES } from '@/legal/disclosures';
 import { GoalType } from '@/types/enums';
 import { answerKey, type InterviewAnswer, type InterviewContext } from '@/types/interview';
 import { makeHousehold } from '../../factories';
@@ -30,7 +32,7 @@ const row = (questionId: string, valueJson: string): [string, InterviewAnswer] =
   answerKey('home_purchase', questionId, ''),
   {
     id: 1, householdId: 1, threadId: 'home_purchase', questionId, subjectKey: '',
-    valueJson, questionVersion: 1, answeredAt: '2026-07-01T00:00:00.000Z',
+    valueJson, questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z',
     basisJson: '{"branch":"not-owner"}',
   },
 ];
@@ -48,6 +50,10 @@ beforeEach(() => {
   useInterviewAnswersStore.setState({ saveAnswer, clearAnswer } as never);
   useHouseholdStore.setState({ household: { id: 1 }, update } as never);
   useGoalsStore.setState({ goals: [], error: null, create: createGoal } as never);
+  // R4 (D-R4-7): the strip is gated on the interview document — accept the
+  // current version so the existing submits are not intercepted (the
+  // QuestionBar.test idiom).
+  useAcceptancesStore.setState({ acceptedVersions: { interview: DISCLOSURES.interview.version } } as never);
 });
 
 describe('home_purchase on the strip', () => {
@@ -67,9 +73,9 @@ describe('home_purchase on the strip', () => {
     renderThreads(renterCtx(new Map([row('q_want_house', '"yes-within-5y"')])));
     const card = screen.getByTestId('thread-home_purchase-');
     expect(within(card).getByText('About how much would the down payment be, and by when?')).toBeInTheDocument();
-    fireEvent.change(within(card).getByLabelText('Amount'), { target: { value: '60000' } });
-    fireEvent.change(within(card).getByLabelText('Month'), { target: { value: '06' } });
-    fireEvent.change(within(card).getByLabelText('Year'), { target: { value: '2028' } });
+    fireEvent.change(within(card).getByLabelText(/^Amount/), { target: { value: '60000' } });
+    fireEvent.change(within(card).getByLabelText(/^Month/), { target: { value: '06' } });
+    fireEvent.change(within(card).getByLabelText(/^Year/), { target: { value: '2028' } });
     fireEvent.click(within(card).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
     expect(saveAnswer.mock.calls[0][0]).toMatchObject({

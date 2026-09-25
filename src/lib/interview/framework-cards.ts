@@ -1,13 +1,12 @@
 import { FRAMEWORKS } from '@/domain/interview/frameworks';
 import { allocateContribution } from '@/lib/contribution-allocator';
 import { valueHoldings } from '@/lib/holdings-value';
-import { buildScenarioDefaults } from '@/lib/calculators/scenario-assumptions';
 import { formatCurrency } from '@/lib/format';
 import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
 import type { AssetClass } from '@/types/enums';
 import type { InterviewContext } from '@/types/interview';
 import { splitAmount, type BucketId, type FrameworkSplit, type SplitInput } from './waterfall';
-import { computeEffect } from './effects';
+import { computeEffect, kernelScenario } from './effects';
 
 export interface CardRow { label: string; amount: string; forLabel?: string }
 export interface CardPhase { label: 'First' | 'Then' | 'Ongoing'; rows: CardRow[] }
@@ -128,11 +127,7 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
     const unallocatable = new Map<AssetClass, number>();
     // (a) provenance — only when a projection figure rendered (CI-22 + CI-26b)
     if (effect.usedProjection) {
-      const todayIso = ctx.today.toISOString().slice(0, 10);
-      const { defaults, provenance } = buildScenarioDefaults({
-        household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
-        snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso,
-      });
+      const { defaults, provenance } = kernelScenario(ctx);
       assumes.push({
         group: 'provenance',
         text: `Growth: ${defaults.returnPct}% nominal (your moderate scenario), solved against ${defaults.inflationPct}% inflation in today's dollars — not a prediction.`,

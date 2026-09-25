@@ -26,7 +26,10 @@ const SELECT_CLASS =
  *  (the T2 compound arm; Save disabled until the amount is valid AND the
  *  month-year is ≥ 1 whole calendar month ahead — a past/current month
  *  with an amount entered explains the disable via the house aria trio:
- *  FieldError + aria-invalid + aria-describedby on the month/year group).
+ *  FieldError + aria-invalid + aria-describedby on the month/year group),
+ *  month-year → the compound arm's Month/Year selects + Save with no amount
+ *  (R4 D-R4-1: submits a bare 'YYYY-MM'; minMonthsAhead / maxYearsAhead caps).
+ *  CR-AP-1 (R4): every control's accessible name is its noun + the prompt.
  *  Double-submit guard + inline error, per DecisionPrompt.
  *  ('amount-cadence' never reaches AnswerPrompt — the bar owns it.) */
 export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
@@ -51,6 +54,36 @@ export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
     }
   };
 
+  // CR-AP-1 (R4, D-R4-3): every control's accessible name composes the prompt,
+  // so two cards on one page never carry two controls named 'Amount'. The bar
+  // keeps the bare 'Amount' — now unique on /roadmap.
+  const name = (noun: 'Amount' | 'Month' | 'Year') => `${noun} — ${prompt}`;
+  const currentYear = Number(todayIso.slice(0, 4));
+  const composed = month !== '' && year !== '' ? `${year}-${month}` : null;
+  const monthsAhead = composed == null ? null : monthsBetweenIso(todayIso, `${composed}-01`);
+
+  const monthYearSelects = (yearsAhead: number, invalid: boolean) => {
+    const years = Array.from({ length: yearsAhead + 1 }, (_, i) => String(currentYear + i));
+    return (
+      <>
+        <select aria-label={name('Month')} className={SELECT_CLASS} value={month}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? monthErrorId : undefined}
+          onChange={(e) => setMonth(e.target.value)}>
+          <option value="">Month</option>
+          {MONTH_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
+        <select aria-label={name('Year')} className={SELECT_CLASS} value={year}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? monthErrorId : undefined}
+          onChange={(e) => setYear(e.target.value)}>
+          <option value="">Year</option>
+          {years.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </>
+    );
+  };
+
   return (
     <div className="mt-2 space-y-1">
       <div className="text-xs text-foreground">{prompt}</div>
@@ -66,7 +99,7 @@ export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
       {spec.kind === 'amount' && (
         <div className="flex gap-2 items-center">
           <div className="w-36">
-            <MoneyInput aria-label="Amount" value={draft} onValueChange={setDraft} />
+            <MoneyInput aria-label={name('Amount')} value={draft} onValueChange={setDraft} />
           </div>
           <Button size="sm" variant="outline"
             disabled={submitting || draft == null || draft <= 0 || draft > (spec.maxDollars ?? 10_000_000)}
@@ -76,10 +109,7 @@ export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
         </div>
       )}
       {spec.kind === 'amount-month-year' && (() => {
-        const currentYear = Number(todayIso.slice(0, 4));
-        const years = Array.from({ length: 11 }, (_, i) => String(currentYear + i));
-        const composed = month !== '' && year !== '' ? `${year}-${month}` : null;
-        const future = composed != null && monthsBetweenIso(todayIso, `${composed}-01`) >= 1;
+        const future = monthsAhead != null && monthsAhead >= 1;
         const amountOk = draft != null && draft > 0 && draft <= (spec.maxDollars ?? 10_000_000);
         // Smoke a11y: the past/current-month rejection must not be silent.
         // With an amount entered and a full month-year selected that is not
@@ -90,22 +120,9 @@ export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
           <div className="space-y-1">
             <div className="flex gap-2 items-center flex-wrap">
               <div className="w-36">
-                <MoneyInput aria-label="Amount" value={draft} onValueChange={setDraft} />
+                <MoneyInput aria-label={name('Amount')} value={draft} onValueChange={setDraft} />
               </div>
-              <select aria-label="Month" className={SELECT_CLASS} value={month}
-                aria-invalid={monthInvalid || undefined}
-                aria-describedby={monthInvalid ? monthErrorId : undefined}
-                onChange={(e) => setMonth(e.target.value)}>
-                <option value="">Month</option>
-                {MONTH_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-              </select>
-              <select aria-label="Year" className={SELECT_CLASS} value={year}
-                aria-invalid={monthInvalid || undefined}
-                aria-describedby={monthInvalid ? monthErrorId : undefined}
-                onChange={(e) => setYear(e.target.value)}>
-                <option value="">Year</option>
-                {years.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
+              {monthYearSelects(10, monthInvalid)}
               <Button size="sm" variant="outline"
                 disabled={submitting || !amountOk || !future}
                 onClick={() => submit({ amountDollars: draft, targetMonth: composed })}>
@@ -114,6 +131,28 @@ export function AnswerPrompt({ prompt, spec, onSubmit }: Props) {
             </div>
             <FieldError id={monthErrorId}
               message={monthInvalid ? 'Pick a month at least one month ahead.' : undefined} />
+          </div>
+        );
+      })()}
+      {spec.kind === 'month-year' && (() => {
+        // R4 (D-R4-1): the standalone arm — the compound controls minus the
+        // amount; submits a bare 'YYYY-MM'. CR-MY-2's copy assumes
+        // minMonthsAhead 1 (any other positive value is a copy-contract event);
+        // minMonthsAhead 0 accepts the current month and rejects a past one
+        // (CR-MY-3). An incomplete selection is not an error, just not done yet.
+        const minAhead = spec.minMonthsAhead ?? 1;
+        const ok = monthsAhead != null && monthsAhead >= minAhead;
+        const monthInvalid = composed != null && !ok;
+        const message = minAhead === 0 ? 'Pick this month or a later one.' : 'Pick a month at least one month ahead.';
+        return (
+          <div className="space-y-1">
+            <div className="flex gap-2 items-center flex-wrap">
+              {monthYearSelects(spec.maxYearsAhead ?? 10, monthInvalid)}
+              <Button size="sm" variant="outline" disabled={submitting || !ok} onClick={() => submit(composed)}>
+                Save
+              </Button>
+            </div>
+            <FieldError id={monthErrorId} message={monthInvalid ? message : undefined} />
           </div>
         );
       })()}

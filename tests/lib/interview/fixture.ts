@@ -25,7 +25,10 @@ export function fixtureCtx(overrides: Partial<InterviewContext> = {}): Interview
     ],
     contributions: [], transactions: [], categories: [], overrides: new Map(),
     thresholds: { low: 5, high: 8 }, taxYear: 2026,
-    today: new Date('2026-08-01T12:00:00Z'),
+    // D-R4-11 (R4): production-shaped — a LOCAL-midnight Date, exactly what
+    // roadmap/context.ts injects (dateFromLocalISO(useLocalToday())). The
+    // purity arms switch TZ around this shape; a UTC-noon fixture hid the class.
+    today: new Date(2026, 7, 1),
     vehicles: [], assetValueSnapshots: [], settings: null, holdings: [], tickers: [],
     dependents: [],
     properties: [], housingPayments: [],

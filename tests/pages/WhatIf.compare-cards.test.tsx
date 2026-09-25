@@ -10,6 +10,10 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { localTodayISO } from '@/lib/dates';
 import { seedWhatIfRealStores } from './whatif-store-seed';
 import {
@@ -47,6 +51,12 @@ vi.mock('@/components/whatif/ScenariosPanel', () => ({
 vi.mock('@/domain/roadmap/context', () => ({ useRoadmap: () => h.roadmapCtx }));
 vi.mock('@/domain/roadmap/evaluate', () => ({
   evaluate: (ctx: unknown) => { h.evaluateCalls.push(ctx); return h.roadmapResults; },
+}));
+// R4 (D-R4-P8): the interview context + census are stubbed like the roadmap
+// pair above — the page's OR is pinned here; the real census has its own suite.
+vi.mock('@/domain/interview/context', () => ({ useInterview: () => h.interviewCtx }));
+vi.mock('@/domain/interview/census', () => ({
+  anyInterviewAsk: (ctx: unknown) => { h.censusCalls.push(ctx); return h.interviewAsk; },
 }));
 
 const householdFixture: Household = {
@@ -140,6 +150,9 @@ const h = vi.hoisted(() => ({
   roadmapCtx: null as unknown,
   roadmapResults: new Map<string, { status: string }>(),
   evaluateCalls: [] as unknown[],
+  interviewCtx: null as unknown,
+  interviewAsk: false,
+  censusCalls: [] as unknown[],
 }));
 
 vi.mock('@/stores/scenarios-store', () => ({
@@ -238,6 +251,7 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
+    h.interviewCtx = null; h.interviewAsk = false; h.censusCalls = [];
     h.scenarios = [scenario(1, 'Baseline'), scenario(2, 'Aggressive payoff')];
     h.projections = new Map<number, unknown[]>([
       [1, [state(900_000)]],
@@ -341,27 +355,42 @@ describe('WhatIf — W3 store wiring (loads + latched gate)', () => {
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
+    h.interviewCtx = null; h.interviewAsk = false; h.censusCalls = [];
     h.scenarios = [scenario(1, 'Baseline'), scenario(2, 'Aggressive payoff')];
     h.projections = new Map<number, unknown[]>([[1, [state(900_000)]], [2, [state(400_000)]]]);
   });
 
-  it('reload() fires load() on contributions, categories and roadmap overrides', () => {
+  it('reload() fires load() on contributions, categories, roadmap overrides and (R4) the interview slices + settings', () => {
     const loadContributions = vi.fn();
     const loadCategories = vi.fn();
     const loadRoadmapOverrides = vi.fn();
     useContributionsStore.setState({ load: loadContributions } as never);
     useCategoriesStore.setState({ load: loadCategories } as never);
     useRoadmapOverridesStore.setState({ load: loadRoadmapOverrides } as never);
+    const loadTickers = vi.fn(); const loadDependents = vi.fn();
+    const loadHousingPayments = vi.fn(); const loadInterviewAnswers = vi.fn(); const loadSettings = vi.fn();
+    useTickersStore.setState({ load: loadTickers } as never);
+    useDependentsStore.setState({ load: loadDependents } as never);
+    useHousingPaymentsStore.setState({ load: loadHousingPayments } as never);
+    useInterviewAnswersStore.setState({ load: loadInterviewAnswers } as never);
+    useSettingsStore.setState({ load: loadSettings } as never);
     renderWhatIf();
     expect(loadContributions).toHaveBeenCalled();
     expect(loadCategories).toHaveBeenCalled();
     expect(loadRoadmapOverrides).toHaveBeenCalled();
+    // R4 (D-R4-9): the four interview-context loads + settings are PAGE-owned.
+    for (const l of [loadTickers, loadDependents, loadHousingPayments, loadInterviewAnswers, loadSettings]) expect(l).toHaveBeenCalled();
   });
 
   const gateStores = [
     ['contributions', useContributionsStore],
     ['categories', useCategoriesStore],
     ['roadmap overrides', useRoadmapOverridesStore],
+    ['tickers', useTickersStore],
+    ['dependents', useDependentsStore],
+    ['housing payments', useHousingPaymentsStore],
+    ['interview answers', useInterviewAnswersStore],
+    ['settings', useSettingsStore],
   ] as const;
   for (const [name, store] of gateStores) {
     it(`the latched gate waits on ${name}: still loading → the skeleton, no cards`, () => {
@@ -386,6 +415,7 @@ describe('WhatIf — W3 page plumbing', () => {
     h.roadmapCtx = null;
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
+    h.interviewCtx = null; h.interviewAsk = false; h.censusCalls = [];
     h.scenarios = [scenario(1, 'Baseline'), scenario(2, 'Aggressive payoff')];
     h.projections = new Map<number, unknown[]>([[1, [state(900_000)]], [2, [state(400_000)]]]);
   });
@@ -486,6 +516,37 @@ describe('WhatIf — W3 page plumbing', () => {
     }]]);
     renderWhatIf();
     expect(screen.queryByText(/The roadmap has questions/)).toBeNull();
+  });
+
+  it('R4 (D-R4-9): G9 fires on an interview ASK alone — the census receives the interview context', () => {
+    h.roadmapCtx = { today: new Date(2026, 7, 25) };
+    h.roadmapResults = new Map([['n1', { status: 'active' }]]);
+    h.interviewCtx = { today: new Date(2026, 7, 25) };
+    h.interviewAsk = true;
+    renderWhatIf();
+    expect(screen.getByText(
+      "The roadmap has questions you haven't answered — its checklist and frameworks assume less until you do.",
+    )).toBeInTheDocument();
+    expect(h.censusCalls[0]).toBe(h.interviewCtx);
+  });
+
+  it('the census is never consulted while the interview context is null (a settling page) — and G9 stays silent', () => {
+    h.roadmapCtx = { today: new Date(2026, 7, 25) };
+    h.roadmapResults = new Map([['n1', { status: 'active' }]]);
+    h.interviewCtx = null;
+    h.interviewAsk = true;
+    renderWhatIf();
+    expect(screen.queryByText(/The roadmap has questions/)).toBeNull();
+    expect(h.censusCalls).toEqual([]);
+  });
+
+  it('a roadmap prompt short-circuits the OR — the census is not called when anyDecisionPrompt is already true', () => {
+    h.roadmapCtx = { today: new Date(2026, 7, 25) };
+    h.roadmapResults = new Map([['n1', { status: 'unanswered', question: QUESTION }]]);
+    h.interviewCtx = { today: new Date(2026, 7, 25) };
+    renderWhatIf();
+    expect(screen.getByText(/The roadmap has questions/)).toBeInTheDocument();
+    expect(h.censusCalls).toEqual([]);
   });
 
   // Review REFUTED-2 residual: G10 reads the page's Settings object…

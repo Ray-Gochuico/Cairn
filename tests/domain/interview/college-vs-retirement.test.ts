@@ -33,7 +33,7 @@ const row = (questionId: string, valueJson: string, basisBranch: string): [strin
   {
     id: 1, householdId: 1, threadId: 'college_vs_retirement', questionId,
     subjectKey: '', valueJson, questionVersion: 1,
-    answeredAt: '2026-07-01T00:00:00.000Z', basisJson: JSON.stringify({ branch: basisBranch }),
+    answeredAt: '2026-07-01T12:00:00.000Z', basisJson: JSON.stringify({ branch: basisBranch }),
   },
 ];
 
@@ -53,9 +53,9 @@ const fullCtx = (answers = new Map<string, InterviewAnswer>()) => fixtureCtx({
 });
 
 describe('college_vs_retirement thread', () => {
-  it('registered LAST, household scope, no per-instance subject', () => {
+  it('registered fourth (R4 appended market_stress last), household scope, no per-instance subject', () => {
     expect(INTERVIEW_THREADS.map((t) => t.id)).toContain('college_vs_retirement');
-    expect(INTERVIEW_THREADS[INTERVIEW_THREADS.length - 1].id).toBe('college_vs_retirement');
+    expect(INTERVIEW_THREADS.map((t) => t.id).indexOf('college_vs_retirement')).toBe(3);
     expect(COLLEGE_VS_RETIREMENT_THREAD.title).toBe('College vs. retirement'); // CI-C1
     expect(COLLEGE_VS_RETIREMENT_THREAD.subject).toBeUndefined();
   });
@@ -83,7 +83,7 @@ describe('college_vs_retirement thread', () => {
     expect(r.pinBasis?.branch).toBe('has-529');
   });
 
-  it('529 but no dependents → asks q_target_year (CI-C2, stale 24mo, T2 compound arm)', () => {
+  it('529 but no dependents → asks q_target_year (CI-C2, stale 24mo, R4 month-year arm)', () => {
     const ctx = fixtureCtx({ household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)] });
     const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
     expect(r.state).toBe('ask');
@@ -91,10 +91,11 @@ describe('college_vs_retirement thread', () => {
     expect(r.node.id).toBe('q_target_year');
     expect(r.node.prompt).toBe('When would college costs start?');
     expect(r.node.staleAfterMonths).toBe(24);
-    // D-T3-9 as-shipped: T2's compound amount-month-year arm is the only
-    // month-year control in the frozen kernel; the thread reads only its
-    // targetMonth (see the '$123' leak guard below).
-    expect(r.node.answer.kind).toBe('amount-month-year');
+    // R4 (D-R4-2): the standalone month-year arm — costs can start this month
+    // (minMonthsAhead 0; resolveStart clamps to ≥ 0), a newborn's start is
+    // ~18 years out (maxYearsAhead 19).
+    expect(r.node.answer).toEqual({ kind: 'month-year', minMonthsAhead: 0, maxYearsAhead: 19 });
+    expect(r.node.version).toBe(1); // nobody is re-asked
     expect(r.pinBasis?.branch).toBe('no-dependents-529');
   });
 
@@ -191,7 +192,7 @@ describe('college_vs_retirement thread', () => {
     expect(r.reply.assumes).toContain("Ada is 18 or older — using today's published prices."); // CI-C21
   });
 
-  it('no-dependents path: stored target month drives the card + CI-C19; the compound amount never renders', () => {
+  it('no-dependents path: a LEGACY compound row still drives the card + CI-C19 (tolerant read); the amount never renders', () => {
     const ctx = fixtureCtx({
       household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)],
       interviewAnswers: new Map([
@@ -206,6 +207,48 @@ describe('college_vs_retirement thread', () => {
     expect(r.reply.lines[0]).toContain('starting September 2030');
     expect(r.reply.assumes).toContain('Using your entered start date — no dependents are tracked in this app.'); // CI-C19
     expect(JSON.stringify(r.reply)).not.toContain('$123'); // captured-but-unused, never rendered
+  });
+
+  it('no-dependents path: a bare "YYYY-MM" row (the R4 shape) walks to the same reply as the legacy row', () => {
+    const at = (valueJson: string) => {
+      const ctx = fixtureCtx({
+        household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)],
+        interviewAnswers: new Map([
+          row('q_target_year', valueJson, 'no-dependents-529'),
+          row('q_monthly_amount', '500', 'has-529'),
+        ]),
+      });
+      const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+      if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected reply');
+      return r.reply;
+    };
+    const fresh = at('"2030-09"');
+    const legacy = at(JSON.stringify({ amountDollars: 123, targetMonth: '2030-09' }));
+    expect(fresh.lines[0]).toContain('starting September 2030');
+    expect(fresh).toEqual(legacy);
+  });
+
+  it('the entered-date path accepts a start 19 years out (a newborn\'s 18th birthday plus rounding)', () => {
+    const ctx = fixtureCtx({
+      household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)],
+      interviewAnswers: new Map([row('q_target_year', '"2044-09"', 'no-dependents-529'), row('q_monthly_amount', '500', 'has-529')]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected reply');
+    expect(r.reply.lines[0]).toContain('starting September 2044');
+  });
+
+  it.each(['"2030-13"', '2030', '"2030"', '{"amountDollars":123}'])('D-GI16: a corrupt q_target_year row %s re-asks as unanswered', (valueJson) => {
+    const ctx = fixtureCtx({
+      household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)],
+      interviewAnswers: new Map([row('q_target_year', valueJson, 'no-dependents-529')]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    expect(r.state).toBe('ask');
+    if (r.state !== 'ask') return;
+    expect(r.node.id).toBe('q_target_year');
+    expect(r.reason).toBe('unanswered');
+    expect(r.priorAnswer).toBeNull();
   });
 
   it('529 with no snapshot: CI-C7b, never a fabricated $0 balance', () => {

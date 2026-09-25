@@ -11,9 +11,13 @@ const matched401k = makeAccount({
 
 describe('monthsRemainingInCalendarYear', () => {
   it('counts the current month through December', () => {
-    expect(monthsRemainingInCalendarYear(new Date('2026-08-01T12:00:00Z'))).toBe(5); // Aug..Dec
-    expect(monthsRemainingInCalendarYear(new Date('2026-01-15T12:00:00Z'))).toBe(12);
-    expect(monthsRemainingInCalendarYear(new Date('2026-12-31T12:00:00Z'))).toBe(1);
+    // R4 (D-R4-11): `today` is production-shaped — a LOCAL-midnight Date, what
+    // roadmap/context.ts injects. The UTC-noon instants this replaced read as
+    // the NEXT local day east of UTC+12 (Dec 31 12:00Z is Jan 1 in Auckland),
+    // so the Dec 31 row read 12 there; the helper's local getMonth() is right.
+    expect(monthsRemainingInCalendarYear(new Date(2026, 7, 1))).toBe(5); // Aug..Dec
+    expect(monthsRemainingInCalendarYear(new Date(2026, 0, 15))).toBe(12);
+    expect(monthsRemainingInCalendarYear(new Date(2026, 11, 31))).toBe(1);
   });
 });
 

@@ -49,12 +49,13 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
 
   it('shows each document version (exact text — the R3 what-changed notes also begin "Version x.y …")', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.5, interview=1.1.
+    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.5, interview=1.2.
     // Exact-string matches on purpose: two documents are now 1.5, and each
     // note's first sentence ("Version 1.5 adds…", "Version 1.5 changes only…",
-    // "Version 1.1 adds…") would substring-match a regex.
+    // "Version 1.2 adds…") would substring-match a regex.
     expect(screen.getAllByText('Version 1.5')).toHaveLength(2); // app_wide + backtest (R3 bump)
-    expect(screen.getAllByText('Version 1.1')).toHaveLength(1); // interview
+    expect(screen.getAllByText('Version 1.2')).toHaveLength(1); // interview (R4 bump)
+    expect(screen.queryByText('Version 1.1')).toBeNull();
     expect(screen.getAllByText('Version 1.0')).toHaveLength(2); // roadmap + learning
     expect(screen.queryByText('Version 1.4')).toBeNull(); // the backtest bump landed
   });
@@ -164,7 +165,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       expect(note.compareDocumentPosition(docBody) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it('every note names its own document’s version and carries that document’s diff (app_wide 1.5, interview 1.1)', () => {
+    it('every note names its own document’s version and carries that document’s diff (app_wide 1.5, interview 1.2)', () => {
       renderSection();
       const appWide = viewerOf(DISCLOSURES.app_wide.title);
       expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
@@ -172,7 +173,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
         DISCLOSURES.app_wide.diffFromPrevious,
       );
       const interview = viewerOf(DISCLOSURES.interview.title);
-      expect(within(interview).getByText('What changed in version 1.1')).toBeInTheDocument();
+      expect(within(interview).getByText('What changed in version 1.2')).toBeInTheDocument();
       expect(within(interview).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
         DISCLOSURES.interview.diffFromPrevious,
       );
@@ -215,7 +216,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       // The interview note names its own version inside its own region.
       expect(
         within(screen.getByRole('region', { name: 'About the Frameworks' })).getByText(
-          'What changed in version 1.1',
+          'What changed in version 1.2',
         ),
       ).toBeInTheDocument();
     });

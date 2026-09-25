@@ -34,6 +34,12 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
+import { useInterview } from '@/domain/interview/context';
+import { anyInterviewAsk } from '@/domain/interview/census';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { anyDecisionPrompt } from '@/components/roadmap/DecisionPrompt';
@@ -99,6 +105,16 @@ export default function WhatIf() {
   const loadContributions  = useContributionsStore((s) => s.load);
   const loadCategories     = useCategoriesStore((s) => s.load);
   const loadRoadmapOverrides = useRoadmapOverridesStore((s) => s.load);
+  // R4 (D-R4-9): useInterview() = useRoadmap()'s 9 stores + 9. This page
+  // already loads and gates 13; the four missing interview slices — tickers,
+  // dependents, housing payments, interview answers — plus settings (read
+  // today without a page-owned load) join the same latched gate. Measured
+  // cost: 13 → 18 gated stores, all small tables, deduped loads.
+  const loadTickers          = useTickersStore((s) => s.load);
+  const loadDependents       = useDependentsStore((s) => s.load);
+  const loadHousingPayments  = useHousingPaymentsStore((s) => s.load);
+  const loadInterviewAnswers = useInterviewAnswersStore((s) => s.load);
+  const loadSettings         = useSettingsStore((s) => s.load);
 
   const household          = useHouseholdStore((s) => s.household);
   const persons            = usePersonsStore((s) => s.persons);
@@ -214,7 +230,12 @@ export default function WhatIf() {
     loadContributions();
     loadCategories();
     loadRoadmapOverrides();
-  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots, loadContributions, loadCategories, loadRoadmapOverrides]);
+    loadTickers();
+    loadDependents();
+    loadHousingPayments();
+    loadInterviewAnswers();
+    loadSettings();
+  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots, loadContributions, loadCategories, loadRoadmapOverrides, loadTickers, loadDependents, loadHousingPayments, loadInterviewAnswers, loadSettings]);
 
   // W10 M33: the ~11-store cold load used to flash "Set up your household…"
   // and the projection-empty CTA before any store resolved. Gate on the
@@ -235,6 +256,11 @@ export default function WhatIf() {
       useContributionsStore((s) => s.isLoading),
       useCategoriesStore((s) => s.isLoading),
       useRoadmapOverridesStore((s) => s.isLoading),
+      useTickersStore((s) => s.isLoading),
+      useDependentsStore((s) => s.isLoading),
+      useHousingPaymentsStore((s) => s.isLoading),
+      useInterviewAnswersStore((s) => s.isLoading),
+      useSettingsStore((s) => s.isLoading),
     ],
     [
       useScenariosStore((s) => s.error),
@@ -250,6 +276,11 @@ export default function WhatIf() {
       useContributionsStore((s) => s.error),
       useCategoriesStore((s) => s.error),
       useRoadmapOverridesStore((s) => s.error),
+      useTickersStore((s) => s.error),
+      useDependentsStore((s) => s.error),
+      useHousingPaymentsStore((s) => s.error),
+      useInterviewAnswersStore((s) => s.error),
+      useSettingsStore((s) => s.error),
     ],
     reload,
   );
@@ -363,14 +394,19 @@ export default function WhatIf() {
   // prompt), so the row claimed questions that weren't there and its
   // "Open Roadmap →" CTA landed on a page with nothing to answer.
   //
-  // Deliberately NARROWER than "every open question in the app": interview
-  // threads would drag useInterview()'s ~18-store hydration onto this page for
-  // one boolean (D-W3-P2, declined). A true-but-narrow row beats a false one.
+  // R4 (D-R4-9, ruling 6): interview ASKS join the census. D-W3-P2 declined
+  // this over "~18-store hydration for one boolean"; the marginal cost is four
+  // small slices (above), and the frozen G9 sentence was authored for exactly
+  // these questions — the asks ARE on /roadmap and the CTA lands where
+  // something is answerable. The census is pure and short-circuits; it is
+  // consulted only when no roadmap prompt already answers the question.
   const roadmapCtx = useRoadmap();
+  const interviewCtx = useInterview();
   const roadmapHasUnanswered = useMemo(() => {
     if (!roadmapCtx) return false;
-    return anyDecisionPrompt(evaluate(roadmapCtx).values());
-  }, [roadmapCtx]);
+    if (anyDecisionPrompt(evaluate(roadmapCtx).values())) return true;
+    return interviewCtx != null && anyInterviewAsk(interviewCtx);
+  }, [roadmapCtx, interviewCtx]);
 
   // G2's consequence ("the portfolio starts at $0 in these projections") is
   // only true when the ENGINE seed is zero. state-snapshot.ts seeds 529s and
