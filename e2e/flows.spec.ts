@@ -390,6 +390,49 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
 
+test('roadmap interview: market stress replays the seeded portfolio through five windows, in registry order, behind the Frameworks gate', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/roadmap');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Open Roadmap' }).click();
+  // ⚑ R4-F16: the seed's brokerage/retirement balances surface the card (last in the strip).
+  const card = page.getByTestId('thread-market_stress-');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toContainText('How is your portfolio split between stocks and bonds?');
+  await card.getByRole('button', { name: '75% stocks, 25% bonds' }).click();
+  // The strip gate (D-R4-7): first strip answer → the interview document at 1.2, NO "What changed" box (never accepted).
+  await expect(page.getByText('About the Frameworks')).toBeVisible();
+  await expect(page.getByText('Version 1.2', { exact: true })).toBeVisible();
+  await expect(page.getByText('What changed since you last accepted:')).toHaveCount(0);
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  // Appendix A of the R4 plan — dataset-derived, run-date-invariant on the seed (the age-90 cap does not bind at 38).
+  const lines = [
+    "Your $935,000 portfolio — from your latest account snapshots — replayed through five historical windows at a 75% stocks / 25% bonds mix, in today's dollars.",
+    "The 1929 crash (1929–1931): $592,050 at the deepest year-end, −36.7% from today; back at today's value by 1935. FI target about 17 years later than on your assumed path.",
+    "The 1970s inflation run (1973–1981): $576,821 at the deepest year-end (1974), −38.3% from today, and $629,774 at the end of 1981; back at today's value by 1984. FI target about 21 years later than on your assumed path.",
+    "The dot-com crash (2000–2002): $705,575 at the deepest year-end, −24.5% from today; back at today's value by 2006. FI target about 12 years later than on your assumed path.",
+    "The 2008 crash (2008): $719,455 at the deepest year-end, −23.1% from today; back at today's value by 2010. FI target about 9 years later than on your assumed path.",
+    "The 2022 inflation shock (2022): $773,401 at the deepest year-end, −17.3% from today; not back at today's value by 2022, where the bundled data ends. FI target about 7 years later than on your assumed path.",
+  ];
+  for (const l of lines) await expect(card).toContainText(l);
+  // Never ranked: the five window lines appear in registry order (an ordered check — containment alone would pass a sort).
+  const text = (await card.textContent()) ?? '';
+  const idx = lines.slice(1).map((l) => text.indexOf(l));
+  expect(idx.every((i) => i >= 0)).toBe(true);
+  expect(idx).toEqual([...idx].sort((a, b) => a - b));
+  await expect(card).toContainText('History that happened once — not a forecast, not a probability.');
+  await expect(card).toContainText('FI target $1,800,000 = 12 × $6,000/mo (from Household) ÷ 4% SWR');
+  await expect(card).toContainText('the search ends where Avery Sample reaches 90, counting from today\'s age.');
+  await expect(card).toContainText('Contributions: no contributions in the last 12 months.');
+  await expect(card).toContainText('Every start year, not just these windows — the Stress Test card and the Backtest tool on Calculators.');
+  // Ask me again clears back to the question (no re-gate — the acceptance is in-store).
+  await card.getByRole('button', { name: /Ask me again/ }).click();
+  await expect(card).toContainText('How is your portfolio split between stocks and bonds?');
+  await expect(page.getByText('About the Frameworks')).toHaveCount(0);
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
+
 test('calculators: stress card gates in-card on the backtest disclosure; solver shows an honest bisection', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/calculators');

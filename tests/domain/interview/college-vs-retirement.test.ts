@@ -53,9 +53,9 @@ const fullCtx = (answers = new Map<string, InterviewAnswer>()) => fixtureCtx({
 });
 
 describe('college_vs_retirement thread', () => {
-  it('registered LAST, household scope, no per-instance subject', () => {
+  it('registered fourth (R4 appended market_stress last), household scope, no per-instance subject', () => {
     expect(INTERVIEW_THREADS.map((t) => t.id)).toContain('college_vs_retirement');
-    expect(INTERVIEW_THREADS[INTERVIEW_THREADS.length - 1].id).toBe('college_vs_retirement');
+    expect(INTERVIEW_THREADS.map((t) => t.id).indexOf('college_vs_retirement')).toBe(3);
     expect(COLLEGE_VS_RETIREMENT_THREAD.title).toBe('College vs. retirement'); // CI-C1
     expect(COLLEGE_VS_RETIREMENT_THREAD.subject).toBeUndefined();
   });

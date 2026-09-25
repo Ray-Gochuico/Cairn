@@ -17,6 +17,10 @@ import { efContext, evaluateSmallEmergencyFund } from '@/domain/roadmap/rules/em
 import { splitAmount } from '@/lib/interview/waterfall';
 import { dateFromLocalISO } from '@/lib/dates';
 import type { InterviewContext } from '@/types/interview';
+import { answerKey } from '@/types/interview';
+import { evaluateThread } from '@/domain/interview/evaluate';
+import { MARKET_STRESS_THREAD } from '@/domain/interview/threads/market-stress';
+import { computeMarketStress } from '@/lib/interview/market-stress';
 import { TaxRulesRepo } from '@/domain/tax-rules';
 import { JurisdictionType } from '@/types/enums';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
@@ -961,5 +965,42 @@ describe('R2 tax anchors — the MFJ seed through the production W-2 engine and 
     });
     expect(evaluateRothIra(ctx).evidence).toBe('MAGI $325,000 above $242,000 — backdoor Roth path instead.');
     expect(evaluateTraditionalIra(ctx).evidence).toBe('MAGI $325,000 above $129,000 — Roth or backdoor path applies instead.');
+  });
+});
+
+describe('R4 seeded market-stress anchors — the shipped seed through the production mappers (Appendix A of the R4 plan)', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => { db = await freshDb(); });
+
+  const withMix = (ctx: InterviewContext, mix: string): InterviewContext => ({
+    ...ctx,
+    interviewAnswers: new Map([[
+      answerKey('market_stress', 'q_mix', ''),
+      { id: 1, householdId: 1, threadId: 'market_stress', questionId: 'q_mix', subjectKey: '', valueJson: JSON.stringify(mix), questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"has-portfolio"}' },
+    ]]),
+  });
+
+  it('seed 2026-07-08 at stocks-75: pv $935,000 (the 529 is out), Avery 38 caps the search, target $1,800,000, real 3.515625%', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const res = computeMarketStress(await seededCtx(db, '2026-07-08'), 'stocks-75');
+    expect(res).toMatchObject({ pv: 935_000, pmt: 0, targetFv: 1_800_000, ageNow: 38, olderName: SAMPLE_PROFILE.personName, personCount: 2, fiState: 'ok' });
+    expect(res.realRate).toBeCloseTo(0.03515625, 12);
+    expect(res.windows.map((w) => w.delay)).toEqual([17, 21, 12, 9, 7]);
+  });
+
+  it('the six seeded strings, byte-exact, in registry order — and the assumes name the household basis', async () => {
+    await seedSampleProfile(db, { todayISO: '2026-07-08' });
+    const r = evaluateThread(MARKET_STRESS_THREAD, withMix(await seededCtx(db, '2026-07-08'), 'stocks-75'), '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected the plan reply');
+    expect(r.reply.lines).toEqual([
+      "Your $935,000 portfolio — from your latest account snapshots — replayed through five historical windows at a 75% stocks / 25% bonds mix, in today's dollars.",
+      "The 1929 crash (1929–1931): $592,050 at the deepest year-end, −36.7% from today; back at today's value by 1935. FI target about 17 years later than on your assumed path.",
+      "The 1970s inflation run (1973–1981): $576,821 at the deepest year-end (1974), −38.3% from today, and $629,774 at the end of 1981; back at today's value by 1984. FI target about 21 years later than on your assumed path.",
+      "The dot-com crash (2000–2002): $705,575 at the deepest year-end, −24.5% from today; back at today's value by 2006. FI target about 12 years later than on your assumed path.",
+      "The 2008 crash (2008): $719,455 at the deepest year-end, −23.1% from today; back at today's value by 2010. FI target about 9 years later than on your assumed path.",
+      "The 2022 inflation shock (2022): $773,401 at the deepest year-end, −17.3% from today; not back at today's value by 2022, where the bundled data ends. FI target about 7 years later than on your assumed path.",
+    ]);
+    expect(r.reply.assumes).toContain("FI target $1,800,000 = 12 × $6,000/mo (from Household) ÷ 4% SWR — two identical whole-year solves from each window's last year, one from the replayed balance and one from your assumed path's balance; the search ends where Avery Sample reaches 90, counting from today's age.");
+    expect(r.reply.assumes).toContain('Contributions: no contributions in the last 12 months.');
   });
 });

@@ -307,3 +307,19 @@ describe('the strip gate (R4 D-R4-7 / D-R4-P6) — the bar\'s modal semantics on
     expect(screen.queryByText('Accept the About the Frameworks disclosure to see this card.')).toBeNull();
   });
 });
+
+describe('⚑ R4-F16 receipt: the strip fixture\'s $30,000 cash/savings never surfaces market_stress; an invested balance does', () => {
+  it('bare owner fixture: nothing renders (the "no false empty state" pin above survives unchanged)', () => {
+    const { container } = render(<InterviewThreads ctx={fixtureCtx({ properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })] })} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+  it('a brokerage snapshot surfaces the mix question', () => {
+    const ctx = fixtureCtx({
+      properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })],
+      accounts: [...fixtureCtx().accounts, makeAccount({ id: 3, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' })],
+      snapshots: [...fixtureCtx().snapshots, snap(3, 100_000)],
+    });
+    render(<InterviewThreads ctx={ctx} />);
+    expect(screen.getByTestId('thread-market_stress-')).toHaveTextContent('How is your portfolio split between stocks and bonds?');
+  });
+});
