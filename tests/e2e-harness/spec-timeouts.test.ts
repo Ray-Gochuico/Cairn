@@ -146,7 +146,6 @@ function maskComments(src: string): string {
 
 /** The source with its comments blanked — what the ratchet scans. */
 const scannable = (src: string) => maskComments(src);
-const read = (f: string) => scannable(readFileSync(f, 'utf8'));
 const label = (f: string) => path.relative(E2E, f);
 
 /**
@@ -180,6 +179,22 @@ function offendersIn(src: string): string[] {
   return [...scannable(src).matchAll(OFFENDER)].map((m) => m[0]);
 }
 
+const BOOT_TIMEOUT_MODULE = path.join(E2E, 'boot-timeout');
+
+/**
+ * Does this spec import bootTimeout from e2e/boot-timeout.ts? The relative
+ * path is resolved against the spec's own directory (review I-m6/I-m14), so a
+ * spec under e2e/<dir>/ passes with '../boot-timeout' and fails with
+ * './boot-timeout' — the walk above is recursive, and so is this rule.
+ */
+function importsBootTimeout(src: string, specFile: string): boolean {
+  for (const m of scannable(src).matchAll(/import \{([^}]*)\} from '(\.[^']*)';/g)) {
+    if (!/\bbootTimeout\b/.test(m[1])) continue;
+    if (path.resolve(path.dirname(specFile), m[2]) === BOOT_TIMEOUT_MODULE) return true;
+  }
+  return false;
+}
+
 /** bootTimeout() call sites in one spec's source (comments excluded). */
 function bootWaitSites(src: string): number {
   return (scannable(src).match(/\bbootTimeout\(\)/g) ?? []).length;
@@ -203,9 +218,9 @@ describe('e2e specs — every wait follows the load policy (v1.7.1 A-6 ratchet)'
   it('every spec that waits imports bootTimeout from ./boot-timeout, and the suite keeps at least the wait sites it had', () => {
     let sites = 0;
     for (const f of specs) {
-      const src = read(f);
-      const n = bootWaitSites(readFileSync(f, 'utf8'));
-      if (n > 0) expect(src, label(f)).toMatch(/import \{[^}]*\bbootTimeout\b[^}]*\} from '\.\/boot-timeout';/);
+      const raw = readFileSync(f, 'utf8');
+      const n = bootWaitSites(raw);
+      if (n > 0) expect(importsBootTimeout(raw, f), label(f)).toBe(true);
       sites += n;
     }
     expect(sites).toBeGreaterThanOrEqual(BOOT_WAIT_FLOOR);
@@ -280,5 +295,26 @@ describe('the ratchet refuses every numeric timeout shape, and none of the bootT
     expect(offendersIn(`setTimeout(() => done(), 100);`)).toEqual([]);
     expect(offendersIn(`const waitForBoot = bootTimeout();`)).toEqual([]);
     expect(offendersIn(`expect.configure({ soft: true });`)).toEqual([]);
+  });
+});
+
+// Review I-m6/I-m14: the walk is recursive, so the import rule must accept the
+// RIGHT relative path from any depth — and only that one.
+describe('the import rule resolves the path against the spec: e2e/<dir>/x.spec.ts imports ../boot-timeout', () => {
+  const at = (...parts: string[]) => path.join(E2E, ...parts);
+  const imp = (from: string, names = 'bootTimeout') => `import { ${names} } from '${from}';`;
+
+  it('accepts the path that resolves to e2e/boot-timeout.ts from the spec\'s own directory', () => {
+    expect(importsBootTimeout(imp('./boot-timeout'), at('x.spec.ts'))).toBe(true);
+    expect(importsBootTimeout(imp('../boot-timeout'), at('whatif', 'x.spec.ts'))).toBe(true);
+    expect(importsBootTimeout(imp('../../boot-timeout'), at('a', 'b', 'x.spec.ts'))).toBe(true);
+    expect(importsBootTimeout(imp('./boot-timeout', 'BOOT_TIMEOUT_MS, bootTimeout'), at('x.spec.ts'))).toBe(true);
+  });
+
+  it('refuses a path that resolves anywhere else, another name, or an import that sits in a comment', () => {
+    expect(importsBootTimeout(imp('./boot-timeout'), at('whatif', 'x.spec.ts'))).toBe(false);
+    expect(importsBootTimeout(imp('../boot-timeout'), at('x.spec.ts'))).toBe(false);
+    expect(importsBootTimeout(imp('./boot-timeout', 'collectErrors'), at('x.spec.ts'))).toBe(false);
+    expect(importsBootTimeout(`// ${imp('./boot-timeout')}`, at('x.spec.ts'))).toBe(false);
   });
 });
