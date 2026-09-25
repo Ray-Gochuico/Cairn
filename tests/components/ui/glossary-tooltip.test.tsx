@@ -23,6 +23,9 @@ describe('TermTooltip', () => {
     await user.click(screen.getByRole('button', { name: /DCFSA/ }));
 
     const tooltip = await screen.findByRole('dialog');
+    // A-13 (v1.7.1, CR-C3-3): the basis sweep excludes glossary tooltip
+    // BODIES from its completeness scan by this hook — and nothing else.
+    expect(tooltip).toHaveAttribute('data-glossary-tooltip');
     const expected = getGlossaryEntry('DCFSA');
     expect(expected).not.toBeNull();
     expect(tooltip).toHaveTextContent(expected!.shortDefinition);

@@ -46,7 +46,10 @@ archive paths.
   with a symlinked `node_modules` no longer shares `node_modules/.vite/deps`
   with the main checkout, and the two Playwright servers no longer race each
   other's cold optimize. The first start of a role in a tree pays one cold
-  optimize; `rm -rf .vite.local` resets.
+  optimize; `rm -rf .vite.local` resets. Vitest's own results cache (test
+  ordering) lives under `<tree>/.vite.local/vitest/` too, so a worktree's
+  `npm test` no longer rewrites the main checkout's
+  `node_modules/.vite/vitest/`.
 - **Dev stamp.** Every dev server answers `GET /__cairn/dev-stamp` with
   `{ root, role, port, seed, shim, nonce, pid, head, cacheDir }` (a serve-only
   plugin; absent from `vite build`). `curl -s localhost:1422/__cairn/dev-stamp`
@@ -57,6 +60,20 @@ archive paths.
   `e2e/global-setup.ts` still refuses a server from another tree, of another
   role, or without the browser shim (the tree is compared as a path, not as a
   spelling: realpath, forward slashes, no trailing separator).
+- **Two trees at once.** `E2E_PORT_BASE=<n>` moves the seed server to `<n>` and
+  the fresh server to `<n>+1` — for `npm run dev:browser:seed` /
+  `npm run dev:browser:fresh`, `npx playwright test` and the identity check
+  alike (e.g. `E2E_PORT_BASE=1622 npx playwright test` in a worktree while the
+  main checkout runs at the fixed 1422/1423; the 1622/1623 pair is clear of the
+  ports the launch configs and the hand smoke use, 1420–1431 and 1523–1530).
+  Unset, nothing moves. The tauri (1420) and browser (1421) roles never move; a
+  value outside 1024–65534, or one whose pair lands on 1420/1421, fails at once
+  rather than falling back. A browser-shim server's port now follows the ROLE
+  inside `vite.config.ts` (the two scripts pass no `--port`), so a seed- or
+  fresh-role shim server started by hand without `--port` answers on 1422/1423.
+  A server without the shim (`npm run dev`, `tauri dev`) stays on 1420 whatever
+  `VITE_SEED_DEMO` or `CAIRN_DEV_ROLE` the shell exports. A `--port` on the
+  command line still wins.
 - **Load policy.** Above `0.7 × cores` 1-min load the suite runs serialized with
   a 120 s test timeout and says so; at or above `1.5 × cores` (local only) it
   refuses to run, once, with that one line. `E2E_LOAD_SOFT`, `E2E_LOAD_HARD`,
@@ -65,7 +82,12 @@ archive paths.
   line naming timeouts apart from failures with the load at start and end (the
   list reporter's failure detail follows it, so it is not the last line of the
   log); the exit code is never changed by it — `onEnd` returns nothing, and a
-  test pins that it never returns a status.
+  test pins that it never returns a status. The specs' boot waits follow the
+  policy: `bootTimeout()` (`e2e/boot-timeout.ts`) is half the policy's test
+  budget — 30 s under normal parallelism, 60 s serialized — read from the frozen
+  policy in `test.info().config.metadata` (a CLI `--timeout` does not move it);
+  `tests/e2e-harness/spec-timeouts.test.ts` refuses a new numeric timeout
+  literal in a spec.
 - **Type-checking the harness.** `npx tsc -p tsconfig.node.json --noEmit` covers
   `vite.config.ts`, `playwright.config.ts`, `scripts/dev-servers.ts` and all of
   `e2e/`; the root `npx tsc --noEmit` still covers `src/` only. Its build info

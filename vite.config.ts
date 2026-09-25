@@ -5,19 +5,28 @@ import { execSync } from "node:child_process";
 import {
   DEV_STAMP_PATH,
   devCacheDirFor,
+  devPortsFromEnv,
   devRoleFromEnv,
   type DevStamp,
 } from "./scripts/dev-servers";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
-// @ts-expect-error process is a nodejs global
 const browserShim = process.env.VITE_BROWSER_SHIM === "1";
 
-// W-I D-I2: the server ROLE keys the dep cache (the config function cannot
-// see `--port`). CAIRN_DEV_ROLE wins; else seed / browser / tauri is derived
-// from the two VITE_ flags. A typo throws in devRoleFromEnv.
+// W-I D-I2: the server ROLE keys the dep cache. CAIRN_DEV_ROLE wins; else
+// seed / browser / tauri is derived from the two VITE_ flags. A typo throws in
+// devRoleFromEnv. v1.7.1 A-6: a browser-shim server's PORT follows the role
+// too — the config computes it (the two Playwright scripts pass no --port any
+// more), and E2E_PORT_BASE moves seed/fresh together (seed = base, fresh =
+// base + 1) so two trees can run the e2e suite at once. Unset, the table is
+// the fixed 1420–1423. A server WITHOUT the shim is the app Tauri loads
+// (tauri.conf.json's devUrl pins 1420), so it stays on 1420 whatever role a
+// leftover VITE_SEED_DEMO / CAIRN_DEV_ROLE export derives (review I-m2). A
+// `--port` on the command line still wins (Vite merges CLI options over this
+// file). A bad E2E_PORT_BASE throws in devPortsFromEnv.
 const devRole = devRoleFromEnv(process.env);
+const devPorts = devPortsFromEnv(process.env);
+const devPort = browserShim ? devPorts[devRole] : devPorts.tauri;
 
 const shimDir = path.resolve(__dirname, "./src/lib/browser-shims");
 
@@ -141,9 +150,9 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // 2. the port follows the role (see devPort above); fail if it is not available
   server: {
-    port: browserShim ? 1421 : 1420,
+    port: devPort,
     strictPort: true,
     host: host || false,
     hmr: host

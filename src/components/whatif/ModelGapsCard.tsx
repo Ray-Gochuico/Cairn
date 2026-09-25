@@ -40,8 +40,19 @@ export function ModelGapsCard({
                 <li key={r.id} className="text-sm flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   {/* C2: a lever-action row (G11) names a $0 expense base — its text
                       carries a testid so the page's W5.1 basis registry classifies
-                      that figure (invariant: $0 in either basis). */}
-                  <span data-testid={isLeverAction(cta) ? 'whatif-model-gap-expense-base' : undefined}>{r.text}</span>
+                      that figure (invariant: $0 in either basis). A-13: G2 ("the
+                      portfolio starts at $0") is the other $ row — same rule. */}
+                  <span
+                    data-testid={
+                      isLeverAction(cta)
+                        ? 'whatif-model-gap-expense-base'
+                        : r.id === 'G2'
+                          ? 'whatif-model-gap-portfolio-zero'
+                          : undefined
+                    }
+                  >
+                    {r.text}
+                  </span>
                   {isLeverAction(cta) ? (
                     onOpenLever ? (
                       <button

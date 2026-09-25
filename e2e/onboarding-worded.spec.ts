@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 /**
  * The worded-flow default-path pin (worded-onboarding wave): married branch,
@@ -10,7 +11,7 @@ import { collectErrors } from './console-guard';
 test('fresh profile (worded default): married branch, account with balance, no-gates → data lands, clean console', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /welcome to cairn/i })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /welcome to cairn/i })).toBeVisible({ timeout: bootTimeout() });
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: /continue to setup/i }).click();
 

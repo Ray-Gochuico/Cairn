@@ -10,13 +10,47 @@ import path from 'node:path';
 
 export type DevRole = 'tauri' | 'browser' | 'seed' | 'fresh';
 
-/** Fixed ports (D-I12). tauri.conf.json's devUrl pins 1420; the rest are the v1.6.0 values. */
+/** Fixed ports (D-I12). tauri.conf.json's devUrl pins 1420; the rest are the v1.6.0 values. E2E_PORT_BASE (v1.7.1 A-6) moves seed/fresh only — see devPortsFromEnv. */
 export const DEV_ROLE_PORTS: Readonly<Record<DevRole, number>> = {
   tauri: 1420, // `npm run dev` / `tauri dev`
   browser: 1421, // `npm run dev:browser` (shim, no seed)
   seed: 1422, // `npm run dev:browser:seed` — Playwright project [seeded]
   fresh: 1423, // `npm run dev:browser:fresh` — Playwright project [onboarding]
 };
+
+/** The env as far as the ports are concerned (process.env satisfies it). */
+export interface DevPortEnv {
+  E2E_PORT_BASE?: string;
+}
+
+/** Ports an E2E_PORT_BASE pair may never land on: tauri.conf.json's devUrl and the hand-run shim. */
+const IMMOVABLE_PORTS: ReadonlySet<number> = new Set([DEV_ROLE_PORTS.tauri, DEV_ROLE_PORTS.browser]);
+
+/**
+ * v1.7.1 A-6 (CR-I-2): OPT-IN. Unset or empty → the fixed table, the very
+ * same object (D-I12: 1420–1423, byte-identical). Set → seed = base and
+ * fresh = base + 1; tauri and browser never move. Anything else THROWS: a
+ * silent fallback to 1422/1423 here is two trees on the same port again —
+ * the collision this knob exists to end (the devRoleFromEnv typo precedent).
+ */
+export function devPortsFromEnv(env: DevPortEnv): Readonly<Record<DevRole, number>> {
+  const raw = env.E2E_PORT_BASE;
+  if (raw === undefined || raw === '') return DEV_ROLE_PORTS;
+  const base = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  const usable =
+    Number.isInteger(base) &&
+    base >= 1024 &&
+    base <= 65534 &&
+    !IMMOVABLE_PORTS.has(base) &&
+    !IMMOVABLE_PORTS.has(base + 1);
+  if (!usable) {
+    throw new Error(
+      `E2E_PORT_BASE must be an integer from 1024 to 65534, and neither it nor the port after it may be ${DEV_ROLE_PORTS.tauri} or ${DEV_ROLE_PORTS.browser} (got "${raw}"). ` +
+        `It moves only the seed and fresh ports (seed = base, fresh = base + 1); unset it for the fixed ${DEV_ROLE_PORTS.seed}/${DEV_ROLE_PORTS.fresh}.`,
+    );
+  }
+  return { ...DEV_ROLE_PORTS, seed: base, fresh: base + 1 };
+}
 
 /** GET this on a running dev server → a DevStamp JSON body (serve-only plugin, vite.config.ts). */
 export const DEV_STAMP_PATH = '/__cairn/dev-stamp';

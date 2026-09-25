@@ -120,4 +120,13 @@ describe('ModelGapsCard', () => {
       "Renting's expense base is $0 — the projection counts only rent and vehicle leases as spending, so no FI date is shown.",
     ]);
   });
+
+  it('A-13: the G2 row carries the basis-registry testid, once (its $0 is registered invariant on the page); the route rows beside it carry none', () => {
+    const { container } = renderCard({ snapshots: [], contributions: [] }); // G2 + G3 + G4 (the "several rows" fixture above)
+    expect(screen.getByTestId('whatif-model-gap-portfolio-zero').textContent).toBe(
+      'No account snapshots yet — the portfolio starts at $0 in these projections.',
+    );
+    expect(container.querySelectorAll('[data-testid="whatif-model-gap-portfolio-zero"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="whatif-model-gap-expense-base"]')).toHaveLength(0);
+  });
 });

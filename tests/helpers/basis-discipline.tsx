@@ -13,6 +13,12 @@ const TODAY_MARKS = ["in today's dollars", "(today's $)"] as const;
 const FUTURE_MARKS = ['in future dollars', '(future $)'] as const;
 /** $-followed-by-digit — control labels like "Today's $" don't match. */
 const DOLLAR_RE = /\$\s?\d/;
+/** A-13 (v1.7.1, CR-C3-3): glossary tooltip BODIES are out of the completeness
+ *  scan — the hook glossary-tooltip.tsx stamps on its PopoverPrimitive.Content.
+ *  ONLY this: portaled Radix Dialogs (the lever popovers, Manage scenarios)
+ *  and every other portal stay in (self-test "IN: a $ inside a portaled
+ *  Radix Dialog"). */
+const GLOSSARY_TOOLTIP_SELECTOR = '[data-glossary-tooltip]';
 
 function hasMark(text: string, basis: DollarBasis): boolean {
   return (basis === 'today' ? TODAY_MARKS : FUTURE_MARKS).some((m) => text.includes(m));
@@ -127,6 +133,7 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
     if (!DOLLAR_RE.test(text)) continue;
     const el = n.parentElement;
     if (!el) continue;
+    if (el.closest(GLOSSARY_TOOLTIP_SELECTOR)) continue; // glossary tooltip bodies: OUT (CR-C3-3)
     if (chartSelectors.some((s) => el.closest(s))) continue; // chart interiors: covered by caption + wiring pins
     if (figureSelectors.some((s) => el.closest(s))) continue;
     looseDollarTexts.push(text.trim());
@@ -144,13 +151,30 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *    its parent element in BOTH bases (the phrase may close the sentence).
  *  - pinned + markTestId (B2, opt-in): the mark may instead sit on the declared
  *    element, which must render with that mark in BOTH bases.
+ *  - ADOPTING markTestId (A-12, v1.7.1 — read before registering the next
+ *    copy-law card): (1) pinned figures only (the CONTRACT clause throws
+ *    otherwise); (2) use it ONLY when copy law keeps BOTH the figure's node
+ *    and its parent bare — a CP-pinned cell whose sentence cannot carry the
+ *    phrase (Stress Test CP-10/11/16 → the CP-18 line; Earliest Retirement
+ *    CP-32 probes → the CP-31 criterion). Where the contract lets the
+ *    sentence carry the mark, put it in the node or its parent (the W5
+ *    rule) — markTestId is the exception, not the default; (3) the mark
+ *    element is a card-level basis STATEMENT rendered in BOTH bases, never
+ *    a caption that flips; (4) the mark element is either registered in its
+ *    own right or carries no $-digit text — there is no separate clause for
+ *    this: the completeness scan already treats a $ inside an UNREGISTERED
+ *    mark as loose (self-test "a mark element that itself carries a $
+ *    figure"), so a mark that is itself a figure (ERC's criterion) must be
+ *    registered too.
  *  - charts: the caption names the active basis (convertible) or the declared
  *    pinnedBasis, in both bases.
  *  - chart DATA (W-I, only when rowsTestId is declared): the hook's data-rows
  *    inside the chart subtree is byte-identical across bases for pinned charts
  *    and differs for convertible ones — and carries at least one row in BOTH
  *    renders, so neither clause can be satisfied by an empty chart.
- *  - completeness: no unregistered $-figure anywhere outside chart subtrees.
+ *  - completeness: no unregistered $-figure anywhere outside chart subtrees
+ *    or glossary tooltip bodies (A-13, CR-C3-3 — the only excluded portal;
+ *    Dialogs stay in).
  * Fixture contract: positive figures, inflation > 0, all registered nodes
  * rendered. Renders once, flips the page basis live, restores today.
  *

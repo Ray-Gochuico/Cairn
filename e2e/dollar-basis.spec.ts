@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 test("calculators: Today's $ default; Future $ grows the Compound figures and flips every phrase", async ({
   page,
@@ -8,7 +9,7 @@ test("calculators: Today's $ default; Future $ grows the Compound figures and fl
   await page.goto('/calculators');
 
   const todayBtn = page.getByRole('button', { name: "Today's $" });
-  await expect(todayBtn).toBeVisible({ timeout: 30_000 });
+  await expect(todayBtn).toBeVisible({ timeout: bootTimeout() });
   await expect(todayBtn).toHaveAttribute('aria-pressed', 'true');
 
   // NO bar edits here (divergence from the plan's sketch, which pre-filled the
@@ -50,7 +51,7 @@ test("calculators: Today's $ default; Future $ grows the Compound figures and fl
   await expect(page.getByRole('button', { name: 'Future $' })).toHaveAttribute(
     'aria-pressed',
     'true',
-    { timeout: 30_000 },
+    { timeout: bootTimeout() },
   );
 
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -61,7 +62,7 @@ test("what-if: Today's $ default; pinned FI number; caption flips; the scoreboar
 }) => {
   const errors = collectErrors(page);
   await page.goto('/what-if');
-  await expect(page.getByTestId('whatif-projection-chart-wrap')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('whatif-projection-chart-wrap')).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByRole('button', { name: "Today's $" })).toHaveAttribute(
     'aria-pressed',
     'true',
@@ -108,7 +109,7 @@ test("what-if: Today's $ default; pinned FI number; caption flips; the scoreboar
   await expect(page.getByRole('button', { name: "Today's $" })).toHaveAttribute(
     'aria-pressed',
     'true',
-    { timeout: 30_000 },
+    { timeout: bootTimeout() },
   );
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });

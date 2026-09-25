@@ -250,7 +250,13 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
       ? null
       : result.recoveredYear == null
         ? `Not back to its starting value by ${lastDataYear}, where the bundled data ends.`
-        : mode === 'KEEP'
+        : // A-12 (v1.7.1, CR-C3-E): CP-12's qualifier only when contributions are
+          // actually counted — the same `pmt > 0` rule the Roadmap's Market
+          // stress thread applies (src/lib/interview/market-stress.ts CI-MS-2r'
+          // vs CI-MS-2r; FROZEN — the reference, never the edit target). At
+          // $0/yr the KEEP replay IS the portfolio-only replay, so the bare form
+          // (CP-13's literal) states the fact without a $0 qualifier.
+          mode === 'KEEP' && engine.annualContribution > 0
           ? `Back at its starting value: ${result.recoveredYear} — with your ${formatCurrency(engine.annualContribution)}/yr contributions counted.`
           : `Back at its starting value: ${result.recoveredYear}.`;
   // The plotted series stops at chartEndYear — everything past it is the
