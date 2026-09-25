@@ -1,9 +1,9 @@
 // @vitest-environment node
 import http from 'node:http';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { assertServerIdentity, fetchDevStamp, type ExpectedIdentity } from '../../e2e/identity';
-import { E2E_ROOT, E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER } from '../../e2e/servers';
+import { E2E_ROOT, E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER, e2eServersFor, type E2eServer } from '../../e2e/servers';
 import { DEV_ROLE_PORTS, DEV_STAMP_PATH, type DevStamp } from '../../scripts/dev-servers';
 
 const stamp = (over: Partial<DevStamp> = {}): DevStamp => ({
@@ -67,7 +67,7 @@ describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
       /reports role=tauri; this project expects role=seed/,
     );
     expect(() =>
-      assertServerIdentity(stamp({ role: 'fresh', seed: false }), {
+      assertServerIdentity(stamp({ role: 'fresh', seed: false, port: 1423 }), {
         ...expected,
         role: 'fresh',
         seed: false,
@@ -85,6 +85,28 @@ describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
     const old = stamp();
     delete (old as { shim?: boolean }).shim;
     expect(() => assertServerIdentity(old, expected)).toThrow(/shim=undefined/);
+  });
+
+  it('asserts the SERVED port (v1.7.1 A-6, CR-I-4): a stamp naming another port than the one this run derived is refused', () => {
+    expect(() => assertServerIdentity(stamp({ port: 1522 }), expected)).toThrow(
+      /reports port=1522; this project expects port=1422 \(E2E_PORT_BASE moves the seed and fresh ports together/,
+    );
+    expect(() => assertServerIdentity(stamp({ port: null }), expected)).toThrow(/reports port=none; this project expects port=1422/);
+    // the shifted pair passes when both sides derived the same base
+    expect(() =>
+      assertServerIdentity(stamp({ port: 1523, role: 'fresh', seed: false }), {
+        ...expected,
+        role: 'fresh',
+        seed: false,
+        label: 'fresh',
+        port: 1523,
+      }),
+    ).not.toThrow();
+  });
+
+  it('the port check comes LAST: a foreign tree on a shifted base is still reported as the wrong TREE (the more useful message)', () => {
+    expect(() => assertServerIdentity(stamp({ root: '/trees/w4', port: 1522 }), expected)).toThrow(/DIFFERENT tree/);
+    expect(() => assertServerIdentity(stamp({ shim: false, port: 1522 }), expected)).toThrow(/reports shim=false/);
   });
 
   it('compares TREES, not spellings: separators and a trailing slash are normalized (MINOR 3, Windows)', () => {
@@ -106,6 +128,7 @@ describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
       stamp({ seed: false }),
       stamp({ role: 'tauri' }),
       stamp({ shim: false }),
+      stamp({ port: 1522 }),
     ]) {
       try {
         assertServerIdentity(bad, expected);
@@ -113,7 +136,7 @@ describe('assertServerIdentity (W-I D-I3/D-I4)', () => {
         messages.push((e as Error).message);
       }
     }
-    expect(messages).toHaveLength(5);
+    expect(messages).toHaveLength(6);
     for (const m of messages) {
       expect(m).not.toMatch(/!/);
       expect(m).not.toMatch(/you should/i);
@@ -158,9 +181,10 @@ describe('e2e/servers.ts — the two servers and this tree', () => {
   it('E2E_ROOT is the repository root Playwright runs from', () => {
     expect(E2E_ROOT).toBe(path.resolve(__dirname, '..', '..'));
   });
-  it('seeded/fresh map onto the seed/fresh roles and their fixed ports', () => {
-    expect(E2E_SERVERS).toEqual([SEEDED_SERVER, FRESH_SERVER]);
-    expect(SEEDED_SERVER).toMatchObject({
+  it('seeded/fresh map onto the seed/fresh roles and the fixed D-I12 ports when E2E_PORT_BASE is unset', () => {
+    const at = e2eServersFor({});
+    expect(at.all).toEqual([at.seeded, at.fresh]);
+    expect(at.seeded).toMatchObject({
       role: 'seed',
       port: DEV_ROLE_PORTS.seed,
       seed: true,
@@ -168,7 +192,7 @@ describe('e2e/servers.ts — the two servers and this tree', () => {
       script: 'dev:browser:seed',
       url: 'http://localhost:1422',
     });
-    expect(FRESH_SERVER).toMatchObject({
+    expect(at.fresh).toMatchObject({
       role: 'fresh',
       port: DEV_ROLE_PORTS.fresh,
       seed: false,
@@ -177,6 +201,50 @@ describe('e2e/servers.ts — the two servers and this tree', () => {
       url: 'http://localhost:1423',
     });
     // both e2e projects run the browser-shim app (identity enforces it)
-    for (const s of E2E_SERVERS) expect(s.shim, s.name).toBe(true);
+    for (const s of at.all) expect(s.shim, s.name).toBe(true);
+    expect(e2eServersFor({ E2E_PORT_BASE: '' })).toEqual(at);
+  });
+
+  it('E2E_PORT_BASE shifts both servers together (seed = base, fresh = base + 1) and changes nothing else about them', () => {
+    const shifted = e2eServersFor({ E2E_PORT_BASE: '1522' });
+    expect(shifted.seeded).toMatchObject({ port: 1522, url: 'http://localhost:1522' });
+    expect(shifted.fresh).toMatchObject({ port: 1523, url: 'http://localhost:1523' });
+    const rest = ({ port: _port, url: _url, ...other }: E2eServer) => other;
+    expect(rest(shifted.seeded)).toEqual(rest(e2eServersFor({}).seeded));
+    expect(rest(shifted.fresh)).toEqual(rest(e2eServersFor({}).fresh));
+    expect(() => e2eServersFor({ E2E_PORT_BASE: '1420' })).toThrow(/E2E_PORT_BASE/);
+  });
+
+  it("the module-level constants are this process's env through the same builder (what playwright.config.ts and global-setup consume)", () => {
+    const mine = e2eServersFor(process.env);
+    expect(SEEDED_SERVER).toEqual(mine.seeded);
+    expect(FRESH_SERVER).toEqual(mine.fresh);
+    expect(E2E_SERVERS).toEqual(mine.all);
+  });
+
+  it('the module wiring reads THIS process\'s E2E_PORT_BASE (M11): a fresh import under the key moves the constants; without it they are the 1422/1423 literals', async () => {
+    // The test above compares the constants to the SAME env, so `const THIS_RUN =
+    // e2eServersFor({})` (the module ignoring the base) would pass it whenever the
+    // test process has no base — CI and gate.sh. This arm re-imports the module
+    // under a set base and again with none, restoring the direct literal pin.
+    const before = process.env.E2E_PORT_BASE;
+    try {
+      delete process.env.E2E_PORT_BASE;
+      vi.resetModules();
+      const fixed = await import('../../e2e/servers');
+      expect(fixed.SEEDED_SERVER.url).toBe('http://localhost:1422');
+      expect(fixed.FRESH_SERVER.url).toBe('http://localhost:1423');
+
+      process.env.E2E_PORT_BASE = '1522';
+      vi.resetModules();
+      const shifted = await import('../../e2e/servers');
+      expect(shifted.SEEDED_SERVER.port).toBe(1522);
+      expect(shifted.FRESH_SERVER.url).toBe('http://localhost:1523');
+      expect(shifted.E2E_SERVERS.map((s) => s.port)).toEqual([1522, 1523]);
+    } finally {
+      if (before === undefined) delete process.env.E2E_PORT_BASE;
+      else process.env.E2E_PORT_BASE = before;
+      vi.resetModules();
+    }
   });
 });

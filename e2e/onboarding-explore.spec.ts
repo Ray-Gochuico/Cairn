@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 /**
  * W4 — Explore with sample data (fresh :1423 server, empty IndexedDB).
@@ -45,13 +46,13 @@ async function deviceKeys(page: Page) {
 
 async function enterExplore(page: Page): Promise<void> {
   await page.goto('/');
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 30_000 }); // Step 0
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: bootTimeout() }); // Step 0
   const explore = page.getByRole('button', { name: 'Explore with sample data first' });
   await expect(explore).toBeDisabled(); // gated on the attestation
   await page.getByRole('checkbox').check();
   await explore.click();
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
 }
 
@@ -59,8 +60,9 @@ test('enter: one click from Step 0 lands on a labeled, fully-populated sample', 
   // Seven hard gotos, and with the flag set EVERY one re-runs the wipe + 55
   // migrations + the full seed (the deliberate D-S2 rebuild). That measured
   // 50-56 s against the 60 s default on a loaded machine — too thin a margin
-  // for the wave's headline proof (W4 review MINOR 15).
-  test.setTimeout(150_000);
+  // for the wave's headline proof (W4 review MINOR 15). Five boot waits:
+  // 150 s at the normal arm (unchanged), 300 s serialized (v1.7.1 A-6).
+  test.setTimeout(bootTimeout() * 5);
   const errors = collectErrors(page);
   await enterExplore(page);
   const banner = page.getByRole('note', { name: 'Sample data notice' });
@@ -72,17 +74,17 @@ test('enter: one click from Step 0 lands on a labeled, fully-populated sample', 
   // there are no pending writes to lose, and gotos are immune to sidebar
   // label drift. (Only scenario 3 relies on the rebuild side effect.)
   await page.goto('/investments');
-  await expect(page.getByText('Taxable Brokerage').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Taxable Brokerage').first()).toBeVisible({ timeout: bootTimeout() });
   await page.goto('/roadmap');
   // The roadmap disclosure gates INSIDE explore (accepted into the throwaway
   // DB) — the same landmark e2e/flows.spec.ts pins for this surface.
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
-  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible();
   await page.goto('/monthly');
   await expect(page.getByRole('button', { name: /^Confirm all \(4\)$/ })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   // The W4 coverage slice: Spending and Goals are no longer empty rooms.
   // "Recent transactions" shows the latest 10 by date, so pin a merchant the
@@ -91,13 +93,13 @@ test('enter: one click from Step 0 lands on a labeled, fully-populated sample', 
   await page.goto('/spending');
   await expect(
     page.getByRole('cell', { name: 'Green Basket Market', exact: true }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: bootTimeout() });
   await page.goto('/goals');
-  await expect(page.getByText('Emergency fund').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Emergency fund').first()).toBeVisible({ timeout: bootTimeout() });
   // One seeded dollar pin (fixed narrative value, run-date-independent) —
   // regex, so $540,000 vs $540,000.00 formatting both match:
   await page.goto('/loans');
-  await expect(page.getByText(/\$540,000/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/\$540,000/).first()).toBeVisible({ timeout: bootTimeout() });
   expect(errors).toEqual([]);
 });
 
@@ -106,7 +108,7 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   // Entry is inlined here (not via enterExplore) so the real device-local keys
   // can be snapshotted at Step 0, BEFORE the explore click.
   await page.goto('/');
-  await expect(page.getByRole('dialog')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: bootTimeout() });
   const explore = page.getByRole('button', { name: 'Explore with sample data first' });
   await expect(explore).toBeDisabled();
   await page.getByRole('checkbox').check();
@@ -121,7 +123,7 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   expect(before.widgetLayout).toBeNull();
   await explore.click();
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   // THE D-S7 proof: a whole explore session wrote NOTHING to the real
   // device-local keys — they are byte-identical to the pre-entry snapshot.
@@ -129,13 +131,13 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   await page.goto('/settings');
   await page.goto('/');
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   // Wait for the DASHBOARD itself, not just the app-level banner: the page
   // renders post-gate, and its layout hooks persist on mount. Without this
   // the wipe proofs below would pass vacuously — nothing would have been
   // written to wipe.
-  await expect(page.getByTestId('dashboard-details-toggle')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('dashboard-details-toggle')).toBeVisible({ timeout: bootTimeout() });
   const during = await deviceKeys(page);
   expect(during.progressV2).toBeNull(); // still absent, not merely unchanged
   expect(during).toEqual(before);
@@ -153,7 +155,7 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   // an empty /settings with no wizard.
   await page.goto('/settings');
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   await page
     .getByRole('note', { name: 'Sample data notice' })
@@ -161,12 +163,12 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
     .click();
   // Full navigation → real boot → personCount 0 → /setup, with NO Step-0
   // dialog (the app_wide acceptance persisted on the real DB).
-  await expect(page).toHaveURL(/\/setup/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/setup/, { timeout: bootTimeout() });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   // FlowShell landmark — the worded wizard's first screen, the same pin
   // e2e/onboarding-worded.spec.ts uses.
   await expect(page.getByRole('heading', { name: 'About you — step 1 of 5' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   // Wipe proofs — IDB record + device-local keys:
   const state = await page.evaluate(async () => {
@@ -235,19 +237,19 @@ test('relaunch mid-explore: edits are gone, the pristine sample and the banner r
   // Mutate the sample through the UI: rename the Roth IRA.
   await page.goto('/investments?manage=accounts');
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   await page.getByRole('button', { name: 'Edit Roth IRA' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Renamed IRA');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Renamed IRA').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Renamed IRA').first()).toBeVisible({ timeout: bootTimeout() });
   // "Relaunch": a hard load with the flag still set → boot wipes + rebuilds.
   await page.goto('/');
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
-    timeout: 30_000,
+    timeout: bootTimeout(),
   });
   await page.goto('/investments?manage=accounts');
-  await expect(page.getByText('Roth IRA').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Roth IRA').first()).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByText('Renamed IRA')).toHaveCount(0); // deterministic reset (D-S2)
   expect(errors).toEqual([]);
 });

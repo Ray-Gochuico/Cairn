@@ -11,7 +11,7 @@ import {
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const CONFIG = path.join(ROOT, 'vite.config.ts');
-const ENV_KEYS = ['VITE_BROWSER_SHIM', 'VITE_SEED_DEMO', 'CAIRN_DEV_ROLE', 'CAIRN_DEV_NONCE'] as const;
+const ENV_KEYS = ['VITE_BROWSER_SHIM', 'VITE_SEED_DEMO', 'CAIRN_DEV_ROLE', 'CAIRN_DEV_NONCE', 'E2E_PORT_BASE'] as const;
 type Env = Partial<Record<(typeof ENV_KEYS)[number], string>>;
 
 /** Load vite.config.ts under `env` exactly as `vite serve`/`vite build` would. */
@@ -57,10 +57,87 @@ describe('vite.config.ts — per-role, per-tree dep cache (W-I D-I1/D-I2)', () =
     }
     expect(dirs.size).toBe(ROLE_ENVS.length);
   });
+});
 
-  it('the shim port rule is unchanged (1421 shim, 1420 tauri; the seed/fresh scripts pass --port)', async () => {
+describe('vite.config.ts — the port follows the role (v1.7.1 A-6; CR-I-2: the defaults are byte-identical)', () => {
+  it('tauri 1420, browser 1421 — unchanged', async () => {
     expect((await loadViteConfig({})).server?.port).toBe(1420);
     expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1' })).server?.port).toBe(1421);
+  });
+
+  it('seed 1422 and fresh 1423 come from the config now — the two scripts pass no --port', async () => {
+    expect(
+      (await loadViteConfig({ VITE_BROWSER_SHIM: '1', VITE_SEED_DEMO: '1', CAIRN_DEV_ROLE: 'seed' })).server?.port,
+    ).toBe(1422);
+    expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh' })).server?.port).toBe(1423);
+    // D-I171-3: the role decides, however it was derived — a hand-started
+    // VITE_SEED_DEMO=1 server with no --port is the seed role and gets 1422.
+    expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1', VITE_SEED_DEMO: '1' })).server?.port).toBe(1422);
+  });
+
+  it('E2E_PORT_BASE moves seed and fresh together and nothing else; strictPort stays on', async () => {
+    const seed = await loadViteConfig({
+      VITE_BROWSER_SHIM: '1',
+      VITE_SEED_DEMO: '1',
+      CAIRN_DEV_ROLE: 'seed',
+      E2E_PORT_BASE: '1522',
+    });
+    const fresh = await loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh', E2E_PORT_BASE: '1522' });
+    expect(seed.server?.port).toBe(1522);
+    expect(fresh.server?.port).toBe(1523);
+    expect(seed.server?.strictPort).toBe(true);
+    expect(fresh.server?.strictPort).toBe(true);
+    expect((await loadViteConfig({ E2E_PORT_BASE: '1522' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ VITE_BROWSER_SHIM: '1', E2E_PORT_BASE: '1522' })).server?.port).toBe(1421);
+  });
+
+  it('a leftover VITE_SEED_DEMO / CAIRN_DEV_ROLE export never moves the non-shim app off 1420 — `npm run dev` / `tauri dev`, whose devUrl tauri.conf.json pins (review I-m2)', async () => {
+    // The reviewer's scenario: a shell still exporting a hand smoke's
+    // CAIRN_DEV_ROLE=seed or VITE_SEED_DEMO=1 runs `npm run tauri dev` →
+    // beforeDevCommand `npm run dev` → plain `vite` (no shim). 971d0850 bound
+    // 1420 here; only a browser-shim server's port follows the role.
+    expect((await loadViteConfig({ VITE_SEED_DEMO: '1' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'seed' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'fresh' })).server?.port).toBe(1420);
+    expect((await loadViteConfig({ CAIRN_DEV_ROLE: 'browser' })).server?.port).toBe(1420);
+    expect(
+      (await loadViteConfig({ CAIRN_DEV_ROLE: 'seed', VITE_SEED_DEMO: '1', E2E_PORT_BASE: '1622' })).server?.port,
+    ).toBe(1420);
+  });
+
+  it('a --port on the command line still wins over the computed port — the smoke idiom `vite --port 1425 --strictPort` (review I-m7)', async () => {
+    // `vite --port 1425 --strictPort` hands createServer `server:
+    // cleanGlobalCLIOptions(options)` (vite/dist/node/cli.js), which resolves
+    // this file with that INLINE server config merged over it — the call below.
+    for (const k of ENV_KEYS) delete process.env[k];
+    Object.assign(process.env, { VITE_BROWSER_SHIM: '1', VITE_SEED_DEMO: '1', CAIRN_DEV_ROLE: 'seed' });
+    const cli = await resolveConfig({ configFile: CONFIG, root: ROOT, server: { port: 1425, strictPort: true } }, 'serve');
+    expect(cli.server.port).toBe(1425);
+    // …and the same env without the CLI port resolves to the role's port, so the pin is not vacuous
+    const bare = await resolveConfig({ configFile: CONFIG, root: ROOT }, 'serve');
+    expect(bare.server.port).toBe(1422);
+  });
+
+  it('a bad E2E_PORT_BASE fails the config load — the CAIRN_DEV_ROLE typo precedent (Vite logs "failed to load config" once; expected)', async () => {
+    await expect(
+      loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh', E2E_PORT_BASE: '1420' }),
+    ).rejects.toThrow(/E2E_PORT_BASE must be an integer/);
+  });
+
+  // NOT an independent port receipt: askStamp's fake server echoes the port this
+  // test passes in (`server.config.server.port = fake.port`, :90-91), and the stamp's
+  // own port path is pinned at :137-147 / :163-171. This arm only shows the stamp
+  // path is unchanged under a shifted base — role and port travel together.
+  it('the stamp path is unchanged for a shifted port (echo through the fake; the role rides with it)', async () => {
+    const cfg = await loadViteConfig({
+      VITE_BROWSER_SHIM: '1',
+      VITE_SEED_DEMO: '1',
+      CAIRN_DEV_ROLE: 'seed',
+      E2E_PORT_BASE: '1522',
+    });
+    const { body } = await askStamp(cfg, { root: ROOT, cacheDir: cfg.cacheDir!, port: cfg.server!.port! });
+    expect(body.port).toBe(1522);
+    expect(body.role).toBe('seed');
   });
 });
 

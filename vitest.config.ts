@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { DEV_CACHE_FOLDER } from './scripts/dev-servers';
 
 // STRESS=1 toggles in `tests/stress/**` files (e.g., 50-year engine
 // projections, 25k-row component renders). Default `npm test` excludes
@@ -17,6 +18,13 @@ import path from 'path';
 const stressEnabled = process.env.STRESS === '1';
 
 export default defineConfig({
+  // v1.7.1 A-6 (W-I D-I13 chip): Vitest's results cache (test ordering —
+  // failed first, then slowest) resolves to `<cacheDir>/vitest/<hash>/results.json`.
+  // Vite's default `node_modules/.vite` is SHARED by every worktree whose
+  // node_modules is a symlink to the main checkout, so two trees' runs rewrote
+  // one file. `.vite.local` is the D-I1 folder (rides .gitignore's `*.local`);
+  // the dev servers keep their `.vite.local/<role>` siblings.
+  cacheDir: path.resolve(__dirname, DEV_CACHE_FOLDER),
   plugins: [react()],
   resolve: {
     alias: {

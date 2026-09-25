@@ -8,8 +8,11 @@ import { E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER } from './e2e/servers';
  * ships, on the sql.js adapter with seeded demo data — real router, real
  * stores, real recharts, real migrations.
  *
- * Ports 1422/1423 are pinned by the two npm scripts (--strictPort), so a
- * stray vite on 1420/1421 can't be smoke-tested by accident.
+ * The two servers' ports come from e2e/servers.ts (scripts/dev-servers.ts:
+ * 1422 seeded / 1423 fresh by default; E2E_PORT_BASE moves both together,
+ * seed = base, fresh = base + 1 — v1.7.1 A-6). --strictPort in both scripts
+ * means a stray vite on 1420/1421 can't be smoke-tested by accident, and
+ * e2e/global-setup.ts asserts each server's stamp names THIS tree and THIS port.
  */
 
 // W-I D-I3: one nonce per run, minted ONLY in the main process (workers carry

@@ -46,7 +46,7 @@ function samePath(a: string, b: string): boolean {
 }
 
 /**
- * W-I D-I3/D-I4: throws (S5–S7) unless `stamp` describes a server of THIS
+ * W-I D-I3/D-I4: throws (S5–S7, and the port) unless `stamp` describes a server of THIS
  * tree, of the expected role and shim, launched by this run (unless waived).
  */
 export function assertServerIdentity(stamp: DevStamp, expected: ExpectedIdentity): void {
@@ -81,6 +81,16 @@ export function assertServerIdentity(stamp: DevStamp, expected: ExpectedIdentity
   if (stamp.shim !== expected.shim) {
     throw new Error(
       `[e2e/identity] the ${expected.label} server reports shim=${stamp.shim}; this project expects shim=${expected.shim} (the e2e projects run the browser-shim build; a server resolving the real @tauri-apps modules cannot boot here).`,
+    );
+  }
+  // v1.7.1 A-6 (CR-I-4): the served port. The stamp was fetched FROM
+  // expected.port, so a stamp naming another port means whatever answers here
+  // was configured for a different one — a forwarder, or a server whose
+  // E2E_PORT_BASE is not this run's. Last on purpose: the tree, launcher, role
+  // and shim messages above keep their precedence.
+  if (stamp.port !== expected.port) {
+    throw new Error(
+      `[e2e/identity] the ${expected.label} server reports port=${stamp.port ?? 'none'}; this project expects port=${expected.port} (E2E_PORT_BASE moves the seed and fresh ports together; a server configured for another port is answering here).`,
     );
   }
 }

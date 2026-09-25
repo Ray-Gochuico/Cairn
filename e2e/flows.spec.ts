@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectErrors } from './console-guard';
+import { bootTimeout } from './boot-timeout';
 
 // ESM spec (no __dirname) — derive the fixtures dir from this module's URL.
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -20,7 +21,7 @@ test('what-if: seeded scenario renders; the Loans lever applies an extra payment
   await page.goto('/what-if');
   // Scenarios store seeds a Baseline on empty — the page must not be in the
   // "No active scenario" state.
-  await expect(page.getByTestId('whatif-projection-chart-wrap')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('whatif-projection-chart-wrap')).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByTestId('whatif-fi-cards-wrap')).toBeVisible();
 
   await page.getByRole('button', { name: 'Loans' }).click();
@@ -56,13 +57,13 @@ test('spending: CSV import round-trips — file in, preview commit, transactions
   // chart, rendering the same strings in SVG; exact:true scopes away the
   // row's "Edit <merchant>" button cell).
   await page.getByRole('link', { name: 'Open all transactions' }).click();
-  await expect(page.getByText('46 transactions')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('46 transactions')).toBeVisible({ timeout: bootTimeout() });
   // The list is virtualized and date-descending; the imported June rows sit
   // near the end, so scroll the container before asserting on them.
   await page.getByTestId('transactions-scroll-parent').evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
-  await expect(page.getByRole('cell', { name: 'Blue Bottle Coffee', exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('cell', { name: 'Blue Bottle Coffee', exact: true })).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByRole('cell', { name: 'Trader Joes', exact: true })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
@@ -74,10 +75,10 @@ test('monthly check-in: Confirm all ratifies the seeded last-month values', asyn
   // 401(k) (Avery Sample) + Partner Brokerage (Jordan Sample) = 4. The
   // cash/savings accounts are MANUAL_BALANCE_TYPES and create no derived card.
   const confirmAll = page.getByRole('button', { name: /^Confirm all \(4\)$/ });
-  await expect(confirmAll).toBeVisible({ timeout: 30_000 });
+  await expect(confirmAll).toBeVisible({ timeout: bootTimeout() });
   await confirmAll.click();
   // The section's pre-mounted live region announces the batch result.
-  await expect(page.getByText('Confirmed 4 account values.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Confirmed 4 account values.')).toBeVisible({ timeout: bootTimeout() });
   // Pending set is empty → the batch button unmounts.
   await expect(page.getByRole('button', { name: /^Confirm all/ })).toHaveCount(0);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -88,16 +89,16 @@ test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ sn
   // Wave-A seed: 3 derived cards owned by Avery Sample (p1), 1 by Jordan Sample (p2).
   await page.goto('/monthly?view=p1');
   const confirmP1 = page.getByRole('button', { name: /^Confirm all \(3\)$/ });
-  await expect(confirmP1).toBeVisible({ timeout: 30_000 });
+  await expect(confirmP1).toBeVisible({ timeout: bootTimeout() });
   await confirmP1.click();
-  await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: bootTimeout() });
   // The partner's pending snapshot MUST survive the scoped batch. Switch the
   // view via the SPA dropdown: the shim persists to IndexedDB on a debounced
   // (250ms) flush, so an immediate goto() can race the flush, load a DB
   // without the writes, and re-seed — the SPA switch stays in the same
   // in-memory DB session.
   await page.getByRole('combobox', { name: 'Filter view by person' }).selectOption('household');
-  await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: bootTimeout() });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
 
@@ -110,7 +111,7 @@ test('calculators: the page scope honors ?view= — scoped FI figures + caption,
   // exact:true — the Backtest card's "Backtest your portfolio" trigger name
   // also substring-matches 'Portfolio'.
   const portfolio = page.getByLabel('Portfolio', { exact: true });
-  await expect(portfolio).toHaveValue('140000', { timeout: 30_000 });
+  await expect(portfolio).toHaveValue('140000', { timeout: bootTimeout() });
   await expect(
     page.getByText("from Jordan Sample's account snapshots — joint accounts not included"),
   ).toBeVisible();
@@ -159,7 +160,7 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   await page.goto('/setup');
   // The worded flow is the /setup default now; this pin covers the FORM view.
   await page.getByRole('button', { name: 'Switch to form view' }).click();
-  await expect(page.getByTestId('person-chips')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('person-chips')).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByTestId('person-chips')).toContainText('Avery Sample');
   await expect(page.getByRole('button', { name: 'Start this section' })).toHaveCount(0);
   // C3: sections with saved data but no completion carry the neutral marker.
@@ -185,7 +186,7 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   // which is also the path a real user takes from the monthly nudge.
   await page.goto('/');
   await page.getByRole('link', { name: 'Dashboard' }).click();
-  await expect(page.getByText('Suggested next step: finish setting up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Suggested next step: finish setting up.')).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
@@ -208,7 +209,7 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
   // The hero phrase is intact and the bar sits below it:
-  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: bootTimeout() });
   // Submit $10,000 one-time. Scoped to the bar region: since T3 the strip's
   // college card carries its own 'Amount' input on the seeded profile.
   await page.getByRole('region', { name: "What's next question bar" })
@@ -304,7 +305,7 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   await page.goto('/roadmap');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
-  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: bootTimeout() });
   await expect(page.getByText('Are there plans to buy a home?')).toHaveCount(0);
   // 2 — Remove the property (test-local mutation: fresh context ⇒ fresh
   //     IndexedDB). Verified against Property.tsx at execution: the editor
@@ -324,7 +325,7 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   await expect(page.getByText('Sample Home')).toHaveCount(0); // the delete landed
   // 3 — Back on /roadmap (no re-gate — acceptance held in-store): the ask.
   await page.getByRole('link', { name: 'Roadmap' }).click();
-  await expect(page.getByText('Are there plans to buy a home?')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Are there plans to buy a home?')).toBeVisible({ timeout: bootTimeout() });
   await page.getByRole('button', { name: 'Within 5 years' }).click();
   // R4 (D-R4-7): the strip's first answer is gated on the interview document
   // (the seed accepts app_wide only) — the body renders with NO "What changed"
@@ -363,7 +364,7 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
   // Dependent + 529 seeded → the strip asks the monthly amount (q_target_year skipped):
   const card = page.getByTestId('thread-college_vs_retirement-');
-  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toBeVisible({ timeout: bootTimeout() });
   await expect(card).toContainText('About how much goes toward college savings each month?');
   await card.getByLabel(/^Amount/).fill('300');
   await card.getByRole('button', { name: 'Save' }).click();
@@ -397,7 +398,7 @@ test('roadmap interview: market stress replays the seeded portfolio through five
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
   // ⚑ R4-F16: the seed's brokerage/retirement balances surface the card (last in the strip).
   const card = page.getByTestId('thread-market_stress-');
-  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toBeVisible({ timeout: bootTimeout() });
   await expect(card).toContainText('How is your portfolio split between stocks and bonds?');
   await card.getByRole('button', { name: '75% stocks, 25% bonds' }).click();
   // The strip gate (D-R4-7): first strip answer → the interview document at 1.2, NO "What changed" box (never accepted).
@@ -437,7 +438,7 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   const errors = collectErrors(page);
   await page.goto('/calculators');
   // The page itself is NOT blocked by the card's gate — the scope control renders.
-  await expect(page.getByRole('group', { name: 'Calculator scope' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('group', { name: 'Calculator scope' })).toBeVisible({ timeout: bootTimeout() });
   // Open the stress card: gated in-card (seed has no backtest acceptance — and a
   // v1.2 acceptance would equally re-gate on the exact-version compare).
   await page.getByTestId('stress-test-trigger').click();
@@ -480,7 +481,7 @@ test('calculators: stress card gates in-card on the backtest disclosure; solver 
   const backtestDoc = page
     .getByTestId('disclosure-viewer')
     .filter({ has: page.getByRole('heading', { name: 'About the Historical Backtest' }) });
-  await expect(backtestDoc.getByText('Version 1.5', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(backtestDoc.getByText('Version 1.5', { exact: true })).toBeVisible({ timeout: bootTimeout() });
   const note = backtestDoc.getByText('What changed in version 1.5');
   await expect(note).toBeVisible();
   const noteText = backtestDoc.getByText('Version 1.5 changes only the acceptance checkbox', { exact: false });
