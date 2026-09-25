@@ -8,6 +8,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { documentTitleFor } from '@/lib/route-titles';
 import { isExploreMode } from '@/lib/explore-mode';
 import { SampleDataBanner } from './SampleDataBanner';
+import { PostUpdateNote } from './PostUpdateNote';
 
 /*
  * Layout floor (Wave 11 T19): the desktop window enforces 1024×700
@@ -57,7 +58,9 @@ export default function PageShell() {
   return (
     // W4 (D-S5): a COLUMN — the sample banner is app-level chrome spanning the
     // full window width ABOVE Sidebar + content, so the existing row nests one
-    // level down (min-h-0 keeps <main>'s overflow-y-auto scrolling).
+    // level down (min-h-0 keeps <main>'s overflow-y-auto scrolling). The
+    // one-time update note takes the same slot on the real profile (U1);
+    // never both.
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       {/*
        * Skip-to-main-content link (Wave-5 frontend A+ #1). Visually hidden
@@ -73,7 +76,7 @@ export default function PageShell() {
       >
         Skip to main content
       </a>
-      {exploring && <SampleDataBanner />}
+      {exploring ? <SampleDataBanner /> : <PostUpdateNote />}
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex-1 min-w-0 flex flex-col">
