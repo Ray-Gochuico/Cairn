@@ -15,6 +15,7 @@ import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { stashRestoreFailureNotice } from './boot-notices';
 
 /** The plugin connection URL the app loads (and the key both Rust commands
  * resolve their pool/path from). Single source of truth here. */
@@ -176,12 +177,11 @@ export async function validateBackupFile(path: string): Promise<BackupValidation
   return invoke<BackupValidation>('db_validate_backup', { path });
 }
 
-/**
- * sessionStorage key carrying a failed-restore reason across the forced reload,
- * so the freshly-booted app can surface what went wrong. Read-once (the reader
- * removes it). See `takeRestoreFailureNotice`.
- */
-export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
+// The restore-failure notice helpers moved to the Tauri-free
+// src/lib/boot-notices.ts (v1.7.1 U1) so the boot-error screen can read the
+// reason at render time without a Tauri import. Re-exported here so existing
+// importers (DataSection, tests) keep their path.
+export { RESTORE_FAILURE_NOTICE_KEY, takeRestoreFailureNotice } from './boot-notices';
 
 /**
  * Restore the live database from `source`, corruption-safely:
@@ -206,8 +206,9 @@ export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
  * a manual restart. We therefore reload whether step 2 succeeds OR throws. This
  * is only safe because of H-1: a failed `db_restore` leaves the ORIGINAL
  * `finance.db` byte-for-byte intact, so the post-reload boot re-inits cleanly on
- * valid data. On failure we stash the reason in sessionStorage first so the app
- * can surface it after reload (best-effort; never blocks the reload).
+ * valid data. On failure we stash the reason in the session store first
+ * (boot-notices.ts) so the app can surface it after reload (best-effort;
+ * never blocks the reload).
  *
  * If the CLOSE itself fails (step 1, before the point of no return), the pool
  * may still be alive — we do NOT reload and propagate the error so the caller
@@ -233,30 +234,11 @@ export async function restoreFromBackup(
   } catch (e) {
     // H-1 guarantees the original finance.db is intact on a failed restore, so
     // the reload below re-inits on valid data. Stash the reason for the app to
-    // show post-reload; swallow any sessionStorage error (never block reload).
-    try {
-      const reason = e instanceof Error ? e.message : String(e);
-      window.sessionStorage?.setItem(RESTORE_FAILURE_NOTICE_KEY, reason);
-    } catch {
-      // sessionStorage unavailable — the reload still happens; reason is lost.
-    }
+    // show post-reload; boot-notices swallows any storage error (never blocks
+    // the reload).
+    stashRestoreFailureNotice(e instanceof Error ? e.message : String(e));
   } finally {
     reload();
-  }
-}
-
-/**
- * Read-and-clear the failed-restore reason left by `restoreFromBackup` before a
- * forced reload. Returns the reason once (subsequent calls return null).
- * Safe to call on every boot; returns null when there's nothing pending.
- */
-export function takeRestoreFailureNotice(): string | null {
-  try {
-    const reason = window.sessionStorage?.getItem(RESTORE_FAILURE_NOTICE_KEY) ?? null;
-    if (reason !== null) window.sessionStorage.removeItem(RESTORE_FAILURE_NOTICE_KEY);
-    return reason;
-  } catch {
-    return null;
   }
 }
 
