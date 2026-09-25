@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { cleanup, render, screen } from '@testing-library/react';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { createPortal } from 'react-dom';
 import { expectBasisDiscipline, type BasisRegistry } from './basis-discipline';
 import {
@@ -623,5 +624,27 @@ describe('expectBasisDiscipline — A-13 glossary tooltip bodies are OUT; portal
     expect(() => expectBasisDiscipline(<InDialog />, EMPTY, { root: document.body })).toThrow(
       /UNREGISTERED dollar figure outside the registry: "\$50"/,
     );
+  });
+
+  it('IN (review C3-m3): a $ inside a plain, NON-glossary Radix Popover is still loose — the exclusion is the glossary hook, never the popper wrapper D-C3-6 rejected', () => {
+    // The Dialog sentinel above cannot see a popper-scoped widening (Dialogs are
+    // never popper-positioned); this one sits exactly where freshness-badge,
+    // ChartColorsSection and DataHealthPopover put their content.
+    const InPopover = () => (
+      <Popover open>
+        <PopoverTrigger>Sentinel</PopoverTrigger>
+        <PopoverContent>
+          <span>$50</span>
+        </PopoverContent>
+      </Popover>
+    );
+    expect(() => expectBasisDiscipline(<InPopover />, EMPTY, { root: document.body })).toThrow(
+      /UNREGISTERED dollar figure outside the registry: "\$50"/,
+    );
+    // Non-vacuous: the figure really sits inside Radix's popper wrapper, and
+    // outside any glossary hook — the exact subtree a popper exclusion would hide.
+    const figure = screen.getByText('$50');
+    expect(figure.closest('[data-radix-popper-content-wrapper]')).not.toBeNull();
+    expect(figure.closest('[data-glossary-tooltip]')).toBeNull();
   });
 });
