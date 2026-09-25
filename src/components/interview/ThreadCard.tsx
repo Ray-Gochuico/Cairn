@@ -6,6 +6,7 @@ import { AnswerPrompt } from './AnswerPrompt';
 import { HouseGoalCta } from './HouseGoalCta';
 import { recordUpcomingPurchase, type HouseTarget } from '@/domain/interview/threads/home-purchase';
 import { localDayOfInstant, monthYearLabel } from '@/lib/interview/kernel-dates';
+import { priorAnswerLabel } from '@/lib/interview/prior-answer-label';
 
 /** U10 (R4): the LOCAL month of the answered_at instant. */
 const answeredMonth = (iso: string): string => monthYearLabel(localDayOfInstant(iso).slice(0, 7));
@@ -26,9 +27,7 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
   if (evaluation.state === 'ask') {
     const { node, reason, priorAnswer, pinBasis } = evaluation;
     const prompt = typeof node.prompt === 'function' ? node.prompt(ctx, subject) : node.prompt;
-    const priorLabel = node.answer.kind === 'enum' && priorAnswer != null
-      ? node.answer.options.find((o) => o.value === priorAnswer.value)?.label ?? String(priorAnswer.value)
-      : priorAnswer != null ? String(priorAnswer.value) : null;
+    const priorLabel = priorAnswerLabel(node, priorAnswer);
     return (
       <Card className="p-4 space-y-1" data-testid={`thread-${thread.id}-${subject}`}>
         {reason === 'version-changed' && priorLabel != null && (

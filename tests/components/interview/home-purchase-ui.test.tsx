@@ -67,9 +67,9 @@ describe('home_purchase on the strip', () => {
     renderThreads(renterCtx(new Map([row('q_want_house', '"yes-within-5y"')])));
     const card = screen.getByTestId('thread-home_purchase-');
     expect(within(card).getByText('About how much would the down payment be, and by when?')).toBeInTheDocument();
-    fireEvent.change(within(card).getByLabelText('Amount'), { target: { value: '60000' } });
-    fireEvent.change(within(card).getByLabelText('Month'), { target: { value: '06' } });
-    fireEvent.change(within(card).getByLabelText('Year'), { target: { value: '2028' } });
+    fireEvent.change(within(card).getByLabelText(/^Amount/), { target: { value: '60000' } });
+    fireEvent.change(within(card).getByLabelText(/^Month/), { target: { value: '06' } });
+    fireEvent.change(within(card).getByLabelText(/^Year/), { target: { value: '2028' } });
     fireEvent.click(within(card).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
     expect(saveAnswer.mock.calls[0][0]).toMatchObject({

@@ -106,7 +106,7 @@ describe('write-path validation (review m4)', () => {
       state: 'ask', node, subject: '', reason: 'unanswered', priorAnswer: null, pinBasis: null,
     };
     render(<ThreadCard thread={thread} subject="" ctx={fixtureCtx()} evaluation={evaluation} />);
-    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: '100' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Could not save your answer.'));
     expect(saveAnswer).not.toHaveBeenCalled();
@@ -162,5 +162,32 @@ describe('U10 — "Answered {Month}" is the LOCAL month of the instant (America/
     // fixture today = local 2026-08-01; local 2025-08-31 → 12 months → stale (the UTC day 2025-09-01 → 11 → no banner at all)
     render(<InterviewThreads ctx={signalCtx(answers)} />);
     expect(screen.getByText('Answered August 2025 — still true?')).toBeInTheDocument();
+  });
+});
+
+describe('F12 — the CI-36 prior label is formatted BY KIND (never String(value))', () => {
+  const compoundNode: PreferenceNode = {
+    kind: 'preference', id: 'q_target', version: 2, prompt: 'About how much would the down payment be, and by when?',
+    answer: { kind: 'amount-month-year', maxDollars: 10_000_000 },
+    valueSchema: z.object({ amountDollars: z.number().positive(), targetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
+    storage: { kind: 'interview-answer' }, branches: { '*': 'r' },
+  };
+  const thread = { id: 't', title: 'T', scope: 'household', entry: 'q_target', nodes: [compoundNode] } as InterviewThread;
+  it('a version-changed compound prior renders "$60,000 by June 2028"', () => {
+    const evaluation: ThreadEvaluation = {
+      state: 'ask', node: compoundNode, subject: '', reason: 'version-changed', pinBasis: null,
+      priorAnswer: { value: { amountDollars: 60000, targetMonth: '2028-06' }, questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z', basis: null },
+    };
+    render(<ThreadCard thread={thread} subject="" ctx={fixtureCtx()} evaluation={evaluation} />);
+    expect(screen.getByText("This question changed since you answered. Your earlier answer: '$60,000 by June 2028'.")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('[object Object]');
+  });
+  it('an unparseable prior renders NO preamble (D-GI16: never undefined, never garbage)', () => {
+    const evaluation: ThreadEvaluation = {
+      state: 'ask', node: compoundNode, subject: '', reason: 'version-changed', pinBasis: null,
+      priorAnswer: { value: { targetMonth: 12 }, questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z', basis: null },
+    };
+    render(<ThreadCard thread={thread} subject="" ctx={fixtureCtx()} evaluation={evaluation} />);
+    expect(screen.queryByText(/This question changed since you answered/)).toBeNull();
   });
 });

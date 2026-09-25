@@ -27,6 +27,10 @@ export type Cadence = 'one-time' | 'per-month';
 export const answerKey = (t: ThreadId, q: InterviewNodeId, s: SubjectKey): string =>
   `${t}/${q}/${s}`;
 
+/** R4 (D-R4-1): the kernel's 'YYYY-MM' month key — the month-year arm's stored value. */
+export const YEAR_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+export const YEAR_MONTH_SCHEMA = z.string().regex(YEAR_MONTH_RE);
+
 /**
  * The interview reads EVERYTHING the roadmap reads, plus the stores its
  * threads need. Assembled once per render by useInterview() (Task 3);
@@ -55,7 +59,13 @@ export type AnswerSpec =
   // T2 (Appendix A pre-authorized): compound amount + month-year. Stored
   // value shape: { amountDollars: number; targetMonth: 'YYYY-MM' } — the
   // node's valueSchema pins it (home-purchase.ts HOUSE_TARGET_SCHEMA).
-  | { kind: 'amount-month-year'; maxDollars?: number };
+  | { kind: 'amount-month-year'; maxDollars?: number }
+  // R4 (D-R4-1, v1.7.0 — the one planned unfreeze): a standalone month-year.
+  // Stored value: a bare 'YYYY-MM' (YEAR_MONTH_SCHEMA). minMonthsAhead defaults
+  // to 1 (T2's rule), maxYearsAhead to 10 (the shipped list); branchKeyOf → '*'
+  // (only enums branch on value). The kernel API is FROZEN again after R4 —
+  // the next arm or field is a design-review event, not a chip.
+  | { kind: 'month-year'; minMonthsAhead?: number; maxYearsAhead?: number };
 
 export type StorageSpec =
   | { kind: 'interview-answer' }
