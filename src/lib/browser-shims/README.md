@@ -83,10 +83,11 @@ archive paths.
   list reporter's failure detail follows it, so it is not the last line of the
   log); the exit code is never changed by it — `onEnd` returns nothing, and a
   test pins that it never returns a status. The specs' boot waits follow the
-  policy: `bootTimeout()` (`e2e/boot-timeout.ts`) is half the test timeout —
-  30 s under normal parallelism, 60 s serialized — read from the frozen policy
-  in `test.info().config.metadata`; `tests/e2e-harness/spec-timeouts.test.ts`
-  refuses a new numeric timeout literal in a spec.
+  policy: `bootTimeout()` (`e2e/boot-timeout.ts`) is half the policy's test
+  budget — 30 s under normal parallelism, 60 s serialized — read from the frozen
+  policy in `test.info().config.metadata` (a CLI `--timeout` does not move it);
+  `tests/e2e-harness/spec-timeouts.test.ts` refuses a new numeric timeout
+  literal in a spec.
 - **Type-checking the harness.** `npx tsc -p tsconfig.node.json --noEmit` covers
   `vite.config.ts`, `playwright.config.ts`, `scripts/dev-servers.ts` and all of
   `e2e/`; the root `npx tsc --noEmit` still covers `src/` only. Its build info

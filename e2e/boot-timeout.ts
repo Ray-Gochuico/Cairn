@@ -4,10 +4,12 @@ import { BASE_TIMEOUT_MS, HIGH_LOAD_TIMEOUT_MS, type LoadPolicy } from './load-g
 /**
  * v1.7.1 A-6: ONE boot wait for every spec, read from the load policy the
  * config froze into `metadata` (D-I6: the policy a worker reads is the policy
- * the banner announced). Half the test timeout in both arms — 30 s under
+ * the banner announced). Half the policy's test timeout in both arms — 30 s under
  * normal parallelism (the literal every spec carried before), 60 s serialized
  * — so a cold boot (vite + sql.js wasm + the migrations + the seed) scales
- * with the run's budget and can never consume all of it.
+ * with the run's budget and can never consume all of it. It is the POLICY's
+ * budget: a CLI `--timeout` overrides config.timeout, not the frozen policy, so
+ * it does not move this wait (review I-m3; no house command passes one).
  *
  * A function, not a constant: `test.info()` is defined only while a test is
  * running ("test.info() can only be called while test is running"), so the
