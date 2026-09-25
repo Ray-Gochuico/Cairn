@@ -383,10 +383,23 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       <span data-testid="path-to-fi-headline">{`${coastPct.toFixed(0)}% of CoastFI`}</span>
     );
 
-  const keepYearsLabel =
+  // A-12 (v1.7.1, CR-C3-2): the STOP reading's KEEP clause. A finite KEEP
+  // solve reads "{label} {years} yrs if you keep contributing" (unchanged);
+  // an infinite one used to render a bare "—" inside the sentence. It states
+  // the cause instead: nothing invested when the BAR's portfolio and
+  // contributions are both zero (CR-C3-B — every scenario is infinite for the
+  // same non-rate reason, so no label), otherwise the rate lock (CR-C3-C —
+  // the KEEP solve's own condition, CP-39's cause, named per scenario). The
+  // predicate is the bar's (`noInvestment`), never STOP's zero contribution:
+  // the KEEP solve compounds the bar's contribution, so an infinite solve
+  // WITH contributions is the lock by construction. The register itself
+  // (NOTHING_INVESTED_LINE) stays KEEP-only (D-B3-3).
+  const keepReading =
     moderateKeepFi && Number.isFinite(moderateKeepFi.years)
-      ? moderateKeepFi.years.toFixed(1)
-      : '—';
+      ? `${moderateKeepFi.label} ${moderateKeepFi.years.toFixed(1)} yrs if you keep contributing`
+      : noInvestment
+        ? 'never reached with nothing invested'
+        : `${moderateKeepFi?.label ?? 'Moderate'}: never reached if you keep contributing — returns at or below inflation`;
   const meaning =
     mode === 'KEEP' && (!moderateFi || !Number.isFinite(moderateFi.years)) ? (
       noInvestment ? (
@@ -408,8 +421,7 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       </>
     ) : (
       <>
-        of {scope.isScoped ? `${scope.personName}'s` : 'the'} coast amount ·{' '}
-        {moderateKeepFi?.label ?? 'Moderate'} {keepYearsLabel} yrs if you keep contributing
+        of {scope.isScoped ? `${scope.personName}'s` : 'the'} coast amount · {keepReading}
       </>
     );
 
