@@ -9,6 +9,16 @@ export interface ScenarioBarSnapshot {
   realPortfolio: number;
   monthlyContribution: number | null;
   monthlyExpenses: number | null;
+  /**
+   * C2: the figure the bar DISPLAYS for Monthly expenses when untouched (the
+   * household baseline — Send is household-scope only, D-B6). What-If has no
+   * "real data" of its own for expenses that matches the calculators, so the
+   * untouched bar carries its figure explicitly: an untouched Send used to
+   * arrive at What-If's factory default ($0 since v1.0.0; the spending
+   * average since C2) and silently disagree with the calculators it came
+   * from. The `realPortfolio` idiom, for expenses.
+   */
+  realMonthlyExpenses: number;
   swr: number | null; // fraction (0.04)
   inflation: number | null; // fraction (0.03)
   /** Per-person edited annual salary, aligned with persons order (≤2). */
@@ -43,10 +53,10 @@ export function leverPayloadFromScenarioBar(
       allocation: null,
     });
   }
-  if (snap.monthlyExpenses != null) {
-    p.expenseSource = 'custom';
-    p.customMonthly = Math.max(0, snap.monthlyExpenses);
-  }
+  // C2: expenses ALWAYS map — the edited value, else the bar's displayed
+  // figure — so the sent scenario never disagrees with the calculators.
+  p.expenseSource = 'custom';
+  p.customMonthly = Math.max(0, snap.monthlyExpenses ?? snap.realMonthlyExpenses);
   if (snap.swr != null) p.swrOverride = clamp(snap.swr, 0.005, 0.15);
   if (snap.inflation != null) {
     p.inflation = { defaultRate: clamp(snap.inflation, -0.05, 0.2), overrides: {} };

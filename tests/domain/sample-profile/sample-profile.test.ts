@@ -29,6 +29,19 @@ import {
 } from '@/domain/roadmap/rules/iraBranch';
 import { formatCurrency } from '@/lib/format';
 import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
+import { HoldingsRepo } from '@/domain/holdings';
+import { HousingPaymentsRepo } from '@/domain/housing-payments';
+import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
+import { PropertiesRepo } from '@/domain/properties';
+import { VehiclesRepo } from '@/domain/vehicles';
+import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { SettingsRepo } from '@/domain/app-settings';
+import { AccountSnapshotSchema } from '@/types/schema';
+import { captureRealState, projectScenario, detectMilestones, emptyLeverPayload, effectiveSwr, type MonthlyState, type RealState } from '@/lib/scenarios';
+import { projectionSpending } from '@/lib/scenarios/milestones';
+import type { Scenario } from '@/types/scenario';
+import type { HousingPayment, VehicleLease } from '@/types/schema';
+import { createHash } from 'node:crypto';
 
 async function freshDb(): Promise<SqliteAdapter> {
   const db = new SqliteAdapter(':memory:');
@@ -885,6 +898,290 @@ describe('R1 historical anchors — the shipped seed through the production mapp
     expect(aggressive.skipped.find((k) => k.bucket === 'ef_target')?.reason).toBe(floorSkip);
   });
 });
+
+/** The What-If RealState from the SEEDED DB through the production mappers —
+ *  useRealState's exact recipe (snapshots via the store's own SQL; tax rules =
+ *  the most recent seeded year, as loadAvailableYears resolves; loanPayments
+ *  []; startISO = the seed day's month). Never inline SQL semantics. */
+async function seededReal(db: SqliteAdapter, todayISO: string): Promise<RealState> {
+  const household = (await new HouseholdRepo(db).get())!;
+  const snapRows = await db.select<Record<string, unknown>>('SELECT * FROM account_snapshots ORDER BY snapshot_date ASC, id ASC');
+  const accountSnapshots = snapRows.map((r) => AccountSnapshotSchema.parse({
+    id: r.id, accountId: r.account_id, snapshotDate: r.snapshot_date, totalValue: r.total_value, source: r.source,
+  }));
+  const taxRepo = new TaxRulesRepo(db);
+  const years = await taxRepo.listDistinctYears();
+  const settings = await new SettingsRepo(db).get();
+  return captureRealState({
+    accounts: await new AccountsRepo(db).list(),
+    accountSnapshots,
+    holdings: await new HoldingsRepo(db).listAll(),
+    loans: await new LoansRepo(db).list(),
+    loanPayments: [],
+    transactions: await new TransactionsRepo(db).list(),
+    categories: await new CategoriesRepo(db).list(),
+    household,
+    persons: await new PersonsRepo(db).list(),
+    appSettings: {
+      defaultInflation: settings?.defaultInflation ?? 0.025,
+      defaultReturnRate: settings?.defaultReturnRate ?? 0.07,
+      defaultCashApy: settings?.defaultCashApy ?? null,
+      defaultDrawdownTaxRate: settings?.defaultDrawdownTaxRate ?? null,
+    },
+    startISO: todayISO.slice(0, 7),
+    taxRules: years.length ? await taxRepo.listForYear(Math.max(...years)) : [],
+    housingPayments: await new HousingPaymentsRepo(db).list(),
+    vehicleLeases: await new VehicleLeasesRepo(db).list(),
+    properties: await new PropertiesRepo(db).list(),
+    vehicles: await new VehiclesRepo(db).list(),
+    assetValueSnapshots: await new AssetValueSnapshotsRepo(db).list(),
+  });
+}
+
+describe('C2 historical anchors — the seeded Baseline through the production mappers (Appendix A; seed day 2026-07-08 → startISO 2026-07)', () => {
+  let db: SqliteAdapter;
+  const SEED_DAY = '2026-07-08';
+  beforeEach(async () => {
+    db = await freshDb();
+    await seedSampleProfile(db, { todayISO: SEED_DAY });
+  });
+  /** Both gates (household M2 + the C2 per-month authored gate) when c2Gate is true; M2 alone otherwise.
+   *  The C2 gate reads the ENGINE's own per-month stamp (MonthlyState.authoredExpenses) — exactly what
+   *  the page's detectMilestones call sees. c2Gate false = the pre-C2 engine's states: the same states
+   *  without the stamp (every other field byte-identical — the matrix pin below). */
+  const milestonesOf = (real: RealState, payload: ReturnType<typeof emptyLeverPayload>, c2Gate: boolean) => {
+    const scenario = { id: 1, leverPayload: payload } as unknown as Scenario;
+    const projected = projectScenario(real, payload, { startISO: real.startISO, months: 360 });
+    const states = c2Gate ? projected : projected.map(withoutStamp);
+    return detectMilestones(states, {
+      withdrawalRate: effectiveSwr(scenario, real.household),
+      monthlyExpenseBaseline: real.household.monthlyExpenseBaseline,
+    });
+  };
+  // The pre-C2 factory default, spelled out — the anti-pin's payload.
+  const CUSTOM_ZERO = () => ({ ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 0 });
+
+  it('captures the spending average the Roadmap states: $5,911.12 from 3 complete months (MFJ, baseline $6,000, 2.4% inflation)', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    expect(real.household.filingStatus).toBe('MFJ');
+    expect(real.household.monthlyExpenseBaseline).toBe(6000);
+    expect(real.household.inflationAssumption).toBeCloseTo(0.024, 6);
+    expect(real.expenseBasis.rolling12m).toBeCloseTo(5911.12, 2);
+    expect(real.expenseBasis.rolling12mMonths).toBe(3);
+    expect(real.expenseBasis.latestMonth).toBeCloseTo(5911.12, 2);
+    expect((real.housingPayments ?? []).length).toBe(0);
+  });
+
+  it('the factory Baseline (rolling12m) spends $5,911.12 in month 1 (inflated) and reaches FI 2033-03; NW30y $9,072,583.18', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const p = emptyLeverPayload();
+    const states = projectScenario(real, p, { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBeCloseTo(5923.30, 2);                 // 5,911.12 × one month of 2.4%/yr
+    // C2 review: the engine stamps the AUTHORED share of that month's spending — the whole of it here
+    // (no rent or lease on file), in the same nominal dollars.
+    expect(states[1].authoredExpenses).toBe(states[1].expenses);
+    const m = milestonesOf(real, p, true);                               // FI 2033-03 holds under the C2 gate
+    expect(m.financialIndependenceISO).toBe('2033-03');
+    expect(m.debtFreeISO).toBe('2046-01');
+    expect(m.retirementISO).toBe('2052-10');
+    expect(m.netWorth30y).toBeCloseTo(9_072_583.18, 2);
+  });
+
+  it('ANTI-PIN — the pre-C2 custom/0 Baseline spent $0 and read FI undefined while its NW30y was $12,216,365.93 (the silent $0)', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const states = projectScenario(real, CUSTOM_ZERO(), { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBe(0);
+    const legacy = milestonesOf(real, CUSTOM_ZERO(), false);
+    expect(legacy.financialIndependenceISO).toBeUndefined();               // `s.expenses > 0` never held
+    expect(legacy.netWorth30y).toBeCloseTo(12_216_365.93, 2);
+    expect(milestonesOf(real, CUSTOM_ZERO(), true).financialIndependenceISO).toBeUndefined();
+  });
+
+  it('the household-baseline scenario (custom/$6,000 — what an untouched Send now carries) reads FI 2033-07; NW30y $9,025,313.05', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const p = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
+    const m = milestonesOf(real, p, false);
+    expect(m.financialIndependenceISO).toBe('2033-07');
+    expect(m.netWorth30y).toBeCloseTo(9_025_313.05, 2);
+  });
+
+  it('THE HAZARD (investigation §E): transactions deleted + one $2,500 rent → the shipped gate read FI 2026-08 from rent alone for BOTH defaults', async () => {
+    await db.execute('DELETE FROM transactions');
+    await db.execute(
+      `INSERT INTO housing_payments (household_id, name, monthly_amount, start_date, end_date) VALUES (1, 'Rent', 2500, '2026-01-01', NULL)`,
+    );
+    const real = await seededReal(db, SEED_DAY);
+    expect(real.expenseBasis.rolling12m).toBe(0);
+    expect(real.expenseBasis.rolling12mMonths).toBe(0);
+    const states = projectScenario(real, emptyLeverPayload(), { startISO: real.startISO, months: 360 });
+    expect(states[1].expenses).toBeCloseTo(2505.15, 2);                 // rent alone, inflated one month
+    const withBaseline = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 6000 };
+    // rolling12m resolves 0 with no complete month — the SAME false date the custom/0 default gave.
+    expect(milestonesOf(real, emptyLeverPayload(), false).financialIndependenceISO).toBe('2026-08');
+    expect(milestonesOf(real, CUSTOM_ZERO(), false).financialIndependenceISO).toBe('2026-08');
+    // … and the C2 gate (the engine's per-month authored stamp is $0 in every month) reads none for both — the G11 row says why.
+    expect(milestonesOf(real, emptyLeverPayload(), true).financialIndependenceISO).toBeUndefined();
+    expect(milestonesOf(real, CUSTOM_ZERO(), true).financialIndependenceISO).toBeUndefined();
+    // A scenario WITH an authored expense keeps its date under both gates.
+    expect(milestonesOf(real, withBaseline, true).financialIndependenceISO).toBe('2045-01');
+    expect(milestonesOf(real, CUSTOM_ZERO(), false).netWorth30y).toBeCloseTo(10_886_760.56, 2);
+    expect(milestonesOf(real, withBaseline, false).financialIndependenceISO).toBe('2045-01');
+    expect(milestonesOf(real, withBaseline, false).netWorth30y).toBeCloseTo(7_693_055.21, 2);
+  });
+
+  // ── C2 review (UPHELD 0/1/2, MINOR 0/4): the FI gate holds PER MONTH, on the engine's own stamp ──
+  // Every figure below is HEAD-derived (b253d2ff) for the ungated dates; the gated ones are the fix's.
+  /** The hazard seed (investigation §E; the plan's A.3): transactions deleted + one $2,500 rent. */
+  const hazardReal = async () => {
+    await db.execute('DELETE FROM transactions');
+    await db.execute(
+      `INSERT INTO housing_payments (household_id, name, monthly_amount, start_date, end_date) VALUES (1, 'Rent', 2500, '2026-01-01', NULL)`,
+    );
+    return seededReal(db, SEED_DAY);
+  };
+  type Payload = ReturnType<typeof emptyLeverPayload>;
+  const withPeriods = (p: Payload, expensePeriods: Payload['expensePeriods']): Payload => ({ ...p, expensePeriods });
+  const statesOf = (real: RealState, p: Payload) => projectScenario(real, p, { startISO: real.startISO, months: 360 });
+  const P4 = () => withPeriods(CUSTOM_ZERO(), [{ start: '2026-07-01', monthlyDelta: 20_000, durationMonths: 3 }]);
+  const P5 = () => withPeriods(CUSTOM_ZERO(), [{ start: '2026-07-01', monthlyDelta: 3_000, durationMonths: 6 }]);
+  const P6 = () => withPeriods(emptyLeverPayload(), [{ start: '2026-07-01', monthlyDelta: 500, durationMonths: 1 }]);
+  const B5 = () => withPeriods(CUSTOM_ZERO(), [{ start: '2026-07-01', monthlyDelta: 3_000, durationMonths: 480 }]);
+  // The '+ Add period' default: a start on today's full date, mid-month in the start month.
+  const MID = () => withPeriods(CUSTOM_ZERO(), [{ start: '2026-07-15', monthlyDelta: 3_000, durationMonths: 480 }]);
+  // Permanent spending that begins 12 months out.
+  const FUTURE = () => withPeriods(CUSTOM_ZERO(), [{ start: '2027-07-01', monthlyDelta: 3_000, durationMonths: 480 }]);
+
+  it('ANTI-PIN (UPHELD 0; P4/P5/P6) — a period that ENDS on a $0 base no longer buys an FI date from rent alone', async () => {
+    const real = await hazardReal();
+    // Ungated (the pre-C2 engine; HEAD's month-0 gate read the same dates): FI once the period ends.
+    expect(milestonesOf(real, P4(), false).financialIndependenceISO).toBe('2026-10');
+    expect(milestonesOf(real, P5(), false).financialIndependenceISO).toBe('2027-01');
+    expect(milestonesOf(real, P6(), false).financialIndependenceISO).toBe('2026-08');   // the shipped defect's exact date
+    // … where the month's spending is the rent alone and the scenario authors none of it.
+    const at = statesOf(real, P4()).find((s) => s.monthISO === '2026-10')!;
+    expect(at.expenses).toBeCloseTo(2515.48, 2);
+    expect(at.authoredExpenses).toBe(0);
+    // Gated per month: no FI date for any of the three.
+    for (const p of [P4(), P5(), P6()]) expect(milestonesOf(real, p, true).financialIndependenceISO).toBeUndefined();
+    // The other milestones are untouched by the gate.
+    expect(milestonesOf(real, P4(), true).netWorth30y).toBeCloseTo(10_846_636.89, 2);
+    expect(milestonesOf(real, P6(), true).netWorth30y).toBeCloseTo(10_886_760.56, 2);
+  });
+
+  it('G11 facts on the hazard seed: $0 authored in every month → named (rent is spent); a period the engine spends keeps it silent', async () => {
+    const real = await hazardReal();
+    // P6's one-month period covers only the start month, which the engine seeds and never spends.
+    for (const p of [CUSTOM_ZERO(), emptyLeverPayload(), P6()]) {
+      expect(projectionSpending(statesOf(real, p))).toEqual({ authorsSpending: false, spendsAnything: true });
+    }
+    for (const p of [P4(), P5(), B5(), MID(), FUTURE()]) {
+      expect(projectionSpending(statesOf(real, p)).authorsSpending).toBe(true);
+    }
+  });
+
+  it('UPHELD 1 — a period starting mid-month in the start month is judged as the engine spends it: the B5 date, not "FI —"', async () => {
+    const real = await hazardReal();
+    // The engine spends a 2026-07-15 start from 2026-08 — exactly as it spends a 2026-07-01 start (month 0 is the seed).
+    expect(statesOf(real, MID()).map((s) => s.expenses)).toEqual(statesOf(real, B5()).map((s) => s.expenses));
+    expect(milestonesOf(real, MID(), true).financialIndependenceISO).toBe('2031-12');
+    expect(milestonesOf(real, B5(), true).financialIndependenceISO).toBe('2031-12');     // B5 control: unchanged from HEAD
+    expect(milestonesOf(real, B5(), true).netWorth30y).toBeCloseTo(9_291_234.12, 2);
+  });
+
+  it('MINOR 0 — a future-start period: FI can land only on/after its start (never on rent alone before it)', async () => {
+    const real = await hazardReal();
+    expect(milestonesOf(real, FUTURE(), false).financialIndependenceISO).toBe('2026-08');  // ungated: rent alone
+    const states = statesOf(real, FUTURE());
+    const gated = milestonesOf(real, FUTURE(), true).financialIndependenceISO;
+    expect(gated).toBeDefined();
+    expect(gated! >= '2027-07').toBe(true);
+    // Engine-consistent: the gated date IS the ungated scan restricted to the months the scenario authors spending.
+    const fromStart = detectMilestones(states.filter((s) => s.monthISO >= '2027-07').map(withoutStamp), {
+      withdrawalRate: 0.04, monthlyExpenseBaseline: real.household.monthlyExpenseBaseline,
+    }).financialIndependenceISO;
+    expect(gated).toBe(fromStart);
+    expect(gated).toBe(FUTURE_HAZARD_FI);
+  });
+
+  it('the untouched seed (no rent): B5 keeps 2026-08; the mid-month and future-start shapes read their true dates', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    expect(milestonesOf(real, B5(), true).financialIndependenceISO).toBe('2026-08');
+    expect(milestonesOf(real, B5(), true).netWorth30y).toBeCloseTo(10_620_839.49, 2);
+    expect(milestonesOf(real, MID(), true).financialIndependenceISO).toBe('2026-08');   // HEAD hid it (UPHELD 1)
+    expect(milestonesOf(real, FUTURE(), true).financialIndependenceISO).toBe('2027-07'); // HEAD hid it (MINOR 0)
+    // A $0 base with nothing on file spends nothing at all → G11's "nothing is spent" variant.
+    expect(projectionSpending(statesOf(real, CUSTOM_ZERO()))).toEqual({ authorsSpending: false, spendsAnything: false });
+    expect(milestonesOf(real, CUSTOM_ZERO(), true).financialIndependenceISO).toBeUndefined();
+  });
+
+  it('BYTE-IDENTITY — the authored stamp is additive: every pre-existing MonthlyState field is unchanged for every stored payload shape (digests recorded at b253d2ff, 480 months)', async () => {
+    const real = await seededReal(db, SEED_DAY);
+    const RENT: HousingPayment = { id: 901, householdId: 1, ownerPersonId: null, name: 'Rent', monthlyAmount: 2_500, startDate: '2026-01-01', endDate: null };
+    const LEASE: VehicleLease = { id: 902, householdId: 1, ownerPersonId: null, name: 'Lease', monthlyAmount: 450, startDate: '2026-01-01', endDate: '2028-06-30' };
+    const FROM_START = [{ start: '2026-07-01', monthlyDelta: 3_000, durationMonths: 480 }];
+    const MIXED = [
+      { start: '2026-07-01', monthlyDelta: 20_000, durationMonths: 3 },   // temporary, from the start month
+      { start: '2026-09-24', monthlyDelta: 1_200, durationMonths: 18 },   // mid-month start
+      { start: '2027-07-01', monthlyDelta: 3_000, durationMonths: 480 },  // future-start, permanent
+      { start: '2028-01-01', monthlyDelta: -400, durationMonths: 12 },    // a reduction
+    ];
+    const withoutKeys = (p: Payload): Payload => {
+      const q: Partial<Payload> = { ...p };
+      delete q.expenseSource;
+      delete q.customMonthly;
+      return q as Payload;
+    };
+    const noBasis = { ...real, expenseBasis: undefined } as unknown as RealState;
+    const owing: RealState = { ...real, housingPayments: [RENT], vehicleLeases: [LEASE] };
+    const MATRIX: Array<[string, Payload, RealState, string]> = [
+      ['custom/0', CUSTOM_ZERO(), real, 'd072df6276ab133eb2673d2a0a7719c61cca9a2da08fc9470cc713178baef92a'],
+      ['custom/4000', { ...CUSTOM_ZERO(), customMonthly: 4_000 }, real, '4e2c6706c802fad4e876579f4703681225e6c081960cac33d3ee2900451ed5cc'],
+      ['rolling12m, basis captured', emptyLeverPayload(), real, '054e3d529df40175976f52675f01fd0dce8b3d775e7c349a9860f02b099827c0'],
+      ['rolling12m, RealState without expenseBasis', emptyLeverPayload(), noBasis, 'd072df6276ab133eb2673d2a0a7719c61cca9a2da08fc9470cc713178baef92a'],
+      ['latestMonth', { ...emptyLeverPayload(), expenseSource: 'latestMonth' }, real, '054e3d529df40175976f52675f01fd0dce8b3d775e7c349a9860f02b099827c0'],
+      ['periods-only from the start month (B5)', withPeriods(CUSTOM_ZERO(), FROM_START), real, '0c3d91db8854c0c6973fedb2c769d7554ec855c0cf49c7ac8aa12006b04d6f83'],
+      ['pre-Feature-B row (no expenseSource / customMonthly keys)', withoutKeys(withPeriods(emptyLeverPayload(), FROM_START)), real, '0c3d91db8854c0c6973fedb2c769d7554ec855c0cf49c7ac8aa12006b04d6f83'],
+      ['pre-Feature-B row, RealState without expenseBasis', withoutKeys(withPeriods(emptyLeverPayload(), MIXED)), noBasis, 'f6dfeccf6d98023e8231008c7bbf1b0a0bc2ac1d31d8d2a3759c8da6914ff8a6'],
+      ['obligations present (rent + an ending lease), rolling12m + mixed periods', withPeriods(emptyLeverPayload(), MIXED), owing, '52f15dda759e1950d27c8d6feff81d6d0e8f800feeedc4db3f7f000bd576d03c'],
+      ['obligations present, custom/0 (the hazard shape)', CUSTOM_ZERO(), owing, '3f06fbf6d97bc6f48a17e6cc6a3c85336b60661a81dfcf1394fcae0ab2e47fc6'],
+      ['custom/1,500 + mixed periods, sequential drawdown at 20%', { ...withPeriods(CUSTOM_ZERO(), MIXED), customMonthly: 1_500, withdrawalStrategy: 'sequential', effectiveDrawdownTaxRate: 0.2 }, real, 'e592d146ab98e33f04e4065f8b2924e44acced552f292cfd46eafbc90f5fe77a'],
+    ];
+    for (const [name, p, r, recorded] of MATRIX) {
+      const states = projectScenario(r, p, { startISO: r.startISO, months: 480 });
+      expect(states).toHaveLength(480);
+      expect(stateDigest(states), name).toBe(recorded);
+    }
+  });
+});
+
+// C2 review — FUTURE on the hazard seed: the first month on/after 2027-07 whose liquid covers rent + $3,000
+// at the 4% rule (the engine-consistent scan in the test above derives the same month independently) —
+// three months before the B5 control's 2031-12: the year spent on rent alone saved the $3,000 a month.
+const FUTURE_HAZARD_FI = '2031-09';
+
+/** The pre-C2 engine's states: the same states without the C2 per-month authored stamp. */
+function withoutStamp(s: MonthlyState): MonthlyState {
+  const out = { ...s };
+  delete out.authoredExpenses;
+  return out;
+}
+
+/** Canonical, lossless serialization (sorted keys; String(n) round-trips every double; -0 kept distinct). */
+function canonical(v: unknown): string {
+  if (typeof v === 'number') return Object.is(v, -0) ? '-0' : String(v);
+  if (v === null || v === undefined || typeof v === 'boolean') return String(v);
+  if (typeof v === 'string') return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  const o = v as Record<string, unknown>;
+  return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(',')}}`;
+}
+
+/** sha256 over every MonthlyState field EXCEPT the additive C2 stamp — so the digest recorded before the
+ *  stamp existed must still match after it lands. */
+function stateDigest(states: MonthlyState[]): string {
+  const pre = states.map((s) => Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'authoredExpenses')));
+  return createHash('sha256').update(canonical(pre)).digest('hex');
+}
 
 /** PaycheckCard.tsx's own `annual` assembly, off the SEEDED rows: FEDERAL/US
  *  + STATE/CA at the household's filing status, no city (city NULL →

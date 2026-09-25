@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
@@ -14,9 +14,27 @@ import SwrLeverPill from '@/components/whatif/SwrLeverPill';
 import { useSurplusFlowPreview } from '@/components/whatif/useSurplusFlowPreview';
 import { formatCompactCurrency } from '@/lib/format';
 
-type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
+export type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
 
-export default function LeverBar() {
+export interface LeverBarProps {
+  /**
+   * C2: an in-page request to open one lever's dialog (the gaps card's
+   * "Open Expenses →"). Keyed on the NONCE — a fresh nonce per request, so
+   * the same lever can be requested twice and a re-render never re-opens a
+   * dialog the user has closed. The page activates the target scenario
+   * BEFORE raising it, so the dialog opens on that scenario. null = none.
+   */
+  openRequest?: { lever: LeverKey; nonce: number } | null;
+  /**
+   * C2 review (MINOR 3): called once with the nonce of each request the bar
+   * honored, so the page can CLEAR it — a remounted bar then has nothing to
+   * replay (the bar's own ref does not survive a remount; the page's state
+   * does).
+   */
+  onOpenRequestConsumed?: (nonce: number) => void;
+}
+
+export default function LeverBar({ openRequest = null, onOpenRequestConsumed }: LeverBarProps = {}) {
   const scenarios = useScenariosStore((s) => s.scenarios);
   const updateLever = useScenariosStore((s) => s.updateLever);
   const household = useHouseholdStore((s) => s.household);
@@ -29,6 +47,22 @@ export default function LeverBar() {
   // default since migration 0029). Hook is called unconditionally before the
   // early return below to keep React's rules of hooks happy.
   const surplus = useSurplusFlowPreview(active?.leverPayload ?? null);
+
+  // C2: honor an in-page open request once per nonce (see LeverBarProps).
+  // C2 review (MINOR 3): the last honored nonce is tracked in a ref, so no
+  // re-run of this effect (a new callback identity, a re-render) re-opens a
+  // dialog the user closed; each honored request is then reported so the
+  // page clears it and a REMOUNTED bar has nothing to replay.
+  const requestNonce = openRequest?.nonce ?? null;
+  const requestLever = openRequest?.lever ?? null;
+  const honoredNonceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (requestNonce == null || requestLever == null) return;
+    if (honoredNonceRef.current === requestNonce) return;
+    honoredNonceRef.current = requestNonce;
+    setOpenLever(requestLever);
+    onOpenRequestConsumed?.(requestNonce);
+  }, [requestNonce, requestLever, onOpenRequestConsumed]);
 
   if (!active) {
     return (
