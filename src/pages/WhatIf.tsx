@@ -703,4 +703,8 @@ export const WHATIF_PAGE_BASIS_FIGURES: RegisteredFigure[] = [
   // C2 (G11): "{name}'s expense base is $0 — …" — a $0 fact, the same in
   // either basis (ModelGapsCard stamps the row text with this testid).
   { testId: 'whatif-model-gap-expense-base', cls: 'invariant' },
+  // A-13 (G2): "No account snapshots yet — the portfolio starts at $0 in these
+  // projections." — a year-0 $0 fact (B1 inventory row 17), invariant. Renders
+  // only on a zero engine seed: the page sweep has a zero-seed state for it.
+  { testId: 'whatif-model-gap-portfolio-zero', cls: 'invariant' },
 ];
