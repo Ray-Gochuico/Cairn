@@ -54,7 +54,7 @@ import {
   type Milestones,
   type MonthlyState,
 } from '@/lib/scenarios';
-import { authoredMonthlyExpense } from '@/lib/scenarios/expense-base';
+import { projectionSpending } from '@/lib/scenarios/milestones';
 import { localTodayISO } from '@/lib/dates';
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
@@ -144,8 +144,14 @@ export default function WhatIf() {
   // C2: the gaps card's "Open Expenses →" also opens the lever's dialog —
   // AFTER activation, so it edits the named scenario. The request is keyed on
   // a counter nonce (never a clock) so the same lever can be asked for twice.
+  // C2 review (MINOR 3): the bar reports each request it honored and the page
+  // clears it, so a REMOUNTED bar (the setup branch while a store reloads)
+  // never replays one — a stale report never clears a newer request.
   const leverNonceRef = useRef(0);
   const [leverRequest, setLeverRequest] = useState<{ lever: LeverKey; nonce: number } | null>(null);
+  const onLeverRequestConsumed = useCallback((nonce: number) => {
+    setLeverRequest((cur) => (cur?.nonce === nonce ? null : cur));
+  }, []);
   const openLeversFor = useCallback((scenarioId: number, lever?: LeverKey) => {
     void useScenariosStore
       .getState()
@@ -250,21 +256,6 @@ export default function WhatIf() {
 
   const real = useRealState();
 
-  // C2 — ONE resolution per VISIBLE scenario of its authored month-0 monthly
-  // expense (resolved base + periods active in the start month; the
-  // household's obligations excluded), through the resolver the engine itself
-  // uses (expense-base.ts). Feeds the per-scenario FI gate below and the G11
-  // register rows — the two can never disagree. Visible only: the strip's set.
-  const authoredExpenseById = useMemo(() => {
-    const m = new Map<number, number>();
-    if (!real) return m;
-    for (const s of scenarios) {
-      if (s.id == null || !s.visible) continue;
-      m.set(s.id, authoredMonthlyExpense(s.leverPayload, real.expenseBasis, real.startISO));
-    }
-    return m;
-  }, [real, scenarios]);
-
   const { projections, milestones } = useMemo(() => {
     if (!real) {
       return {
@@ -279,16 +270,15 @@ export default function WhatIf() {
       const params = {
         withdrawalRate: effectiveSwr(scenario, household),
         // Round-3 M2: zero baseline → no FI milestone (chips render "FI —").
+        // C2: a month whose AUTHORED spending is $0 (rent alone) is gated per
+        // month inside detectMilestones, off the engine's own stamp on
+        // `states` — the page resolves no expense figure of its own.
         monthlyExpenseBaseline: household?.monthlyExpenseBaseline,
-        // C2: a scenario whose AUTHORED month-0 expense is $0 would cross "FI"
-        // against rent alone — gated per scenario (milestones.ts), from the
-        // same resolution G11 reads.
-        scenarioMonthlyExpenseBase: authoredExpenseById.get(id),
       };
       ms.set(id, detectMilestones(states, params));
     }
     return { projections: projs, milestones: ms };
-  }, [real, scenarios, projectedScenarios, horizonMonths, household, authoredExpenseById]);
+  }, [real, scenarios, projectedScenarios, horizonMonths, household]);
 
   // W5.1 (D-W51-1): the page's ONLY basis reader — ONE bundle carries the
   // already-based chart map, the branded milestones, the scoreboard strings
@@ -408,16 +398,19 @@ export default function WhatIf() {
     sides: [comparePair.a, comparePair.b]
       .filter((s): s is NonNullable<typeof s> => s != null)
       .map((s) => ({ name: s.name, payload: s.leverPayload })),
-    // C2 (G11): visible scenarios in the strip's order with their authored
-    // month-0 expense — the rows name the ones at $0. Empty without `real`
-    // (the page's setup state renders no card).
-    expenseBases: real
-      ? scenarios
-          .filter((s) => s.visible && s.id != null)
-          .map((s) => ({ scenarioId: s.id as number, name: s.name, monthlyExpense: authoredExpenseById.get(s.id as number) ?? 0 }))
+    // C2 (G11): visible scenarios in the strip's order, each with two facts
+    // read off its OWN projection — the engine's per-month authored stamp,
+    // the FI gate's own predicate — so the row and the strip's "FI —" never
+    // disagree. A scenario without a projection makes no claim. Empty
+    // without `real` (the page's setup state renders no card).
+    scenarioSpending: real
+      ? scenarios.flatMap((s) => {
+          const states = s.visible && s.id != null ? projections.get(s.id) : undefined;
+          return states ? [{ scenarioId: s.id as number, name: s.name, ...projectionSpending(states) }] : [];
+        })
       : [],
     todayIso,
-  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, real, scenarios, authoredExpenseById, todayIso]);
+  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, real, scenarios, projections, todayIso]);
 
   // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
   // above this early return. Hooks must always run in the same order
@@ -538,7 +531,7 @@ export default function WhatIf() {
         />
       </div>
 
-      <LeverBar openRequest={leverRequest} />
+      <LeverBar openRequest={leverRequest} onOpenRequestConsumed={onLeverRequestConsumed} />
 
       {pillsPosition === FiPillsPosition.ABOVE ? (
         <>

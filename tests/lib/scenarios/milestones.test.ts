@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectMilestones, type FinancialIndependenceParams } from '@/lib/scenarios/milestones';
+import { detectMilestones, projectionSpending, type FinancialIndependenceParams } from '@/lib/scenarios/milestones';
 import type { MonthlyState } from '@/lib/scenarios/engine';
 
 function buildStates(values: Array<{
@@ -13,6 +13,9 @@ function buildStates(values: Array<{
   liquid?: number;
   /** Optional home-equity overlay. Defaults to 0. */
   homeEquity?: number;
+  /** C2 review: the engine's per-month AUTHORED stamp (MonthlyState.authoredExpenses).
+   *  Omitted → the state carries no stamp (a hand-built / pre-C2 shape). */
+  authored?: number;
 }>): MonthlyState[] {
   return values.map((v) => {
     const investments = v.liquid ?? v.netWorth + v.debt;
@@ -23,6 +26,7 @@ function buildStates(values: Array<{
       cash: 0,
       debtByLoan: v.debt > 0 ? { 1: v.debt } : {},
       netWorth: v.netWorth, incomeAfterTax: 0, expenses: v.expenses, savings: 0, events: [],
+      ...(v.authored !== undefined ? { authoredExpenses: v.authored } : {}),
     };
   });
 }
@@ -130,36 +134,118 @@ describe('detectMilestones', () => {
     });
   });
 
-  // ----- C2 — the SCENARIO's authored expense gate (sibling of M2) ----------
-  describe('zero authored scenario expense (C2)', () => {
+  // ----- C2 — the SCENARIO's authored expense gate (sibling of M2), PER MONTH ----------
+  describe('zero authored scenario expense (C2) — gated per month on the engine\'s own stamp', () => {
     // The hazard: a household with rent on file and a scenario whose authored
     // expense is $0 (custom/0, or a data mode with no complete month). The
     // engine's `expenses` is the rent alone (> 0), the household baseline is
     // set (> 0), so M2 is open and the crossing fires on month one against
     // rent — "FI next month". Seeded repro: FI 2026-08 (sample-profile.test).
+    // C2 review: the gate reads the engine's per-month stamp
+    // (MonthlyState.authoredExpenses: base + the periods it applies THAT month,
+    // obligations excluded), so a period that ends, starts mid-month or starts
+    // later is judged exactly as the engine spends it.
     const rentOnly = buildStates([
-      { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000 },
-      { month: '2026-08', netWorth: 950_000, debt: 0, expenses: 2_510, liquid: 950_000 },
+      { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000, authored: 0 },
+      { month: '2026-08', netWorth: 950_000, debt: 0, expenses: 2_510, liquid: 950_000, authored: 0 },
+    ]);
+    const authoring = buildStates([
+      { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000, authored: 5_911.12 },
+      { month: '2026-08', netWorth: 950_000, debt: 0, expenses: 2_510, liquid: 950_000, authored: 5_911.12 },
     ]);
 
     it('a $0 authored expense gates the FI scan OFF even though engine expenses are > 0 (rent) and the household baseline is set', () => {
-      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000, scenarioMonthlyExpenseBase: 0 });
+      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 });
       expect(m.financialIndependenceISO).toBeUndefined();
       expect(m.debtFreeISO).toBe('2026-07');                              // the other milestones are untouched
     });
 
     it('a positive authored expense keeps the crossing behavior', () => {
-      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000, scenarioMonthlyExpenseBase: 5_911.12 });
+      const m = detectMilestones(authoring, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 });
       expect(m.financialIndependenceISO).toBe('2026-07');                 // 947k × 4% / 12 ≈ $3,157 ≥ $2,505
     });
 
-    it('omitted → legacy behavior (callers without a scenario in scope are not gated)', () => {
-      expect(detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBe('2026-07');
+    it('no stamp → legacy behavior (hand-built states and callers outside the engine are not gated)', () => {
+      const unstamped = buildStates([
+        { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000 },
+      ]);
+      expect(detectMilestones(unstamped, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBe('2026-07');
     });
 
-    it('BOTH gates hold: a $0 household baseline with a positive scenario base still reads no FI (G1 and the FI cards keep saying why)', () => {
-      const m = detectMilestones(rentOnly, { withdrawalRate: 0.04, monthlyExpenseBaseline: 0, scenarioMonthlyExpenseBase: 5_911.12 });
+    it('BOTH gates hold: a $0 household baseline with a positive authored expense still reads no FI (G1 and the FI cards keep saying why)', () => {
+      const m = detectMilestones(authoring, { withdrawalRate: 0.04, monthlyExpenseBaseline: 0 });
       expect(m.financialIndependenceISO).toBeUndefined();
+    });
+
+    it('UPHELD 0 — a period that ENDS: no crossing in the months after it, where the spending is rent alone', () => {
+      // A $0 base + a big 2-month period: liquid cannot cover it while it runs,
+      // then the engine spends rent alone — the shipped month-0 gate read FI here.
+      const states = buildStates([
+        { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 0,      liquid: 947_000, authored: 0 },
+        { month: '2026-08', netWorth: 930_000, debt: 0, expenses: 22_505, liquid: 930_000, authored: 20_000 },
+        { month: '2026-09', netWorth: 910_000, debt: 0, expenses: 22_510, liquid: 910_000, authored: 20_000 },
+        { month: '2026-10', netWorth: 911_000, debt: 0, expenses: 2_515,  liquid: 911_000, authored: 0 },
+        { month: '2026-11', netWorth: 912_000, debt: 0, expenses: 2_520,  liquid: 912_000, authored: 0 },
+      ]);
+      expect(detectMilestones(states, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBeUndefined();
+    });
+
+    it('MINOR 0 — a period that starts LATER: no FI on rent alone before it; FI can land on its first authored month', () => {
+      const states = buildStates([
+        { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 0,     liquid: 947_000, authored: 0 },
+        { month: '2026-08', netWorth: 950_000, debt: 0, expenses: 2_505, liquid: 950_000, authored: 0 },
+        { month: '2026-09', netWorth: 953_000, debt: 0, expenses: 3_005, liquid: 953_000, authored: 500 },
+      ]);
+      expect(detectMilestones(states, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBe('2026-09');
+    });
+
+    it('the gate is per MONTH, not per projection: month 1 authoring does not open the months after it', () => {
+      // The month-0/first-month mutant: judge the whole horizon by one month.
+      const states = buildStates([
+        { month: '2026-07', netWorth: 100_000, debt: 0, expenses: 0,     liquid: 100_000, authored: 0 },
+        { month: '2026-08', netWorth: 100_000, debt: 0, expenses: 9_000, liquid: 100_000, authored: 6_500 },
+        { month: '2026-09', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000, authored: 0 },
+      ]);
+      expect(detectMilestones(states, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBeUndefined();
+      // … and a first month authoring $0 does not close the months after it
+      const later = buildStates([
+        { month: '2026-07', netWorth: 947_000, debt: 0, expenses: 0,     liquid: 947_000, authored: 0 },
+        { month: '2026-08', netWorth: 947_000, debt: 0, expenses: 2_505, liquid: 947_000, authored: 0 },
+        { month: '2026-09', netWorth: 947_000, debt: 0, expenses: 3_005, liquid: 947_000, authored: 500 },
+      ]);
+      expect(detectMilestones(later, { withdrawalRate: 0.04, monthlyExpenseBaseline: 6_000 }).financialIndependenceISO).toBe('2026-09');
+    });
+  });
+
+  // ----- C2 review — G11's two facts about ONE scenario's projection ----------
+  describe('projectionSpending — read off the engine\'s per-month stamp, the FI gate\'s own predicate', () => {
+    it('authors spending when ANY month\'s stamp is > 0 (a future start, a period that ends)', () => {
+      expect(projectionSpending(buildStates([
+        { month: '2026-07', netWorth: 1, debt: 0, expenses: 0, authored: 0 },
+        { month: '2026-08', netWorth: 1, debt: 0, expenses: 2_500, authored: 0 },
+        { month: '2026-09', netWorth: 1, debt: 0, expenses: 5_500, authored: 3_000 },
+      ]))).toEqual({ authorsSpending: true, spendsAnything: true });
+    });
+
+    it('$0 authored in EVERY month with rent spent → spends, authors nothing (the rent variant)', () => {
+      expect(projectionSpending(buildStates([
+        { month: '2026-07', netWorth: 1, debt: 0, expenses: 0, authored: 0 },
+        { month: '2026-08', netWorth: 1, debt: 0, expenses: 2_500, authored: 0 },
+        { month: '2026-09', netWorth: 1, debt: 0, expenses: 2_505, authored: 0 },
+      ]))).toEqual({ authorsSpending: false, spendsAnything: true });
+    });
+
+    it('nothing on file → nothing spent in any month (the "nothing is spent" variant)', () => {
+      expect(projectionSpending(buildStates([
+        { month: '2026-07', netWorth: 1, debt: 0, expenses: 0, authored: 0 },
+        { month: '2026-08', netWorth: 1, debt: 0, expenses: 0, authored: 0 },
+      ]))).toEqual({ authorsSpending: false, spendsAnything: false });
+    });
+
+    it('unstamped states (hand-built / pre-C2) are never claimed to author nothing', () => {
+      expect(projectionSpending(buildStates([
+        { month: '2026-07', netWorth: 1, debt: 0, expenses: 0 },
+      ])).authorsSpending).toBe(true);
     });
   });
 

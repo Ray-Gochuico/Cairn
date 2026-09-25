@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import LeverBar from '@/components/whatif/LeverBar';
+import LeverBar, { type LeverKey } from '@/components/whatif/LeverBar';
 
 // Mock all the popovers to keep the test focused on pill wiring.
 vi.mock('@/components/whatif/levers/ExtraLoanPaymentsPopover', () => ({
@@ -340,6 +341,46 @@ describe('LeverBar — C2 openRequest (the gaps card\'s Open Expenses →)', () 
 
   it('no request (the prop omitted, every pre-C2 caller) never opens a dialog', () => {
     render(<LeverBar />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+  });
+
+  // C2 review MINOR 3: the page keeps its request in state; a REMOUNT of the
+  // bar (the page's setup branch while a store reloads) must not replay one
+  // the bar already honored. The bar reports each honored nonce; the page
+  // clears the request (WhatIf.expense-base pins the page side).
+  it('reports each honored request once, with its nonce', () => {
+    const onConsumed = vi.fn();
+    const { rerender } = render(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} onOpenRequestConsumed={onConsumed} />);
+    expect(onConsumed).toHaveBeenCalledTimes(1);
+    expect(onConsumed).toHaveBeenLastCalledWith(1);
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} onOpenRequestConsumed={onConsumed} />);
+    expect(onConsumed).toHaveBeenCalledTimes(1);
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 2 }} onOpenRequestConsumed={onConsumed} />);
+    expect(onConsumed).toHaveBeenCalledTimes(2);
+    expect(onConsumed).toHaveBeenLastCalledWith(2);
+  });
+
+  it('the honored nonce is remembered: a re-render with a NEW callback identity never re-opens a dialog the user closed', () => {
+    const { rerender } = render(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} onOpenRequestConsumed={() => {}} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Expenses' }));          // the user closes it
+    rerender(<LeverBar openRequest={{ lever: 'expenses', nonce: 1 }} onOpenRequestConsumed={() => {}} />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('a REMOUNT after the request was honored leaves the dialog closed (no replay)', () => {
+    // The page's contract, in miniature: hold the request, clear it when the bar reports it honored.
+    function Host({ mounted }: { mounted: boolean }) {
+      const [req, setReq] = useState<{ lever: LeverKey; nonce: number } | null>({ lever: 'expenses', nonce: 1 });
+      if (!mounted) return null;
+      return <LeverBar openRequest={req} onOpenRequestConsumed={(n) => setReq((cur) => (cur?.nonce === n ? null : cur))} />;
+    }
+    const { rerender } = render(<Host mounted />);
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Expenses' }));          // the user closes it
+    expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
+    rerender(<Host mounted={false} />);                                          // the bar unmounts …
+    rerender(<Host mounted />);                                                  // … and mounts again
     expect(screen.getByTestId('expenses-popover')).toHaveAttribute('data-open', 'false');
   });
 });

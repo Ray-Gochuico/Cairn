@@ -25,6 +25,9 @@ export function toReal(states: MonthlyState[], inflation: number, startISO: stri
       netWorth: s.netWorth * factor,
       incomeAfterTax: s.incomeAfterTax * factor,
       expenses: s.expenses * factor,
+      // C2 review: the authored share of `expenses` — nominal like it, so the
+      // same factor (an absent stamp stays absent).
+      authoredExpenses: scaleOpt(s.authoredExpenses),
       savings: s.savings * factor,
       debtByLoan: Object.fromEntries(Object.entries(s.debtByLoan).map(([k, v]) => [k, v * factor])),
       compoundReturnAdded: scaleOpt(s.compoundReturnAdded),

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { emptyLeverPayload, type LeverPayload } from '@/lib/scenarios';
-import { resolveExpenseBase, authoredMonthlyExpense } from '@/lib/scenarios/expense-base';
+import { resolveExpenseBase } from '@/lib/scenarios/expense-base';
 
-// C2: the ONE resolution of a scenario's expense base, shared by the engine
-// (engine.ts, the expense seam), the What-If FI gate and the G11 register row.
+// C2: the ONE resolution of a scenario's expense base — the engine's expense seam
+// (engine.ts), whose per-month stamp the What-If FI gate and the G11 row read.
 const BASIS = { latestMonth: 2_500, rolling12m: 3_000, rolling12mMonths: 3 };
 
 describe('resolveExpenseBase — engine.ts:611-617 extracted verbatim', () => {
@@ -25,25 +25,7 @@ describe('resolveExpenseBase — engine.ts:611-617 extracted verbatim', () => {
   });
 });
 
-describe('authoredMonthlyExpense — base + the periods active in ONE month, obligations excluded', () => {
-  const period = { start: '2026-07-01', monthlyDelta: 1_200, durationMonths: 12 };
-
-  it('adds only the periods active in the given month', () => {
-    const p = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 2_000, expensePeriods: [period] };
-    expect(authoredMonthlyExpense(p, BASIS, '2026-07')).toBe(3_200);
-    expect(authoredMonthlyExpense(p, BASIS, '2027-07')).toBe(2_000); // the 12-month period has ended
-    expect(authoredMonthlyExpense(p, BASIS, '2026-06')).toBe(2_000); // not started
-  });
-
-  it('a pre-Feature-B periods-only scenario (custom/0 + periods) is AUTHORED spending, never $0 (B5)', () => {
-    const p = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 0, expensePeriods: [period] };
-    expect(authoredMonthlyExpense(p, undefined, '2026-07')).toBe(1_200);
-  });
-
-  it('the hazard shape: custom/0 and no periods is $0 whatever the household owes in rent (rent is not authored here)', () => {
-    const p = { ...emptyLeverPayload(), expenseSource: 'custom' as const, customMonthly: 0 };
-    expect(authoredMonthlyExpense(p, BASIS, '2026-07')).toBe(0);
-    // a data mode with nothing captured is $0 too — the popover's guard, not a number, speaks for it
-    expect(authoredMonthlyExpense({ ...emptyLeverPayload(), expenseSource: 'rolling12m' }, { latestMonth: 0, rolling12m: 0, rolling12mMonths: 0 }, '2026-07')).toBe(0);
-  });
-});
+// C2 review: the per-month AUTHORED expense (base + the periods the engine applies
+// that month, obligations excluded) is now the engine's own stamp,
+// MonthlyState.authoredExpenses — its pins moved to engine-authored-expenses.test.ts
+// (the page no longer resolves a month-0 figure of its own).

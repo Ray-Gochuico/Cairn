@@ -50,6 +50,21 @@ export interface MonthlyState {
   netWorth: number;
   incomeAfterTax: number;
   expenses: number;
+  /**
+   * C2 review — the share of this month's `expenses` the SCENARIO authored:
+   * its resolved expense base plus the expense periods applied THIS month,
+   * with the household's recurring obligations (rent, vehicle leases)
+   * EXCLUDED. POST-inflation (nominal), like `expenses` and every sibling
+   * dollar field — `(expenseBase + periodDelta) × inflationFactor` — so
+   * `expenses − authoredExpenses` is the obligations' nominal share; toReal
+   * deflates it with the rest. The seed month (index 0) spends nothing and
+   * carries 0. Additive observability: no engine math reads it. The FI gate
+   * (milestones.ts) and the G11 register row read it per month, so a period
+   * that ends, starts mid-month or starts later is judged exactly as the
+   * engine spends it. Optional so hand-built MonthlyState literals compile;
+   * absent = not stamped (callers treat such states as ungated).
+   */
+  authoredExpenses?: number;
   savings: number;
   events: string[];
 
@@ -212,6 +227,9 @@ export function projectScenario(
     netWorth: 0,
     incomeAfterTax: 0,
     expenses: 0,
+    // C2 review: the seed spends nothing, so it authors nothing — stamped
+    // (not left absent) so a per-month scan reads every month.
+    authoredExpenses: 0,
     savings: 0,
     events: [],
   };
@@ -611,6 +629,10 @@ function stepMonth(
   // periods + obligations.
   const expenseBase = resolveExpenseBase(payload, real.expenseBasis);
   s.expenses = (expenseBase + periodDelta + obligationDelta) * inflationFactor;
+  // C2 review: stamp the AUTHORED share (base + this month's periods;
+  // obligations excluded) in the same nominal dollars. Additive only — the
+  // line above is byte-untouched, and nothing below reads the stamp.
+  s.authoredExpenses = (expenseBase + periodDelta) * inflationFactor;
 
   // 5. Debt servicing
   let regularLoanPayments = 0;

@@ -35,7 +35,7 @@ const input = (over: Partial<ModelGapsInput> = {}): ModelGapsInput => ({
   contributions: [recentContribution],
   roadmapHasUnanswered: false,
   engineStartsAtZero: true,
-  expenseBases: [],
+  scenarioSpending: [],
   sides: [{ name: 'Baseline', payload: emptyLeverPayload() }],
   todayIso: TODAY,
   ...over,
@@ -95,7 +95,7 @@ describe('ModelGapsCard', () => {
 
   it('C2: a G11 row renders its in-page action as a BUTTON when the page supplies the handler; clicking hands it the scenario + lever', () => {
     const onOpenLever = vi.fn();
-    render(<MemoryRouter><ModelGapsCard input={input({ expenseBases: [{ scenarioId: 3, name: 'Baseline', monthlyExpense: 0 }] })} onOpenLever={onOpenLever} /></MemoryRouter>);
+    render(<MemoryRouter><ModelGapsCard input={input({ scenarioSpending: [{ scenarioId: 3, name: 'Baseline', authorsSpending: false, spendsAnything: false }] })} onOpenLever={onOpenLever} /></MemoryRouter>);
     expect(screen.getByText("Baseline's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.")).toBeInTheDocument();
     const action = screen.getByRole('button', { name: 'Open Expenses →' });
     expect(screen.queryByRole('link', { name: 'Open Expenses →' })).toBeNull();
@@ -104,9 +104,20 @@ describe('ModelGapsCard', () => {
   });
 
   it('C2: without a handler the row states its fact and renders NO control (never a dead button)', () => {
-    render(<MemoryRouter><ModelGapsCard input={input({ expenseBases: [{ scenarioId: 3, name: 'Baseline', monthlyExpense: 0 }] })} /></MemoryRouter>);
+    render(<MemoryRouter><ModelGapsCard input={input({ scenarioSpending: [{ scenarioId: 3, name: 'Baseline', authorsSpending: false, spendsAnything: false }] })} /></MemoryRouter>);
     expect(screen.getByText(/Baseline's expense base is \$0/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open Expenses →' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open Expenses →' })).toBeNull();
+  });
+
+  it('C2 review: BOTH G11 variants carry the basis-registry testid (their $0 is registered invariant on the page)', () => {
+    render(<MemoryRouter><ModelGapsCard input={input({ scenarioSpending: [
+      { scenarioId: 3, name: 'Baseline', authorsSpending: false, spendsAnything: false },
+      { scenarioId: 4, name: 'Renting', authorsSpending: false, spendsAnything: true },
+    ] })} onOpenLever={vi.fn()} /></MemoryRouter>);
+    expect(screen.getAllByTestId('whatif-model-gap-expense-base').map((el) => el.textContent)).toEqual([
+      "Baseline's expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.",
+      "Renting's expense base is $0 — the projection counts only rent and vehicle leases as spending, so no FI date is shown.",
+    ]);
   });
 });

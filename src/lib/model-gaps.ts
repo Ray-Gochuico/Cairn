@@ -65,11 +65,14 @@ export interface ModelGapsInput {
   engineStartsAtZero: boolean;
   /** The compared pair (2 entries) or the only scenario (1). */
   sides: ModelGapsSide[];
-  /** C2 (G11): every VISIBLE scenario in the strip's order with its AUTHORED
-   *  month-0 monthly expense (resolved base + periods active in the start
-   *  month, obligations excluded — authoredMonthlyExpense, the engine's own
-   *  resolver). The page computes it; the lib never sees RealState. */
-  expenseBases: ReadonlyArray<{ scenarioId: number; name: string; monthlyExpense: number }>;
+  /** C2 (G11): every VISIBLE scenario in the strip's order with two facts
+   *  read off its OWN projection (milestones.ts projectionSpending — the
+   *  engine's per-month authored stamp, the FI gate's own predicate): does any
+   *  projected month spend something the scenario AUTHORED (base + that
+   *  month's periods, obligations excluded), and does any month spend
+   *  anything at all (rent and vehicle leases included)? The page computes
+   *  it; the lib never sees RealState or the states. */
+  scenarioSpending: ReadonlyArray<{ scenarioId: number; name: string; authorsSpending: boolean; spendsAnything: boolean }>;
   /** 'YYYY-MM-DD' — injected (localTodayISO at the page layer, ONE clock per
    *  page); the lib never reads a clock and parses this LOCALLY, so the
    *  calendar day it reasons over is the same day every other monthly-pending
@@ -106,21 +109,26 @@ export function buildModelGaps(i: ModelGapsInput): ModelGapsModel {
   if (i.household != null && i.household.monthlyExpenseBaseline <= 0) {
     rows.push({ id: 'G1', text: "No monthly expense baseline — FI dates can't be computed, so they aren't shown.", cta: OPEN_HOUSEHOLD });
   }
-  // C2 (G11): a scenario whose AUTHORED expense resolves to $0 while the
+  // C2 (G11): a scenario that authors $0 in EVERY projected month while the
   // household baseline is set. The engine then runs it on the household's
-  // recurring obligations alone (rent, leases — or on nothing), and the FI
-  // milestone is gated off for it (milestones.ts scenarioMonthlyExpenseBase)
-  // — this row is the one place that says why the strip reads "FI —".
-  // Mutually exclusive with G1 by construction (G1 needs a $0 household
-  // baseline; this row needs a positive one), so the two never double up.
-  // One row per scenario, strip order; the CTA is an in-page action (the
-  // Expenses lever on THIS page), never a route.
+  // recurring obligations alone (rent, leases) — or on nothing — and the FI
+  // milestone is gated off in every month (milestones.ts, the same per-month
+  // predicate) — this row is the one place that says why the strip reads
+  // "FI —". A period the engine spends in ANY month (one that starts later,
+  // or mid-month) keeps the row silent. The sentence follows what the engine
+  // does spend (C2 review): obligations → it says so; none → nothing is
+  // spent. Mutually exclusive with G1 by construction (G1 needs a $0
+  // household baseline; this row needs a positive one), so the two never
+  // double up. One row per scenario, strip order; the CTA is an in-page
+  // action (the Expenses lever on THIS page), never a route.
   if (i.household != null && i.household.monthlyExpenseBaseline > 0) {
-    for (const b of i.expenseBases) {
-      if (b.monthlyExpense > 0) continue;
+    for (const b of i.scenarioSpending) {
+      if (b.authorsSpending) continue;
       rows.push({
         id: `G11:${b.scenarioId}`,
-        text: `${b.name}'s expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.`,
+        text: b.spendsAnything
+          ? `${b.name}'s expense base is $0 — the projection counts only rent and vehicle leases as spending, so no FI date is shown.`
+          : `${b.name}'s expense base is $0 — the projection assumes nothing is spent, so no FI date is shown.`,
         cta: { label: 'Open Expenses →', scenarioId: b.scenarioId, lever: 'expenses' },
       });
     }
