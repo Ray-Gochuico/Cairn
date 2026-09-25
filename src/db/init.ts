@@ -1,7 +1,15 @@
 import { TauriAdapter } from './tauri-adapter';
 import { setDatabase } from './db';
 import type { Database } from './db';
-import { runMigrations, loadAllMigrations } from './migrations';
+import {
+  runMigrations,
+  loadAllMigrations,
+  pendingMigrations,
+  readUserVersion,
+  MAX_SCHEMA_VERSION,
+  MigrationFailedError,
+  type Migration,
+} from './migrations';
 import { assertDatabaseIntegrity } from './integrity';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { SettingsRepo } from '@/domain/app-settings';
@@ -9,12 +17,16 @@ import { isRefreshDue } from '@/lib/refresh-cadence';
 import { RefreshCadence } from '@/types/enums';
 import {
   EXPLORE_DB_URL,
+  ExploreBootError,
   clearExploreFlag,
   clearExplorePrefs,
   clearExploreSessionStorage,
   isExploreMode,
 } from '@/lib/explore-mode';
 import { resetSampleDb } from '@/db/sample-reset';
+import { isTauriRuntime } from '@/lib/tauri-runtime';
+import { takePreUpdateCopy } from '@/lib/pre-update-copy';
+import { stashPostUpdateNotice, takeSkipOnce } from '@/lib/boot-notices';
 
 /**
  * Decide whether to run the background market-data refresh on launch.
@@ -86,6 +98,50 @@ async function initExploreDatabase(): Promise<void> {
   // Deliberately NOT maybeRunLaunchRefresh — explore is offline (D-S7).
 }
 
+/**
+ * v1.7.1 U1 (CR-U-1/3/5): the automatic pre-update safety copy. Runs on the
+ * REAL profile only (the explore branch never reaches it), in the Tauri
+ * runtime only, only on an UPDATING boot (a database that already has
+ * migrations AND has at least one pending; a fresh file has nothing to
+ * protect), and STRICTLY BEFORE runMigrations. The runner stamps
+ * user_version even when nothing is pending, so a copy taken afterwards would
+ * be refused by the previous build.
+ *
+ * `updating` also tells initDatabase whether a runMigrations failure is an
+ * update failure (D-U1-19): the runner writes on every boot, so a read-only
+ * or full file can fail it with nothing pending, and that is not an update.
+ * A file too new for this build takes no copy (runMigrations throws
+ * SchemaTooNewError next). A file left partway by an earlier boot
+ * (0 < user_version < applied, the pre-U3 signal) resumes from the copy that
+ * chain started from (D-U1-17). `skipCopy` is "Continue without a copy",
+ * consumed by initDatabase at the start of the real branch (D-U1-13).
+ *
+ * A PreUpdateCopyError propagates: main.tsx renders the fail-closed choice
+ * and nothing has been migrated.
+ */
+export async function maybeTakePreUpdateCopy(
+  db: Database,
+  migrations: Migration[],
+  opts: { skipCopy?: boolean } = {},
+): Promise<PreUpdateGate> {
+  const { applied, pending } = await pendingMigrations(db, migrations);
+  const updating = applied > 0 && pending.length > 0;
+  if (!updating) return { copyPath: null, updating };
+  const userVersion = await readUserVersion(db);
+  if (userVersion > MAX_SCHEMA_VERSION) return { copyPath: null, updating };
+  if (!isTauriRuntime() || opts.skipCopy) return { copyPath: null, updating };
+  const originFrom = userVersion > 0 && userVersion < applied ? userVersion : undefined;
+  const { path } = await takePreUpdateCopy({ from: applied, to: migrations.length, now: new Date(), originFrom });
+  return { copyPath: path, updating };
+}
+
+export interface PreUpdateGate {
+  /** The copy taken or reused before this boot's migrations; null when none was. */
+  copyPath: string | null;
+  /** True when existing data is about to change: applied > 0 and something is pending. */
+  updating: boolean;
+}
+
 export async function initDatabase(): Promise<void> {
   if (isExploreMode()) {
     try {
@@ -106,11 +162,12 @@ export async function initDatabase(): Promise<void> {
       clearExploreFlag();
       // eslint-disable-next-line no-console
       console.warn('[explore] sample boot failed; leaving sample mode:', e);
-      throw e;
+      throw new ExploreBootError(e);
     }
     return;
   }
   // ——— existing path, unchanged from here ———
+  const skipCopy = takeSkipOnce(); // every real boot consumes "Continue without a copy" (PR-13, D-U1-13)
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
 
@@ -122,7 +179,21 @@ export async function initDatabase(): Promise<void> {
   await assertDatabaseIntegrity(adapter);
 
   const migrations = await loadAllMigrations();
-  await runMigrations(adapter, migrations);
+  // v1.7.1 U1: the safety copy, BEFORE the runner touches the file (order is
+  // the guarantee — see maybeTakePreUpdateCopy). A failure here stops the boot
+  // with the data untouched (CR-U-1).
+  const gate = await maybeTakePreUpdateCopy(adapter, migrations, { skipCopy });
+  try {
+    await runMigrations(adapter, migrations);
+  } catch (e) {
+    // SchemaTooNewError is thrown before any migration runs — keep its screen.
+    if (e instanceof Error && e.name === 'SchemaTooNewError') throw e;
+    // Nothing was being updated (nothing pending, or a fresh file): not an
+    // update failure, so the generic screen, as in 1.7.0 (D-U1-19).
+    if (!gate.updating) throw e;
+    throw new MigrationFailedError(e, gate.copyPath);
+  }
+  if (gate.copyPath !== null) stashPostUpdateNotice(gate.copyPath);
 
   // DEV-ONLY: populate demo data for browser smoke of the Investments donuts.
   // Triple-guarded so the entire branch dead-code-eliminates from the Tauri
