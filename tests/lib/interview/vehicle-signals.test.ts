@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { evaluateCarSignals } from '@/lib/interview/vehicle-signals';
 import { AssetSnapshotOwnerType } from '@/types/enums';
 import { makeVehicle } from '../../factories';
@@ -95,5 +95,26 @@ describe('evaluateCarSignals — three independent signals (design §4.2)', () =
     const r = evaluateCarSignals(ctx, 1);
     expect(r.facts.repair12mDollars).toBe(1500); // 1500 counted, 2000 excluded
     expect(r.branch).toBe('signal'); // 1500 ≥ 1200
+  });
+});
+
+describe('U7 — ONE calendar: the 12-month window and the model-year age both read the LOCAL day (Pacific/Auckland)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { process.env.TZ = 'Pacific/Auckland'; });
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  it('local Jan 1 2027 (= Dec 31 2026 UTC): a snapshot dated today is inside the window; age = 2027 − 2017 = 10', () => {
+    const ctx = fixtureCtx({
+      today: new Date(2027, 0, 1),
+      vehicles: [makeVehicle({ id: 1, year: 2017 })],
+      assetValueSnapshots: [vsnap(1, '2026-02-01', 20000), vsnap(1, '2027-01-01', 16000)],
+      categories: CATS,
+    });
+    const r = evaluateCarSignals(ctx, 1);
+    expect(r.facts.ageYears).toBe(10);
+    expect(r.facts.declinePct).toBe(20); // the UTC day (2026-12-31) excluded the 2027-01-01 snapshot → null
+    expect(r.facts.firing).toEqual(['age', 'decline']);
   });
 });

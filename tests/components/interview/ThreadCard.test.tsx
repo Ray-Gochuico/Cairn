@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { z } from 'zod';
 import { InterviewThreads } from '@/components/interview/InterviewThreads';
@@ -63,7 +63,7 @@ describe('InterviewThreads / ThreadCard', () => {
       {
         id: 1, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
         subjectKey: 'vehicle:7', valueJson: '"no-plans"', questionVersion: 1,
-        answeredAt: '2026-07-01T00:00:00.000Z', basisJson: '{"branch":"signal"}',
+        answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"signal"}',
       },
     ]]);
     render(<InterviewThreads ctx={signalCtx(answers)} />);
@@ -79,7 +79,7 @@ describe('InterviewThreads / ThreadCard', () => {
       {
         id: 1, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
         subjectKey: 'vehicle:7', valueJson: '"no-plans"', questionVersion: 1,
-        answeredAt: '2025-06-01T00:00:00.000Z', basisJson: '{"branch":"signal"}',
+        answeredAt: '2025-06-01T12:00:00.000Z', basisJson: '{"branch":"signal"}',
       },
     ]]);
     render(<InterviewThreads ctx={signalCtx(answers)} />);
@@ -121,7 +121,7 @@ describe('Ask me again accessible names (review m7)', () => {
         {
           id: 1, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
           subjectKey: 'vehicle:7', valueJson: '"replace-within-2y"', questionVersion: 1,
-          answeredAt: '2026-07-01T00:00:00.000Z', basisJson: '{"branch":"signal"}',
+          answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"signal"}',
         },
       ],
       [
@@ -129,7 +129,7 @@ describe('Ask me again accessible names (review m7)', () => {
         {
           id: 2, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_replacement_budget',
           subjectKey: 'vehicle:7', valueJson: '30000', questionVersion: 1,
-          answeredAt: '2026-07-01T00:00:00.000Z', basisJson: '{"branch":"signal"}',
+          answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"signal"}',
         },
       ],
     ]);
@@ -140,5 +140,27 @@ describe('Ask me again accessible names (review m7)', () => {
     // …but distinct ACCESSIBLE names (a11y metadata only).
     expect(screen.getByRole('button', { name: 'Ask me again: Are there plans to replace Old Wagon?' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ask me again: About how much would the replacement cost?' })).toBeInTheDocument();
+  });
+});
+
+describe('U10 — "Answered {Month}" is the LOCAL month of the instant (America/Los_Angeles)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  it('03:00Z on Sep 1 2025 is Aug 31 locally → "Answered August 2025" (the UTC month read September)', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    const answers = new Map([[
+      answerKey('vehicle_replacement', 'q_keep_horizon', 'vehicle:7'),
+      {
+        id: 1, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
+        subjectKey: 'vehicle:7', valueJson: '"no-plans"', questionVersion: 1,
+        answeredAt: '2025-09-01T03:00:00.000Z', basisJson: '{"branch":"signal"}',
+      },
+    ]]);
+    // fixture today = local 2026-08-01; local 2025-08-31 → 12 months → stale (the UTC day 2025-09-01 → 11 → no banner at all)
+    render(<InterviewThreads ctx={signalCtx(answers)} />);
+    expect(screen.getByText('Answered August 2025 — still true?')).toBeInTheDocument();
   });
 });

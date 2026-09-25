@@ -7,6 +7,7 @@ import { localTodayISO } from '@/lib/dates';
 import { get529DeductionForState, UNLIMITED_DEDUCTION_SENTINEL } from '@/lib/529-state-deductions';
 import { computeCollegeTarget, project529Real } from '@/lib/interview/college-tradeoff';
 import { computeFiMonthlyDelta } from '@/lib/interview/effects';
+import { monthYearLabel } from '@/lib/interview/kernel-dates';
 import {
   getTuition, STATE_PUBLIC_4YR_TUITION_FEES, TUITION_BASE_ACADEMIC_YEAR,
   TUITION_REAL_GROWTH, TUITION_SECTOR_LABELS,
@@ -38,9 +39,6 @@ const COLLEGE_TARGET_SCHEMA = z.object({
   amountDollars: z.number().positive().max(50_000),
   targetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
 });
-
-const monthYearLabel = (ym: string): string =>
-  new Date(`${ym}-01T12:00:00Z`).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 const fmt = (n: number): string => formatCurrency(Math.round(n));
 

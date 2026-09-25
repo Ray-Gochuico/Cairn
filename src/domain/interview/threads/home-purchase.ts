@@ -6,6 +6,7 @@ import { monthlyHousingObligation } from '@/lib/recurring-obligations';
 import { localTodayISO } from '@/lib/dates';
 import { monthsBetweenIso } from '@/domain/interview/evaluate';
 import { cashSavingsReserve, computeEfOverlap } from '@/lib/interview/cash-reserve-variants';
+import { monthYearLabel, todayIsoOf, utcNoonOf } from '@/lib/interview/kernel-dates';
 import { useHouseholdStore } from '@/stores/household-store';
 import { AccountType, PropertyType } from '@/types/enums';
 import type { AnswerValues, InterviewContext, InterviewThread } from '@/types/interview';
@@ -25,10 +26,8 @@ export const HOUSE_TARGET_SCHEMA = z.object({
 /** D-HP4: the s5 window — a target further out is not "upcoming". */
 const WRITE_THROUGH_MAX_MONTHS = 60;
 
-export const monthYearLabel = (targetMonth: string): string =>
-  new Date(`${targetMonth}-01T12:00:00Z`).toLocaleString('en-US', {
-    month: 'long', year: 'numeric', timeZone: 'UTC',
-  });
+/** U11 (R4): consolidated into kernel-dates; re-exported so HouseGoalCta's import path is unchanged. */
+export { monthYearLabel };
 
 /**
  * D-HP3: three-way tenure in facts, two-way branching. Owner wins over
@@ -83,7 +82,7 @@ function housePlanReply(ctx: InterviewContext, answers: AnswerValues) {
     currentSaved: reserve,           // D-HP5: full reserve, declared below
     recentMonthlyContribution: 0,
     annualGrowthRate: rate,
-    today: ctx.today,
+    today: utcNoonOf(todayIsoOf(ctx)), // U9: the engine reads UTC accessors — the local day at UTC noon
   });
   const when = monthYearLabel(target.targetMonth);
   const hasHsa = ctx.accounts.some(

@@ -30,7 +30,7 @@ const row = (questionId: string, valueJson: string): [string, InterviewAnswer] =
   answerKey('home_purchase', questionId, ''),
   {
     id: 1, householdId: 1, threadId: 'home_purchase', questionId, subjectKey: '',
-    valueJson, questionVersion: 1, answeredAt: '2026-07-01T00:00:00.000Z',
+    valueJson, questionVersion: 1, answeredAt: '2026-07-01T12:00:00.000Z',
     basisJson: '{"branch":"not-owner"}',
   },
 ];

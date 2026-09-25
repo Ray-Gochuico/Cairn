@@ -3,6 +3,7 @@ import { computeGoalProgress } from '@/lib/goal-progress';
 import { pickModerateRate } from '@/lib/growth-scenario';
 import { formatCurrency } from '@/lib/format';
 import { evaluateCarSignals, type CarSignalEvaluation } from '@/lib/interview/vehicle-signals';
+import { addMonthsYm, monthYearLabel, todayIsoOf, utcNoonOf } from '@/lib/interview/kernel-dates';
 import type { AnswerValues, InterviewContext, InterviewThread, SubjectKey } from '@/types/interview';
 
 /** Horizon midpoints — registry constants (design §4.2). */
@@ -27,12 +28,6 @@ const REPAIR_HONESTY =
 const NO_TRADE_IN =
   "Assumes no trade-in credit — the current car's value isn't netted against the target.";
 
-function monthYear(today: Date, monthsAhead: number): string {
-  const d = new Date(today.getTime());
-  d.setUTCMonth(d.getUTCMonth() + monthsAhead);
-  return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-
 function planReply(ctx: InterviewContext, answers: AnswerValues, subject: SubjectKey) {
   const signals = evaluateCarSignals(ctx, vehicleIdOf(subject));
   const f = signals.facts;
@@ -40,14 +35,16 @@ function planReply(ctx: InterviewContext, answers: AnswerValues, subject: Subjec
   const months = HORIZON_MONTHS[horizon];
   const budget = answers.get('q_replacement_budget') as number;
   const rate = pickModerateRate(ctx.household);
-  const targetDate = (() => {
-    const d = new Date(ctx.today.getTime());
-    d.setUTCMonth(d.getUTCMonth() + months);
-    return d.toISOString().slice(0, 10);
-  })();
+  // U8/U9 (R4, ruling 1): the horizon month by 'YYYY-MM' string arithmetic
+  // from the LOCAL month — the shipped setUTCMonth overflowed the day on the
+  // 29th–31st in every zone, and the overflowed date fed computeGoalProgress
+  // (43 months for a 42-month horizon → both /mo figures wrong). The engine
+  // reads UTC accessors, so it gets the local day at UTC noon (the one bridge).
+  const todayIso = todayIsoOf(ctx);
+  const targetYm = addMonthsYm(todayIso.slice(0, 7), months);
   const progress = computeGoalProgress({
-    targetAmount: budget, targetDate, currentSaved: 0,
-    recentMonthlyContribution: 0, annualGrowthRate: rate, today: ctx.today,
+    targetAmount: budget, targetDate: `${targetYm}-01`, currentSaved: 0,
+    recentMonthlyContribution: 0, annualGrowthRate: rate, today: utcNoonOf(todayIso),
   });
   const ratePct = Number((rate * 100).toFixed(2));
   const lines = [
@@ -60,7 +57,7 @@ function planReply(ctx: InterviewContext, answers: AnswerValues, subject: Subjec
     lines.push(`${formatCurrency(f.unattributedRepairDollars)} of categorized repair spending isn't linked to a specific vehicle and isn't counted here.`);
   }
   lines.push(
-    `Saving ${formatCurrency(Math.round(progress.linearMonthlyNeeded))}/mo covers a ${formatCurrency(budget)} replacement by ${monthYear(ctx.today, months)}; about ${formatCurrency(Math.round(progress.monthlyNeededWithGrowth))}/mo if savings grow at ${ratePct}% (moderate scenario).`,
+    `Saving ${formatCurrency(Math.round(progress.linearMonthlyNeeded))}/mo covers a ${formatCurrency(budget)} replacement by ${monthYearLabel(targetYm)}; about ${formatCurrency(Math.round(progress.monthlyNeededWithGrowth))}/mo if savings grow at ${ratePct}% (moderate scenario).`,
   );
   return {
     kind: 'plan' as const,

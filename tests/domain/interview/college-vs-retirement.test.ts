@@ -33,7 +33,7 @@ const row = (questionId: string, valueJson: string, basisBranch: string): [strin
   {
     id: 1, householdId: 1, threadId: 'college_vs_retirement', questionId,
     subjectKey: '', valueJson, questionVersion: 1,
-    answeredAt: '2026-07-01T00:00:00.000Z', basisJson: JSON.stringify({ branch: basisBranch }),
+    answeredAt: '2026-07-01T12:00:00.000Z', basisJson: JSON.stringify({ branch: basisBranch }),
   },
 ];
 

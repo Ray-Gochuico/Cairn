@@ -5,9 +5,10 @@ import type { InterviewContext, InterviewThread, SubjectKey, ThreadEvaluation } 
 import { AnswerPrompt } from './AnswerPrompt';
 import { HouseGoalCta } from './HouseGoalCta';
 import { recordUpcomingPurchase, type HouseTarget } from '@/domain/interview/threads/home-purchase';
+import { localDayOfInstant, monthYearLabel } from '@/lib/interview/kernel-dates';
 
-const monthYear = (iso: string): string =>
-  new Date(iso).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+/** U10 (R4): the LOCAL month of the answered_at instant. */
+const answeredMonth = (iso: string): string => monthYearLabel(localDayOfInstant(iso).slice(0, 7));
 
 /** One thread instance: ask state → AnswerPrompt (with CI-36/CI-37
  *  preambles), reply state → lines + assumes + per-answer CI-34 stale
@@ -80,7 +81,7 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
       })()}
       {staleAnswers.map(({ node, answer }) => (
         <div key={node.id} className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-          <span>Answered {monthYear(answer.answeredAt!)} — still true?</span>
+          <span>Answered {answeredMonth(answer.answeredAt!)} — still true?</span>
           <Button size="sm" variant="outline"
             onClick={() => saveAnswer({
               threadId: thread.id, questionId: node.id, subjectKey: subject,

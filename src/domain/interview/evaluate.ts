@@ -3,6 +3,7 @@ import type {
   InterviewThread, PreferenceNode, StoredAnswerView, SubjectKey, ThreadEvaluation,
 } from '@/types/interview';
 import { answerKey } from '@/types/interview';
+import { localDayOfInstant, todayIsoOf } from '@/lib/interview/kernel-dates';
 
 /** Registry bug guard — no phase-1 thread is longer than a handful of nodes. */
 const MAX_STEPS = 50;
@@ -73,8 +74,10 @@ function readAnswer(
 
 function isAgeStale(node: PreferenceNode, stored: StoredAnswerView, today: Date): boolean {
   if (node.staleAfterMonths == null || stored.answeredAt == null) return false;
-  const todayIso = today.toISOString().slice(0, 10);
-  return monthsBetweenIso(stored.answeredAt.slice(0, 10), todayIso) >= node.staleAfterMonths;
+  // U1 (R4): LOCAL day vs the LOCAL day of the answered_at instant — an
+  // evening answer west of UTC is the next UTC day; a local-midnight `today`
+  // is the prior UTC day east of it.
+  return monthsBetweenIso(localDayOfInstant(stored.answeredAt), todayIsoOf({ today })) >= node.staleAfterMonths;
 }
 
 /**

@@ -27,7 +27,7 @@ const row = (questionId: string, valueJson: string): [string, InterviewAnswer] =
   {
     id: 1, householdId: 1, threadId: 'home_purchase', questionId,
     subjectKey: '', valueJson, questionVersion: 1,
-    answeredAt: '2026-07-01T00:00:00.000Z', basisJson: '{"branch":"not-owner"}',
+    answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"not-owner"}',
   },
 ];
 
@@ -382,5 +382,19 @@ describe('f1 (review): the day is the LOCAL calendar day, never the UTC one', ()
     expect(r.state).toBe('ask');
     if (r.state !== 'ask') return;
     expect(r.pinBasis?.facts.tenure).toBe('renter');
+  });
+
+  it('U9: the plan reply counts months from the LOCAL month through the utcNoonOf bridge (21, not the UTC day\'s 22)', () => {
+    const ctx = fixtureCtx({
+      household: HOUSE_HOUSEHOLD(), housingPayments: [rent()], today: new Date(2026, 8, 1),
+      interviewAnswers: new Map([
+        row('q_want_house', '"yes-within-5y"'),
+        row('q_target', '{"amountDollars":60000,"targetMonth":"2028-06"}'),
+      ]),
+    });
+    const r = evaluateThread(HOME_PURCHASE_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected a plan reply');
+    // 2026-09 → 2028-06 = 21 months; $30,000 remaining / 21 = $1,428.57 → $1,429 (the UTC day: 22 → $1,364).
+    expect(r.reply.lines.some((l) => l.startsWith('Saving $1,429/mo reaches $60,000 by June 2028;'))).toBe(true);
   });
 });
