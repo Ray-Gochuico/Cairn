@@ -118,7 +118,7 @@ const NAMESPACED: ReadonlySet<string> = new Set([
  */
 const RAW_WITH_REASON: Readonly<Record<string, string>> = {
   'src/App.tsx': 'chunk-reload guard — boot infra, not a UI pref; must be SHARED across the reload it guards',
-  'src/lib/boot-notices.ts': 'boot/session notices (restore-failure reason, the one-time post-update note, the one-boot skip flag) — set only on the REAL-profile boot path or by a restore control, all disabled in explore; sessionStorage, blanked on every explore exit',
+  'src/lib/boot-notices.ts': 'boot/session notices (restore-failure reason, the one-time post-update note, the one-boot skip flag, the one-boot update hold) — set only on the REAL-profile boot path or by a restore control, all disabled in explore; sessionStorage, blanked on every explore exit',
   'src/lib/calculator-card-layout.ts': 'the live card layout lives in app_settings (DB) ⇒ already isolated by the sample DB; the only localStorage touch is the legacy import, itself explore-guarded (it DELETES a real key)',
   'src/lib/calculator-visibility.ts': 'legacy `calculator-hidden-cards` key — no UI write path left (hidden cards live in app_settings ⇒ DB-isolated); its one reader is the explore-guarded import, which must still see the user’s REAL legacy value',
   // NOTE (W4×W5 merge, 2026-09-02): the per-card display-mode hook that used

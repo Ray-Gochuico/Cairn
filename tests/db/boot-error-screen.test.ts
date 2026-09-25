@@ -14,12 +14,12 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { MigrationFailedError } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
 import { EXPLORE_FLAG_KEY, ExploreBootError } from '@/lib/explore-mode';
-import { RESTORE_FAILURE_NOTICE_KEY, takeSkipOnce } from '@/lib/boot-notices';
+import { PRE_UPDATE_HOLD_KEY, RESTORE_FAILURE_NOTICE_KEY, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { RELEASES_URL } from '@/lib/releases-url';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripComments } from '../policy/source-walker';
-import { DatabaseInitError } from '@/db/boot-errors';
+import { DatabaseInitError, UpdateHeldError } from '@/db/boot-errors';
 
 describe('renderBootError', () => {
   let root: HTMLElement;
@@ -181,7 +181,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     pastGuard();
     restoreBtn.click();
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
-    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload });
+    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload, onRestored: expect.any(Function) }); // CR-U-14
   });
 
   it('Cancel puts the row back and never restores', async () => {
@@ -526,6 +526,68 @@ describe('CR-U-13 — the generic DB screen offers Try again (U1-m15)', () => {
     first.click();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(mRestore).not.toHaveBeenCalled();
+  });
+});
+
+describe('CR-U-14 — the update hold (U1-m8)', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+
+  async function confirmRow(i: number) {
+    renderBootError(root, new MigrationFailedError(new Error('x'), PRE.path), { now });
+    await settled(root, 2);
+    const btn = rows(root)[i].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    return mRestore.mock.calls[0][1] as { onRestored?: () => void };
+  }
+
+  it('a boot-screen restore of a PRE-UPDATE copy hands restoreFromBackup a hook that sets the one-boot hold', async () => {
+    const opts = await confirmRow(0);
+    expect(typeof opts.onRestored).toBe('function');
+    expect(sessionStorage.getItem(PRE_UPDATE_HOLD_KEY)).toBeNull(); // only once the swap succeeded
+    opts.onRestored!();
+    expect(takeUpdateHold()).toBe(true);
+  });
+
+  it('a boot-screen restore of a MANUAL backup sets no hold', async () => {
+    const opts = await confirmRow(1);
+    expect(opts.onRestored).toBeUndefined();
+    expect(takeUpdateHold()).toBe(false);
+  });
+
+  it('the hold screen: heading, body, and exactly Open the releases page / Try the update again / Reveal, in that order', async () => {
+    renderBootError(root, new UpdateHeldError());
+    expect(root.querySelector('h1')?.textContent).toBe('Cairn put back your data from before the update');
+    expect(root.textContent).toContain(
+      'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page.',
+    );
+    expect(buttons(root)).toEqual(['Open the releases page', 'Try the update again', 'Reveal backups in Finder']);
+    expect(root.querySelector('pre')).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mList).not.toHaveBeenCalled();                       // no restore list here
+    expect(mOpenUrl).not.toHaveBeenCalled();                    // no network until a click (CR-U-2)
+    [...root.querySelectorAll('button')][0].click();
+    await vi.waitFor(() => expect(mOpenUrl).toHaveBeenCalledWith(RELEASES_URL));
+  });
+
+  it('Try the update again clears the hold and reloads', () => {
+    const reload = vi.fn();
+    setUpdateHold();
+    renderBootError(root, new UpdateHeldError(), { reload });
+    [...root.querySelectorAll('button')][1].click();
+    expect(takeUpdateHold()).toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -240,11 +240,13 @@ function isNotLoadedRejection(e: unknown): boolean {
  *
  * `reload` is injectable for tests; it defaults to `window.location.reload`.
  * `tolerateNotLoaded` (boot screens only) accepts the plugin's exact
- * not-loaded rejection as 'no pool to drain'.
+ * not-loaded rejection as 'no pool to drain'. `onRestored` runs once, only
+ * after `db_restore` succeeded and before the reload (best-effort; the boot
+ * screens set the one-boot update hold with it, CR-U-14).
  */
 export async function restoreFromBackup(
   source: string,
-  opts: { reload?: () => void; tolerateNotLoaded?: boolean } = {},
+  opts: { reload?: () => void; tolerateNotLoaded?: boolean; onRestored?: () => void } = {},
 ): Promise<void> {
   const reload = opts.reload ?? (() => window.location.reload());
 
@@ -267,8 +269,10 @@ export async function restoreFromBackup(
 
   // Point of no return: the pool is closed. From here we MUST reload no matter
   // what, or the session is stuck on a dead pool (M-4).
+  let restored = false;
   try {
     await invoke('db_restore', { db: DB_URL, source });
+    restored = true;
   } catch (e) {
     // H-1 guarantees the original finance.db is intact on a failed restore, so
     // the reload below re-inits on valid data. Stash the reason for the app to
@@ -276,6 +280,13 @@ export async function restoreFromBackup(
     // the reload).
     stashRestoreFailureNotice(e instanceof Error ? e.message : String(e));
   } finally {
+    if (restored) {
+      try {
+        opts.onRestored?.();
+      } catch {
+        // Best-effort: the swap already happened; never block the reload.
+      }
+    }
     reload();
   }
 }

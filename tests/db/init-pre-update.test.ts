@@ -15,7 +15,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { initDatabase, maybeTakePreUpdateCopy } from '@/db/init';
 import { MAX_SCHEMA_VERSION, loadAllMigrations, pendingMigrations, readUserVersion, runMigrations, type Migration } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
-import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNotice, setSkipOnce, takeSkipOnce } from '@/lib/boot-notices';
+import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNotice, setSkipOnce, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
 import { DatabaseInitError } from '@/db/boot-errors';
 
@@ -238,3 +238,68 @@ describe('CR-U-12 — every raw failure of the real-profile database boot is tag
     await expect(initDatabase()).rejects.toMatchObject({ name: 'SchemaTooNewError' });
   });
 });
+
+describe('CR-U-14 — the one-boot update hold after a boot-screen restore of a pre-update copy (U1-m8)', () => {
+  let db: SqliteAdapter;
+  let all: Migration[];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    localStorage.removeItem(EXPLORE_FLAG_KEY);
+    db = new SqliteAdapter(':memory:');
+    all = await loadAllMigrations();
+    load.mockImplementation(async () => db);
+    isTauri.mockReturnValue(true);
+    takePreUpdateCopy.mockResolvedValue({ path: COPY, reused: true });
+  });
+  afterEach(async () => { await db.close(); });
+
+  async function atSchema53() {
+    await runMigrations(db, all.slice(0, 53));
+    await db.execute('PRAGMA user_version = 53');
+  }
+
+  it('hold + pending: no copy, NOTHING migrated (user_version 53, applied 53), UpdateHeldError; the flag is consumed', async () => {
+    await atSchema53();
+    setUpdateHold();
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    expect(takePreUpdateCopy).not.toHaveBeenCalled();
+    expect(await readUserVersion(db)).toBe(53);
+    expect((await pendingMigrations(db, all)).applied).toBe(53);
+    expect(takeUpdateHold()).toBe(false);                     // consumed by that boot
+    expect(peekPostUpdateNotice()).toBeNull();
+  });
+
+  it('the hold lasts exactly ONE boot: the next boot migrates with the normal copy rules ("Try the update again")', async () => {
+    await atSchema53();
+    setUpdateHold();
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    await initDatabase();
+    expect(takePreUpdateCopy).toHaveBeenCalledTimes(1);
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 53, to: all.length, now: expect.any(Date) });
+    expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
+    expect((await pendingMigrations(db, all)).pending).toHaveLength(0);
+  });
+
+  it('hold with nothing pending: the boot is ordinary and the flag is consumed', async () => {
+    await runMigrations(db, all);
+    setUpdateHold();
+    await initDatabase();
+    expect(takeUpdateHold()).toBe(false);
+  });
+
+  it('the hold is consumed by a boot that fails BEFORE the gate too (it never outlives one boot)', async () => {
+    setUpdateHold();
+    load.mockRejectedValueOnce(new Error('finance.db is locked'));
+    await expect(initDatabase()).rejects.toThrow('finance.db is locked');
+    expect(takeUpdateHold()).toBe(false);
+  });
+
+  it('maybeTakePreUpdateCopy alone: holdUpdate on an updating boot throws UpdateHeldError before any copy', async () => {
+    await atSchema53();
+    await expect(maybeTakePreUpdateCopy(db, all, { holdUpdate: true })).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    expect(takePreUpdateCopy).not.toHaveBeenCalled();
+  });
+});
+

@@ -21,6 +21,21 @@ export class DatabaseInitError extends Error {
   }
 }
 
+/**
+ * CR-U-14 (U1-m8): thrown by the pre-update gate on the one boot after a
+ * boot-screen restore of a pre-update copy, INSTEAD of migrating — the
+ * restored file is the data from before the update, and re-running the same
+ * update at once would undo the restore. The boot screen renders the calm
+ * hold screen for it. Nothing was migrated and no copy was taken.
+ */
+export class UpdateHeldError extends Error {
+  constructor() {
+    super('Cairn held the update for this launch after putting back the copy from before it.');
+    this.name = 'UpdateHeldError';
+    Object.setPrototypeOf(this, UpdateHeldError.prototype);
+  }
+}
+
 /** The typed errors initDatabase's real branch already throws by name; each
  * has its own screen, so none is re-tagged. */
 const TYPED_DATABASE_BOOT_ERRORS: ReadonlySet<string> = new Set([
@@ -29,6 +44,7 @@ const TYPED_DATABASE_BOOT_ERRORS: ReadonlySet<string> = new Set([
   'PreUpdateCopyError',
   'MigrationFailedError',
   'DatabaseInitError',
+  'UpdateHeldError',
 ]);
 
 /** Tag a real-profile database boot failure; typed errors pass through. */

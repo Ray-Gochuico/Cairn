@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  PRE_UPDATE_HOLD_KEY,
   PRE_UPDATE_NOTICE_KEY,
   PRE_UPDATE_SKIP_ONCE_KEY,
   RESTORE_FAILURE_NOTICE_KEY,
   clearPostUpdateNotice,
+  clearUpdateHold,
   peekPostUpdateNotice,
   setSkipOnce,
+  setUpdateHold,
   stashPostUpdateNotice,
   stashRestoreFailureNotice,
   takeRestoreFailureNotice,
   takeSkipOnce,
+  takeUpdateHold,
 } from '@/lib/boot-notices';
 
 beforeEach(() => window.sessionStorage.clear());
@@ -43,6 +47,17 @@ describe('boot notices (sessionStorage, Tauri-free)', () => {
     expect(takeSkipOnce()).toBe(false);
   });
 
+  it('update hold (CR-U-14): the documented key; false when unset; true exactly once; clear drops it', () => {
+    expect(PRE_UPDATE_HOLD_KEY).toBe('cairn.preUpdateCopy.holdOnce');
+    expect(takeUpdateHold()).toBe(false);
+    setUpdateHold();
+    expect(takeUpdateHold()).toBe(true);
+    expect(takeUpdateHold()).toBe(false);
+    setUpdateHold();
+    clearUpdateHold();
+    expect(takeUpdateHold()).toBe(false);
+  });
+
   it('every helper is safe when sessionStorage throws (private mode)', () => {
     const real = window.sessionStorage;
     Object.defineProperty(window, 'sessionStorage', {
@@ -55,6 +70,9 @@ describe('boot notices (sessionStorage, Tauri-free)', () => {
       expect(() => setSkipOnce()).not.toThrow();
       expect(takeSkipOnce()).toBe(false);
       expect(takeRestoreFailureNotice()).toBeNull();
+      expect(() => setUpdateHold()).not.toThrow();
+      expect(takeUpdateHold()).toBe(false);
+      expect(() => clearUpdateHold()).not.toThrow();
     } finally {
       Object.defineProperty(window, 'sessionStorage', { configurable: true, value: real });
     }

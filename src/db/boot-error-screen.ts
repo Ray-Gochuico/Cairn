@@ -15,6 +15,9 @@
  *     Reveal backups, the releases page.
  *   - `ExploreBootError` (v1.7.1 U2): the SAMPLE data could not open → Try
  *     again only. The real profile's backups are never listed on it.
+ *   - `UpdateHeldError` (v1.7.1 CR-U-14): the boot after a boot-screen restore
+ *     of a pre-update copy held the update → the releases page, Try the
+ *     update again, Reveal backups. No restore list.
  *   - `DatabaseInitError` (v1.7.1 CR-U-12): any other failure of the
  *     real-profile DATABASE boot → the generic heading + pane, Try again
  *     (CR-U-13), then the restore list.
@@ -43,7 +46,7 @@
  * list hydrator.
  */
 import { isWindows } from '@/lib/platform';
-import { setSkipOnce, takeRestoreFailureNotice } from '@/lib/boot-notices';
+import { clearUpdateHold, setSkipOnce, setUpdateHold, takeRestoreFailureNotice } from '@/lib/boot-notices';
 import { RELEASES_URL } from '@/lib/releases-url';
 import { isExploreMode } from '@/lib/explore-mode';
 
@@ -404,7 +407,13 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         // Boot path: the pool may never have been loaded (the generic screen),
         // so the exact not-loaded close rejection is tolerated. Reloads on its
         // way out once the swap has been attempted.
-        await restoreFromBackup(entry.path, { tolerateNotLoaded: true, reload: ctx.reload });
+        // CR-U-14: putting back a copy from before an update holds that
+        // update for the next boot (set only once the swap succeeded).
+        await restoreFromBackup(entry.path, {
+          tolerateNotLoaded: true,
+          reload: ctx.reload,
+          onRestored: preUpdate ? setUpdateHold : undefined,
+        });
       } catch (err) {
         // The only path that re-enables the screen (CR-U-10).
         ctx.state.restoring = false;
@@ -468,6 +477,28 @@ export function renderBootError(
       makeRevealButton(),
     );
     appendFailureNotice(container);
+    root.replaceChildren(container);
+    return;
+  }
+
+  // CR-U-14 (U1-m8): the boot after a restore of a pre-update copy. Nothing
+  // was migrated; the choice is the previous version, a retry, or the folder.
+  if (name === 'UpdateHeldError') {
+    const container = makeContainer();
+    const retry = makeButton('Try the update again');
+    retry.addEventListener('click', () => {
+      clearUpdateHold();
+      reload();
+    });
+    container.append(
+      makeHeading('Cairn put back your data from before the update'),
+      makeParagraph(
+        'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page.',
+      ),
+      makeReleasesButton(),
+      retry,
+      makeRevealButton(),
+    );
     root.replaceChildren(container);
     return;
   }

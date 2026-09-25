@@ -452,3 +452,53 @@ describe('restoreFromBackup — tolerateNotLoaded (the boot path, v1.7.1 U2)', (
     expect(reload).not.toHaveBeenCalled();
   });
 });
+
+describe('restoreFromBackup — onRestored (CR-U-14: the boot screens set the one-boot update hold)', () => {
+  it('runs once, after a SUCCESSFUL db_restore and before the reload', async () => {
+    const order: string[] = [];
+    mInvokeOrder(order);
+    const onRestored = vi.fn(() => { order.push('onRestored'); });
+    const reload = vi.fn(() => { order.push('reload'); });
+    await restoreFromBackup('/some/backup.db', { reload, onRestored });
+    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'onRestored', 'reload']);
+    expect(onRestored).toHaveBeenCalledTimes(1);
+  });
+
+  it('never runs when db_restore rejects (the reload still happens, the reason is stashed)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'db_restore') throw new Error('disk full during restore');
+      return undefined;
+    });
+    const onRestored = vi.fn();
+    const reload = vi.fn();
+    await restoreFromBackup('/some/backup.db', { reload, onRestored });
+    expect(onRestored).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(takeRestoreFailureNotice()).toBe('disk full during restore');
+  });
+
+  it('never runs when the close rejects (before the point of no return)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'plugin:sql|close') throw new Error('close failed');
+      return undefined;
+    });
+    const onRestored = vi.fn();
+    await expect(restoreFromBackup('/some/backup.db', { reload: vi.fn(), onRestored })).rejects.toBeTruthy();
+    expect(onRestored).not.toHaveBeenCalled();
+  });
+
+  it('a throwing onRestored never blocks the reload and is never reported as a failed restore', async () => {
+    const reload = vi.fn();
+    await restoreFromBackup('/some/backup.db', { reload, onRestored: () => { throw new Error('storage denied'); } });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(takeRestoreFailureNotice()).toBeNull();
+  });
+});
+
+function mInvokeOrder(order: string[]) {
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    order.push(cmd);
+    return undefined;
+  });
+}
+
