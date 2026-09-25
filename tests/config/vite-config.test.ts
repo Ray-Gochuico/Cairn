@@ -105,6 +105,19 @@ describe('vite.config.ts — the port follows the role (v1.7.1 A-6; CR-I-2: the 
     ).toBe(1420);
   });
 
+  it('a --port on the command line still wins over the computed port — the smoke idiom `vite --port 1425 --strictPort` (review I-m7)', async () => {
+    // `vite --port 1425 --strictPort` hands createServer `server:
+    // cleanGlobalCLIOptions(options)` (vite/dist/node/cli.js), which resolves
+    // this file with that INLINE server config merged over it — the call below.
+    for (const k of ENV_KEYS) delete process.env[k];
+    Object.assign(process.env, { VITE_BROWSER_SHIM: '1', VITE_SEED_DEMO: '1', CAIRN_DEV_ROLE: 'seed' });
+    const cli = await resolveConfig({ configFile: CONFIG, root: ROOT, server: { port: 1425, strictPort: true } }, 'serve');
+    expect(cli.server.port).toBe(1425);
+    // …and the same env without the CLI port resolves to the role's port, so the pin is not vacuous
+    const bare = await resolveConfig({ configFile: CONFIG, root: ROOT }, 'serve');
+    expect(bare.server.port).toBe(1422);
+  });
+
   it('a bad E2E_PORT_BASE fails the config load — the CAIRN_DEV_ROLE typo precedent (Vite logs "failed to load config" once; expected)', async () => {
     await expect(
       loadViteConfig({ VITE_BROWSER_SHIM: '1', CAIRN_DEV_ROLE: 'fresh', E2E_PORT_BASE: '1420' }),
