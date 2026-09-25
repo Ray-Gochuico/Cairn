@@ -15,6 +15,7 @@ import {
 import { AccountType } from '@/types/enums';
 import { monthsBetweenIso } from '@/domain/interview/evaluate';
 import type { Account, Dependent } from '@/types/schema';
+import { YEAR_MONTH_SCHEMA } from '@/types/interview';
 import type { AnswerValues, InterviewContext, InterviewThread } from '@/types/interview';
 
 /** D-T3-4: sector fixed this wave; a q_sector is a phase-3 chip. */
@@ -26,19 +27,18 @@ const FILING_LABELS = {
   MFS: 'married filing separately', HOH: 'head of household',
 } as const;
 
-/** The q_target_year stored value — T2's shipped compound arm (D-T3-9:
- *  no standalone month-year control exists in the frozen kernel, so the
- *  amount-month-year arm is reused; only targetMonth is ever read). */
-interface CollegeTarget {
-  amountDollars: number;
-  /** 'YYYY-MM' — composed by the amount-month-year control. */
-  targetMonth: string;
-}
-
-const COLLEGE_TARGET_SCHEMA = z.object({
-  amountDollars: z.number().positive().max(50_000),
-  targetMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-});
+/** R4 (D-R4-2, ⚑ R4-F2): q_target_year stores a bare 'YYYY-MM'. Legacy rows
+ *  from T3 ({ amountDollars, targetMonth } — the compound arm's shape) read as
+ *  their month through this preprocess, so nobody is re-asked. A RETIRING
+ *  shim, not a contract (ruling 7): the CI-34 "Still true" re-confirm
+ *  re-persists the parsed string (ThreadCard), and a v1.7.x chip drops the
+ *  preprocess once stored rows have normalized. */
+const COLLEGE_START_SCHEMA = z.preprocess(
+  (v) => (v != null && typeof v === 'object' && 'targetMonth' in (v as object)
+    ? (v as { targetMonth: unknown }).targetMonth
+    : v),
+  YEAR_MONTH_SCHEMA,
+);
 
 const fmt = (n: number): string => formatCurrency(Math.round(n));
 
@@ -82,10 +82,10 @@ function resolveStart(ctx: InterviewContext, answers: AnswerValues): ResolvedSta
       dependentCount: ctx.dependents.length,
     };
   }
-  const target = answers.get('q_target_year') as CollegeTarget; // walked path guarantees it
+  const startYm = answers.get('q_target_year') as string; // walked path guarantees a parsed 'YYYY-MM'
   return {
-    startYm: target.targetMonth,
-    monthsToStart: Math.max(0, monthsBetweenIso(todayIso.slice(0, 7), target.targetMonth)),
+    startYm,
+    monthsToStart: Math.max(0, monthsBetweenIso(todayIso.slice(0, 7), startYm)),
     usingName: null,
     dependentCount: 0,
   };
@@ -257,12 +257,10 @@ export const COLLEGE_VS_RETIREMENT_THREAD: InterviewThread = {
       id: 'q_target_year',
       version: 1,
       prompt: 'When would college costs start?',
-      // D-T3-9 as-shipped: T2's compound amount-month-year arm (the kernel's
-      // only month-year control; AnswerSpec is frozen). The control forces an
-      // amount; the thread reads ONLY targetMonth — the amount is stored but
-      // never rendered and never used (chip: standalone month-year arm).
-      answer: { kind: 'amount-month-year', maxDollars: 50_000 },
-      valueSchema: COLLEGE_TARGET_SCHEMA,
+      // R4 (D-R4-2): the standalone month-year arm — costs can start this
+      // month (resolveStart clamps to ≥ 0); a newborn's start is ~18 years out.
+      answer: { kind: 'month-year', minMonthsAhead: 0, maxYearsAhead: 19 },
+      valueSchema: COLLEGE_START_SCHEMA,
       staleAfterMonths: 24,
       storage: { kind: 'interview-answer' },
       branches: { '*': 'd_529' },

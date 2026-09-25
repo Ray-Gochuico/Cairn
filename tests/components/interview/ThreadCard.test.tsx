@@ -6,9 +6,9 @@ import { ThreadCard } from '@/components/interview/ThreadCard';
 import type { InterviewThread, PreferenceNode, ThreadEvaluation } from '@/types/interview';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { answerKey, type InterviewAnswer } from '@/types/interview';
-import { PropertyType } from '@/types/enums';
-import { makeHousehold, makeVehicle, makeProperty } from '../../factories';
-import { fixtureCtx } from '../../lib/interview/fixture';
+import { AccountType, PropertyType } from '@/types/enums';
+import { makeAccount, makeHousehold, makeVehicle, makeProperty } from '../../factories';
+import { fixtureCtx, snap } from '../../lib/interview/fixture';
 
 const CATS = [
   { id: 2, name: 'Vehicles', parentCategoryId: null, type: 'NEED' },
@@ -189,5 +189,33 @@ describe('F12 — the CI-36 prior label is formatted BY KIND (never String(value
     };
     render(<ThreadCard thread={thread} subject="" ctx={fixtureCtx()} evaluation={evaluation} />);
     expect(screen.queryByText(/This question changed since you answered/)).toBeNull();
+  });
+});
+
+describe('CI-34 "Still true" re-persists the PARSED value (R4 D-R4-P11 — the college shim retires by normalizing on write)', () => {
+  it('a legacy compound q_target_year row re-confirms as the bare "YYYY-MM"', async () => {
+    const collegeRow = (questionId: string, valueJson: string, answeredAt: string, branch: string): [string, InterviewAnswer] => [
+      answerKey('college_vs_retirement', questionId, ''),
+      { id: 1, householdId: 1, threadId: 'college_vs_retirement', questionId, subjectKey: '', valueJson, questionVersion: 1, answeredAt, basisJson: JSON.stringify({ branch }) },
+    ];
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 6000, inflationAssumption: 0.03, growthScenarios: [{ label: 'moderate', rate: 0.05 }] }),
+      properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })], // owner: no home card
+      accounts: [makeAccount({ id: 9, type: AccountType.ACCOUNT_529, name: 'College 529' })],
+      snapshots: [snap(9, 10_000)],
+      interviewAnswers: new Map([
+        // 31 months old → stale (staleAfterMonths 24) → the CI-34 banner; the legacy T3 shape.
+        collegeRow('q_target_year', '{"amountDollars":123,"targetMonth":"2030-09"}', '2024-01-01T12:00:00.000Z', 'no-dependents-529'),
+        collegeRow('q_monthly_amount', '500', '2026-07-01T12:00:00.000Z', 'has-529'),
+      ]),
+    });
+    render(<InterviewThreads ctx={ctx} />);
+    expect(screen.getByText('Answered January 2024 — still true?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Still true' }));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    expect(saveAnswer.mock.calls[0][0]).toMatchObject({
+      threadId: 'college_vs_retirement', questionId: 'q_target_year', subjectKey: '',
+      value: '2030-09', questionVersion: 1,
+    });
   });
 });

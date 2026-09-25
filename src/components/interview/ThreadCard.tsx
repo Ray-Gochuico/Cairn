@@ -82,11 +82,17 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
         <div key={node.id} className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
           <span>Answered {answeredMonth(answer.answeredAt!)} — still true?</span>
           <Button size="sm" variant="outline"
-            onClick={() => saveAnswer({
-              threadId: thread.id, questionId: node.id, subjectKey: subject,
-              value: answer.value, questionVersion: node.version,
-              basis: answer.basis, // re-confirm: same value, fresh answered_at
-            })}>
+            onClick={() => {
+              // R4 (D-R4-P11): re-confirm re-persists the PARSED value — a
+              // legacy-shaped row (the college compound object) lands in the
+              // current shape with a fresh answered_at; the tolerant read retires.
+              const parsed = node.valueSchema.safeParse(answer.value);
+              void saveAnswer({
+                threadId: thread.id, questionId: node.id, subjectKey: subject,
+                value: parsed.success ? parsed.data : answer.value,
+                questionVersion: node.version, basis: answer.basis,
+              });
+            }}>
             Still true
           </Button>
           <Button size="sm" variant="outline" onClick={() => clearAnswer(thread.id, node.id, subject)}>
