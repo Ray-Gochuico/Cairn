@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import LeverPopoverShell from './LeverPopoverShell';
+import { localTodayISO } from '@/lib/dates';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,8 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
 ];
 
 function emptyEvent(): IncomeEvent {
-  const today = new Date().toISOString().slice(0, 10);
+  // LOCAL day (v1.7.0 R4 smoke) — the projection starts in the local month.
+  const today = localTodayISO();
   return { when: today, type: 'raise', deltaAmount: 0 };
 }
 

@@ -106,4 +106,42 @@ describe('MarkReimbursedDialog', () => {
 
     expect(onConfirmed).toHaveBeenCalled();
   });
+
+  // v1.7.0 R4 smoke regression: the reimbursed-date default was the UTC day
+  // (tomorrow, in the evening west of UTC). It is now the LOCAL day.
+  describe('the reimbursed-date default is the LOCAL day', () => {
+    const ORIGINAL_TZ = process.env.TZ;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
+
+    async function confirmWithDefaultDate(): Promise<string | null> {
+      const user = userEvent.setup();
+      render(
+        <MarkReimbursedDialog transaction={transaction} onClose={vi.fn()} onConfirmed={vi.fn()} />,
+      );
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      await vi.waitFor(async () => {
+        expect((await new TransactionsRepo(db).list())[0].reimbursedAt).not.toBeNull();
+      });
+      return (await new TransactionsRepo(db).list())[0].reimbursedAt;
+    }
+
+    it('New York, 23:33 EDT (03:33 UTC the next day): the local 24th', async () => {
+      process.env.TZ = 'America/New_York';
+      vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+      expect(await confirmWithDefaultDate()).toBe('2026-09-24');
+    });
+
+    it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): the local 25th', async () => {
+      process.env.TZ = 'Pacific/Auckland';
+      vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+      expect(await confirmWithDefaultDate()).toBe('2026-09-25');
+    });
+  });
 });

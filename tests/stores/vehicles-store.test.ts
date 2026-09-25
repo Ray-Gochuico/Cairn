@@ -4,8 +4,13 @@ import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { localTodayISO } from '@/lib/dates';
 
-const todayIso = new Date().toISOString().slice(0, 10);
+// The store stamps the LOCAL calendar day (v1.7.0 R4 smoke); the UTC day
+// this expectation used to mirror is tomorrow in the evening west of UTC.
+// Real clock kept (frozen test-clock allowlist); the clock-pinned arms are
+// in estimate-snapshot.local-day.test.ts.
+const todayIso = localTodayISO(new Date());
 
 // Full VehicleSchema shape (src/types/schema.ts): parallels Property but with
 // year/make/model instead of type/address.

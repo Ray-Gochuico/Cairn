@@ -11,6 +11,7 @@ import {
   type FlowPart, type SetupOrigin, type SetupProgressV2, type StepStatus,
 } from '@/lib/setup-progress';
 import { finishSetup } from '@/lib/setup-dismissal';
+import { localTodayISO } from '@/lib/dates';
 import {
   GATE_ENTITY_COUNT, effectiveStatus, partPosition, partStatus,
   prevInstance, resumeTarget, visibleInstances, type GateStepId,
@@ -104,8 +105,11 @@ export default function FlowShell({ originIfNew, onSwitchView }: Props) {
   useEffect(() => {
     saveSetupProgress(progress);
   }, [progress]);
-  // The ONE clock read (date purity — the store-answeredAt precedent).
-  const todayIso = useRef(new Date().toISOString().slice(0, 10)).current;
+  // The ONE clock read (date purity — the store-answeredAt precedent), on the
+  // LOCAL calendar day (v1.7.0 R4 smoke): the Roadmap reads snapshots on or
+  // before the local day, and the UTC day is already tomorrow in the evening
+  // west of UTC — the accounts gate's balance was invisible to it.
+  const todayIso = useRef(localTodayISO()).current;
 
   const household = useHouseholdStore((s) => s.household);
   const persons = usePersonsStore((s) => s.persons);

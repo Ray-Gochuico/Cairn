@@ -55,6 +55,7 @@ import { ContributionsRepo } from '@/domain/contributions';
 import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
 import { EquityGrantsRepo } from '@/domain/equity-grants';
 import { getDatabase } from '@/db/db';
+import { localTodayISO } from '@/lib/dates';
 import { fetchMarketDataOnAdd } from '@/market/fetch-on-add';
 import type { ImportEntity, ValidationContext, CommitResult } from '@/lib/import/types';
 
@@ -231,7 +232,7 @@ export function ImportPreviewModal({
             properties: new PropertiesRepo(db),
             assetValueSnapshots: new AssetValueSnapshotsRepo(db),
             householdId,
-            todayIso: new Date().toISOString().slice(0, 10),
+            todayIso: localTodayISO(), // LOCAL calendar day (v1.7.0 R4 smoke)
           });
           await loadProperties();
           // A value change may have minted a snapshot — refeed its store so
@@ -245,7 +246,7 @@ export function ImportPreviewModal({
             vehicles: new VehiclesRepo(db),
             assetValueSnapshots: new AssetValueSnapshotsRepo(db),
             householdId,
-            todayIso: new Date().toISOString().slice(0, 10),
+            todayIso: localTodayISO(), // LOCAL calendar day (v1.7.0 R4 smoke)
           });
           await loadVehicles();
           // A value change may have minted a snapshot — refeed its store so

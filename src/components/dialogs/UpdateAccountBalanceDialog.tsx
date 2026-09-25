@@ -15,6 +15,7 @@ import { getDatabase } from '@/db/db';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { SnapshotSource } from '@/types/enums';
+import { localTodayISO } from '@/lib/dates';
 
 interface Props {
   open: boolean;
@@ -31,7 +32,9 @@ export function UpdateAccountBalanceDialog({
   accountName,
   onSuccess,
 }: Props) {
-  const today = new Date().toISOString().slice(0, 10);
+  // LOCAL calendar day (v1.7.0 R4 smoke) — the UTC day dates an evening
+  // update west of UTC tomorrow, past every local-day as-of read.
+  const today = localTodayISO();
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today);
   const [submitting, setSubmitting] = useState(false);

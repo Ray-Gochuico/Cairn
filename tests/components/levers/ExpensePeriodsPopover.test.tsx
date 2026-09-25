@@ -479,3 +479,39 @@ describe('ExpensePeriodsPopover — C2: a NEW scenario opens on Spending average
     expect(text).not.toContain('!');
   });
 });
+
+// v1.7.0 R4 smoke regression: a new period's Start defaulted to the UTC day,
+// while this popover's own live summary (and the engine's projection start)
+// reads the LOCAL month — on a month's last local evening west of UTC the new
+// row started NEXT month. It is now the local day.
+describe('ExpensePeriodsPopover — a new period\'s Start is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  async function addRowStart(): Promise<string> {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /add period/i }));
+    return (screen.getByLabelText(/start \(YYYY-MM-DD\)/i) as HTMLInputElement).value;
+  }
+
+  it('New York, 23:33 EDT on Sep 30 (03:33 UTC Oct 1): September 30', async () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-10-01T03:33:00Z'));
+    expect(await addRowStart()).toBe('2026-09-30');
+  });
+
+  it('Pacific/Auckland, 10:00 NZDT on Oct 1 (21:00 UTC Sep 30): October 1', async () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-30T21:00:00Z'));
+    expect(await addRowStart()).toBe('2026-10-01');
+  });
+});

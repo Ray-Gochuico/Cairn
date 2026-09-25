@@ -3,6 +3,7 @@ import { VehiclesRepo } from '@/domain/vehicles';
 import { getDatabase } from '@/db/db';
 import { createDedupedLoad } from '@/stores/create-entity-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { localTodayISO } from '@/lib/dates';
 import type { Vehicle } from '@/types/schema';
 
 interface VehiclesState {
@@ -50,7 +51,7 @@ export const useVehiclesStore = create<VehiclesState>((set, get) => ({
       before !== undefined &&
       patch.currentEstimatedValue !== before.currentEstimatedValue
     ) {
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = localTodayISO(); // LOCAL calendar day (v1.7.0 R4 smoke)
       await useAssetValueSnapshotsStore
         .getState()
         .upsertForDate('VEHICLE', id, todayIso, patch.currentEstimatedValue);

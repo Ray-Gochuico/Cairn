@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import LeverPopoverShell from './LeverPopoverShell';
+import { localTodayISO } from '@/lib/dates';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,8 @@ import type { LumpSumEvent } from '@/lib/scenarios';
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
 
 function emptyRow(): LumpSumEvent {
-  const today = new Date().toISOString().slice(0, 10);
+  // LOCAL day (v1.7.0 R4 smoke) — the projection starts in the local month.
+  const today = localTodayISO();
   return { when: today, amount: 0, destination: 'investments', label: '' };
 }
 

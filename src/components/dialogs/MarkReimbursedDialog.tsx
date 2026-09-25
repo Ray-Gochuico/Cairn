@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { formatCurrencyCents } from '@/lib/format';
+import { localTodayISO } from '@/lib/dates';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +27,7 @@ export function MarkReimbursedDialog({
   onClose,
   onConfirmed,
 }: MarkReimbursedDialogProps) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localTodayISO(); // LOCAL calendar day (v1.7.0 R4 smoke), not the UTC day
   const [amount, setAmount] = useState(String(transaction.amount));
   const [date, setDate] = useState(today);
   const [saving, setSaving] = useState(false);
