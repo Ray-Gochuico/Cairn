@@ -5,6 +5,8 @@ import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useGoalsStore } from '@/stores/goals-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DISCLOSURES } from '@/legal/disclosures';
 import { GoalType } from '@/types/enums';
 import { answerKey, type InterviewAnswer, type InterviewContext } from '@/types/interview';
 import { makeHousehold } from '../../factories';
@@ -48,6 +50,10 @@ beforeEach(() => {
   useInterviewAnswersStore.setState({ saveAnswer, clearAnswer } as never);
   useHouseholdStore.setState({ household: { id: 1 }, update } as never);
   useGoalsStore.setState({ goals: [], error: null, create: createGoal } as never);
+  // R4 (D-R4-7): the strip is gated on the interview document — accept the
+  // current version so the existing submits are not intercepted (the
+  // QuestionBar.test idiom).
+  useAcceptancesStore.setState({ acceptedVersions: { interview: DISCLOSURES.interview.version } } as never);
 });
 
 describe('home_purchase on the strip', () => {

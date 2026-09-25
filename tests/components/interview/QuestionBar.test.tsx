@@ -89,14 +89,14 @@ describe('QuestionBar', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
     };
 
-    it('a household that accepted interview 1.0 is re-gated at 1.1 and reads the interview diff', () => {
-      useAcceptancesStore.setState({ acceptedVersions: { interview: '1.0' } } as never);
+    it('a household that accepted interview 1.1 is re-gated at 1.2 and reads the interview diff', () => {
+      useAcceptancesStore.setState({ acceptedVersions: { interview: '1.1' } } as never);
       openGate();
       expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
-      expect(screen.getByText('Version 1.1')).toBeInTheDocument();
+      expect(screen.getByText('Version 1.2')).toBeInTheDocument();
       expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
       // Identity, not copy: the box carries THIS document's diff (the interview
-      // 1.1 text is pinned in tests/legal/disclosures.test.ts, not duplicated).
+      // 1.2 text is pinned in tests/legal/disclosures.test.ts, not duplicated).
       expect(screen.getByText(DISCLOSURES.interview.diffFromPrevious as string)).toBeInTheDocument();
       expect(useInterviewBarStore.getState().submitted).toBeNull(); // nothing computed pre-accept
     });

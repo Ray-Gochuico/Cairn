@@ -107,7 +107,8 @@ Content is hand-curated; errors are possible. If a question looks wrong, treat t
 
 **Trivia is for vocabulary and intuition; decisions belong with a CFP, CPA, or attorney.**`;
 
-const INTERVIEW_TEXT_v1_1 = `## Mechanical frameworks, not advice
+// R4 (v1.7.0): 1.1 → 1.2 adds the 'Market history' paragraph (the market_stress thread's dataset claims); one owner per version — R4.
+const INTERVIEW_TEXT_v1_2 = `## Mechanical frameworks, not advice
 
 The question bar and the "Questions for you" cards apply **fixed, mechanical frameworks** to numbers you entered. Nothing here is personalized financial advice, a recommendation, or a prediction.
 
@@ -120,6 +121,8 @@ The question bar and the "Questions for you" cards apply **fixed, mechanical fra
 **Projections are not predictions.** Growth figures use your saved scenario rates and are shown in today's dollars. Real returns vary and can be negative.
 
 **Reference data.** College-cost figures are the College Board's published sticker-price averages for the 2025-26 academic year, bundled with this app and grown at each sector's published long-run rate above inflation. They are list prices, not what any family pays after aid, and they age. State 529 deduction hints are a static snapshot. Verify costs with the school and deduction rules with your state's Department of Revenue.
+
+**Market history.** The market-stress question replays your portfolio through named windows of U.S. market history — the 1871–2022 replay described in the Historical Backtest disclosure: real (CPI-adjusted) stock and bond total returns, blended at the stock share you chose and rebalanced annually, gross of fees, with no tax treatment. A named window is one sequence that happened once — history replayed, never a forecast and never a probability. Its retirement line is the same whole-year solve as the Earliest Retirement calculator, run twice from the window's last year with your assumed path resumed from the window's end balance; the historical years after the window are not part of that reading, and it states a difference in years, not a date. It uses your saved inputs — edits in the Calculators scenario bar do not apply here.
 
 Decisions about debt, investing, and reserves belong with you — and, for anything consequential, a CFP, CPA, or attorney.`;
 
@@ -167,11 +170,11 @@ export const DISCLOSURES = {
       'I understand the Backtest tool, the Stress Test card, and the History view report historical outcomes only and are not a prediction of future performance.',
   } satisfies DisclosureDocument,
   interview: {
-    version: '1.1',
+    version: '1.2',
     title: 'About the Frameworks',
-    body: INTERVIEW_TEXT_v1_1,
+    body: INTERVIEW_TEXT_v1_2,
     diffFromPrevious:
-      "Version 1.1 adds a 'Reference data' paragraph: the college questions use bundled College Board 2025-26 sticker-price averages grown at published above-inflation rates — list prices, not post-aid costs — plus static state 529 deduction hints. No other content changes since v1.0. Please re-read and re-accept.",
+      "Version 1.2 adds a 'Market history' paragraph: the new market-stress question replays your portfolio through named windows of the 1871–2022 replay described in the Historical Backtest disclosure (real stock and bond returns, blended and rebalanced annually) — history that happened once, not a forecast or a probability — and its retirement line is the Earliest Retirement calculator's solve run from each window's last year, stated as a difference in years. No other content changes since v1.1. Please re-read and re-accept.",
     acceptanceCheckboxLabel:
       'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
   } satisfies DisclosureDocument,

@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { z } from 'zod';
 import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { ThreadCard } from '@/components/interview/ThreadCard';
 import type { InterviewThread, PreferenceNode, ThreadEvaluation } from '@/types/interview';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { DISCLOSURES } from '@/legal/disclosures';
 import { answerKey, type InterviewAnswer } from '@/types/interview';
 import { AccountType, PropertyType } from '@/types/enums';
 import { makeAccount, makeHousehold, makeVehicle, makeProperty } from '../../factories';
@@ -31,6 +34,10 @@ const signalCtx = (answers = new Map<string, InterviewAnswer>()) => fixtureCtx({
 beforeEach(() => {
   vi.clearAllMocks();
   useInterviewAnswersStore.setState({ saveAnswer, clearAnswer } as never);
+  // R4 (D-R4-7): the strip is gated on the interview document — accept the
+  // current version so the existing submits are not intercepted (the
+  // QuestionBar.test idiom).
+  useAcceptancesStore.setState({ acceptedVersions: { interview: DISCLOSURES.interview.version } } as never);
 });
 
 describe('InterviewThreads / ThreadCard', () => {
@@ -217,5 +224,86 @@ describe('CI-34 "Still true" re-persists the PARSED value (R4 D-R4-P11 — the c
       threadId: 'college_vs_retirement', questionId: 'q_target_year', subjectKey: '',
       value: '2030-09', questionVersion: 1,
     });
+  });
+});
+
+describe('the strip gate (R4 D-R4-7 / D-R4-P6) — the bar\'s modal semantics on every thread; the reply RENDER is gated too', () => {
+  const acceptDisclaimer = vi.fn(async () => {});
+  beforeEach(() => {
+    useHouseholdStore.setState({ acceptDisclaimer } as never);
+  });
+  const replyAnswers = () => new Map([[
+    answerKey('vehicle_replacement', 'q_keep_horizon', 'vehicle:7'),
+    {
+      id: 1, householdId: 1, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
+      subjectKey: 'vehicle:7', valueJson: '"no-plans"', questionVersion: 1,
+      answeredAt: '2026-07-01T12:00:00.000Z', basisJson: '{"branch":"signal"}',
+    },
+  ]]);
+
+  it('never-accepted: the first strip answer opens the id-generic modal — body + attestation, NO "What changed" box — and saves nothing', () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+    expect(screen.getByText('Version 1.2')).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: DISCLOSURES.interview.acceptanceCheckboxLabel })).toBeInTheDocument();
+    expect(saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it('Escape does not dismiss; Cancel closes and saves nothing', () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('About the Frameworks')).toBeNull();
+    expect(saveAnswer).not.toHaveBeenCalled();
+  });
+
+  it('accept → acceptDisclaimer("interview", "1.2") → the pending answer saves with its basis', async () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(acceptDisclaimer).toHaveBeenCalledWith('interview', DISCLOSURES.interview.version));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    expect(saveAnswer.mock.calls[0][0]).toMatchObject({ questionId: 'q_keep_horizon', value: 'no-plans' });
+  });
+
+  it('a household that accepted 1.1 is re-gated at 1.2 and reads the "What changed" box with the interview diff (R3\'s rule)', () => {
+    useAcceptancesStore.setState({ acceptedVersions: { interview: '1.1' } } as never);
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    expect(screen.getByText(DISCLOSURES.interview.diffFromPrevious as string)).toBeInTheDocument();
+  });
+
+  it('a household on 1.2 is never gated: the answer saves at once', async () => {
+    render(<InterviewThreads ctx={signalCtx()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
+    await waitFor(() => expect(saveAnswer).toHaveBeenCalledOnce());
+    expect(screen.queryByText('About the Frameworks')).toBeNull();
+  });
+
+  it('a REPLY card under needs-acceptance renders the title + CR-GATE-1 + "Read and accept" and none of its lines; acceptance reveals them', async () => {
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<InterviewThreads ctx={signalCtx(replyAnswers())} />);
+    expect(screen.getByText('Vehicle replacement')).toBeInTheDocument();
+    expect(screen.getByText('Accept the About the Frameworks disclosure to see this card.')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing computed — you said no replacement plans/)).toBeNull();
+    expect(screen.queryByText('Ask me again')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Frameworks disclosure' }));
+    expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(acceptDisclaimer).toHaveBeenCalledWith('interview', DISCLOSURES.interview.version));
+    // The real acceptDisclaimer writes the row and the acceptances projection reloads; mirror that here.
+    act(() => { useAcceptancesStore.setState({ acceptedVersions: { interview: DISCLOSURES.interview.version } } as never); });
+    expect(screen.getByText(/Nothing computed — you said no replacement plans/)).toBeInTheDocument();
+    expect(screen.queryByText('Accept the About the Frameworks disclosure to see this card.')).toBeNull();
   });
 });

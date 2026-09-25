@@ -216,6 +216,7 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await page.getByRole('button', { name: 'Show me' }).click();
   // Gate 2 — the interview disclosure, first submission only:
   await expect(page.getByText('About the Frameworks')).toBeVisible();
+  await expect(page.getByText('Version 1.2', { exact: true })).toBeVisible();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue' }).click();
   // Three cards with the seed-derived split (hand-computed pins — Appendix D of
@@ -325,12 +326,19 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   await page.getByRole('link', { name: 'Roadmap' }).click();
   await expect(page.getByText('Are there plans to buy a home?')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Within 5 years' }).click();
+  // R4 (D-R4-7): the strip's first answer is gated on the interview document
+  // (the seed accepts app_wide only) — the body renders with NO "What changed"
+  // box (R3's rule: never accepted ⇒ no prior); accept → the pending answer saves.
+  await expect(page.getByText('About the Frameworks')).toBeVisible();
+  await expect(page.getByText('What changed since you last accepted:')).toHaveCount(0);
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue' }).click();
   // 4 — The compound target: $60,000 by June two years out (run-date-relative).
   const card = page.getByTestId('thread-home_purchase-');
   const year = String(new Date().getFullYear() + 2);
-  await card.getByLabel('Amount').fill('60000');   // scoped: the bar has its own 'Amount'
-  await card.getByLabel('Month').selectOption('06');
-  await card.getByLabel('Year').selectOption(year);
+  await card.getByLabel(/^Amount/).fill('60000');   // scoped: the bar has its own 'Amount'; CR-AP-1 names it 'Amount — {prompt}'
+  await card.getByLabel(/^Month/).selectOption('06');
+  await card.getByLabel(/^Year/).selectOption(year);
   await card.getByRole('button', { name: 'Save' }).click();
   // 5 — The plan reply (monthly figures vary with run date → pattern pins;
   //     the reserve is a seed literal → exact).
@@ -357,8 +365,15 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   const card = page.getByTestId('thread-college_vs_retirement-');
   await expect(card).toBeVisible({ timeout: 30_000 });
   await expect(card).toContainText('About how much goes toward college savings each month?');
-  await card.getByLabel('Amount').fill('300');
+  await card.getByLabel(/^Amount/).fill('300');
   await card.getByRole('button', { name: 'Save' }).click();
+  // R4 (D-R4-7): the strip's first answer is gated on the interview document
+  // (the seed accepts app_wide only) — the body renders with NO "What changed"
+  // box (R3's rule: never accepted ⇒ no prior); accept → the pending answer saves.
+  await expect(page.getByText('About the Frameworks')).toBeVisible();
+  await expect(page.getByText('What changed since you last accepted:')).toHaveCount(0);
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue' }).click();
   // The two-sided card. Structure pins only — target and FV move with the run
   // date (today → months-to-2034 shrinks monthly); 'May 2034' is time-stable.
   await expect(card).toContainText('College for Riley Sample');

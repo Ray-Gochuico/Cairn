@@ -99,19 +99,48 @@ describe('DISCLOSURES', () => {
     expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'backtest', 'interview', 'learning', 'roadmap']);
   });
 
-  it('interview disclosure: v1.1 (T3 reference-data vintage), checkbox label pinned', () => {
-    expect(DISCLOSURES.interview.version).toBe('1.1');
+  it('interview disclosure: v1.2 (R4 market history), title + checkbox label unchanged', () => {
+    expect(DISCLOSURES.interview.version).toBe('1.2');
     expect(DISCLOSURES.interview.title).toBe('About the Frameworks');
     expect(DISCLOSURES.interview.acceptanceCheckboxLabel).toBe(
       'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
     );
     expect(DISCLOSURES.interview.body).toContain('Mechanical frameworks, not advice');
     expect(DISCLOSURES.interview.body).toContain('Projections are not predictions');
+    expect(DISCLOSURES.interview.body).toContain('**Reference data.**'); // the 1.1 paragraph survives
   });
 
-  it('interview 1.1 carries a re-prompt diff (house rule: body change ⇒ bump + diff)', () => {
-    expect(DISCLOSURES.interview.diffFromPrevious).toContain('Reference data');
-    expect(DISCLOSURES.interview.diffFromPrevious).toContain('re-read and re-accept');
+  it('interview 1.2 body carries the Market history paragraph byte-exact (the paragraph the consent describes)', () => {
+    expect(DISCLOSURES.interview.body).toContain(
+      "**Market history.** The market-stress question replays your portfolio through named windows of U.S. market history — the 1871–2022 replay described in the Historical Backtest disclosure: real (CPI-adjusted) stock and bond total returns, blended at the stock share you chose and rebalanced annually, gross of fees, with no tax treatment. A named window is one sequence that happened once — history replayed, never a forecast and never a probability. Its retirement line is the same whole-year solve as the Earliest Retirement calculator, run twice from the window's last year with your assumed path resumed from the window's end balance; the historical years after the window are not part of that reading, and it states a difference in years, not a date. It uses your saved inputs — edits in the Calculators scenario bar do not apply here.",
+    );
+    // The paragraph sits between Reference data and the closing sentence.
+    const b = DISCLOSURES.interview.body;
+    expect(b.indexOf('**Reference data.**')).toBeLessThan(b.indexOf('**Market history.**'));
+    expect(b.indexOf('**Market history.**')).toBeLessThan(b.indexOf('Decisions about debt, investing, and reserves belong with you'));
+  });
+
+  it('interview 1.2 diffFromPrevious is the contract string, byte-exact', () => {
+    expect(DISCLOSURES.interview.diffFromPrevious).toBe(
+      "Version 1.2 adds a 'Market history' paragraph: the new market-stress question replays your portfolio through named windows of the 1871–2022 replay described in the Historical Backtest disclosure (real stock and bond returns, blended and rebalanced annually) — history that happened once, not a forecast or a probability — and its retirement line is the Earliest Retirement calculator's solve run from each window's last year, stated as a difference in years. No other content changes since v1.1. Please re-read and re-accept.",
+    );
+  });
+
+  /* The R3 idiom: the body's SHA-256 + length are machine-checked so a one-
+     character edit reds this pin; the protocol answer is a bump + a diff that
+     names the edit + a re-pin here. Recompute with the command in the backtest
+     block above, swapping `backtest` for `interview`. */
+  it('interview 1.2 body is byte-pinned (length 2577, SHA-256)', () => {
+    const body = DISCLOSURES.interview.body;
+    expect(body.length).toBe(2577);
+    expect(createHash('sha256').update(body, 'utf8').digest('hex')).toBe(
+      '02472806625f8277c1043fd06c43b4592298e499f1ae34a57d9520eb05a91c51',
+    );
+  });
+
+  it('the backtest document is NOT bumped by R4 (its "three views" sentence describes that document)', () => {
+    expect(DISCLOSURES.backtest.version).toBe('1.5');
+    expect(DISCLOSURES.backtest.body.length).toBe(3392);
   });
 
   it('interview body names the bundled dataset vintage (re-vintage without a bump trips here)', () => {
