@@ -31,7 +31,7 @@ import LiabilitiesDonut from '@/components/charts/LiabilitiesDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
 import { computeHorizonGrowth } from '@/lib/growth-horizons';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
+import { utcNoonOf } from '@/lib/dates';
 import { netWorthAsOfFactory } from '@/lib/asset-value-chart';
 import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 
@@ -235,7 +235,10 @@ export default function NetWorth() {
       assetValueSnapshots,
       todayIso: todayISO,
     });
-    return computeHorizonGrowth(valueAsOf, dateFromLocalISO(todayISO));
+    // The local day's UTC-noon bridge (v1.7.0 R4 smoke): computeHorizonGrowth
+    // reads UTC accessors, and a local-midnight Date is the PREVIOUS UTC day
+    // east of UTC.
+    return computeHorizonGrowth(valueAsOf, utcNoonOf(todayISO));
   }, [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots, todayISO]);
 
   // W10 M5: never show "No net worth snapshots yet" while loads are in

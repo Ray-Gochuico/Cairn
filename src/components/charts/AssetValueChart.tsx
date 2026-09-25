@@ -48,6 +48,7 @@ import {
   type EntityKind,
   type SelectedEntity,
 } from '@/lib/net-worth-chart-prefs';
+import { localTodayISO } from '@/lib/dates';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { scopeSuffix } from '@/lib/view-scope';
 import { entityKey, parseEntityKey } from '@/lib/entity-key';
@@ -762,8 +763,8 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   // Derived per render ON PURPOSE (no mount-pinned memo): a frozen date
   // goes stale across midnight (stale cutoffs, vanishing new snapshots).
   // The ISO string is a primitive, so downstream memos stay stable within
-  // a day.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  // a day. The LOCAL calendar day (v1.7.0 R4 smoke) — the writers' day.
+  const todayIso = localTodayISO();
 
   // Lib helper mirrors the builder's observation-starts semantics
   // (incl. property/vehicle purchaseDate) so the ALL-window granularity is

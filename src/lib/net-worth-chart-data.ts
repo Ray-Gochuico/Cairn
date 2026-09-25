@@ -4,6 +4,7 @@ import {
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
 import { assetValuesAsOf } from '@/lib/asset-snapshot-bucketing';
+import { localTodayISO } from '@/lib/dates';
 import { loanBalanceHistory } from '@/lib/loan-history';
 import { entityKey, parseEntityKey } from '@/lib/entity-key';
 import type {
@@ -94,7 +95,7 @@ export function buildNetWorthChartData(
 
   if (selectedKeys.size === 0) return [];
 
-  const today = todayOverride ?? new Date().toISOString().slice(0, 10);
+  const today = todayOverride ?? localTodayISO(); // LOCAL calendar day (v1.7.0 R4 smoke)
 
   // Resolve each selected key to its concrete entity so we can compute
   // values + drop entries that point at deleted entities.

@@ -1,3 +1,5 @@
+import { localTodayISO, utcNoonOf } from '@/lib/dates';
+
 export type Granularity = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
 
 export type TimeWindow = '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'ALL';
@@ -6,8 +8,10 @@ export type TimeWindow = '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'ALL';
  * Returns the ISO (YYYY-MM-DD) cutoff date for a time window relative to `today`,
  * or `null` for `'ALL'` (no filtering). `'YTD'` is Jan 1 of today's UTC year.
  * Uses UTC math so the result is timezone-stable regardless of the caller's locale.
+ * The default `today` is the LOCAL calendar day through its UTC-noon bridge
+ * (v1.7.0 R4 smoke), so the UTC accessors read the day the writers stamp.
  */
-export function cutoffForWindow(w: TimeWindow, today: Date = new Date()): string | null {
+export function cutoffForWindow(w: TimeWindow, today: Date = utcNoonOf(localTodayISO())): string | null {
   if (w === 'ALL') return null;
   if (w === 'YTD') return `${today.getUTCFullYear()}-01-01`;
   const monthsBack = w === '3M' ? 3 : w === '6M' ? 6 : w === '1Y' ? 12 : 60;

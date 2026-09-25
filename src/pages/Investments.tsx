@@ -49,7 +49,7 @@ import {
 import { computeAccountBreakdown } from '@/lib/account-breakdown';
 import { colorForAccount } from '@/lib/chart-colors';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
+import { dateFromLocalISO, utcNoonOf } from '@/lib/dates';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import { classTargetVsActual } from '@/lib/allocation-hierarchy';
@@ -499,7 +499,9 @@ export default function Investments() {
     () =>
       computeHorizonGrowth(
         (iso) => sumLatestOnOrBefore(snapshots, iso, growthAccountIds),
-        dateFromLocalISO(todayISO),
+        // The local day's UTC-noon bridge (v1.7.0 R4 smoke): the helper reads
+        // UTC accessors; a local-midnight Date is the previous UTC day east of UTC.
+        utcNoonOf(todayISO),
       ),
     [snapshots, growthAccountIds, todayISO],
   );
@@ -742,7 +744,8 @@ export default function Investments() {
   // injected "now" — the helper is otherwise pure/deterministic.
   const accountBreakdown = useMemo(
     () =>
-      computeAccountBreakdown(visibleAccounts, visibleSnapshots, dateFromLocalISO(todayISO), {
+      // UTC-noon bridge, as above (v1.7.0 R4 smoke).
+      computeAccountBreakdown(visibleAccounts, visibleSnapshots, utcNoonOf(todayISO), {
         investableOnly,
       }),
     [visibleAccounts, visibleSnapshots, investableOnly, todayISO],

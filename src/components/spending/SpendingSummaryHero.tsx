@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { formatCurrencyCents, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
+import { utcNoonOf } from '@/lib/dates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
@@ -56,7 +56,9 @@ export function SpendingSummaryHero({
   emptyScopeNote,
 }: SpendingSummaryHeroProps) {
   const localToday = useLocalToday();
-  const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
+  // The local day's UTC-noon bridge (v1.7.0 R4 smoke): rangeBounds reads UTC
+  // accessors, and a local-midnight Date is the PREVIOUS UTC day east of UTC.
+  const today = useMemo(() => asOf ?? utcNoonOf(localToday), [asOf, localToday]);
   // Round-3 S12: data-anchored initial range (lazy — runs once at mount).
   const [range, setRange] = useState<SpendingRange>(() =>
     defaultSpendingRange(transactions, today.toISOString().slice(0, 10)),

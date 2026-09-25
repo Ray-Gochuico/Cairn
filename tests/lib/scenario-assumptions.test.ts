@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   SCENARIO_STORAGE_KEY,
   SCENARIO_FIELDS,
@@ -391,5 +391,43 @@ describe('Wave B: scoped buildScenarioDefaults', () => {
     });
     expect(defaults.monthlyExpenses).toBe(6000);
     expect(provenance.monthlyExpenses).toBe('your monthly expense baseline');
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): with no injected todayIso — the calculators'
+// path, use-scenario-assumptions.ts passes none — the portfolio prefill took
+// the latest snapshot on or before the UTC day. The writers now stamp the
+// LOCAL day, so an Auckland-morning balance (local ahead of UTC) was missing
+// until local noon, and a New York evening read counted a row dated the next
+// local day. The default is the local day.
+describe('buildScenarioDefaults — the default today is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const portfolioWith = (snapshotDates: Array<[string, number]>) => {
+    const { todayIso: _unused, ...noToday } = EMPTY_INPUT;
+    void _unused;
+    return buildScenarioDefaults({
+      ...noToday,
+      accounts: [mkAccount(1)],
+      snapshots: snapshotDates.map(([snapshotDate, totalValue]) => ({ accountId: 1, snapshotDate, totalValue })),
+    }).defaults.portfolio;
+  };
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): the local 25th\'s balance is the prefill', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    expect(portfolioWith([['2026-09-20', 100_000], ['2026-09-25', 120_000]])).toBe(120_000);
+  });
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): the local 24th\'s balance, not the next day\'s', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    expect(portfolioWith([['2026-09-20', 100_000], ['2026-09-24', 120_000], ['2026-09-25', 150_000]])).toBe(120_000);
   });
 });
