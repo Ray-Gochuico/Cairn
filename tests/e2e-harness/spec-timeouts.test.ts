@@ -154,11 +154,19 @@ const label = (f: string) => path.relative(E2E, f);
  * the detours around them: `page.waitForTimeout(<n>)` (a sleep, never a wait),
  * `test.slow()` (3× the budget, outside the policy) and a hoisted numeric
  * constant whose name says TIMEOUT or WAIT (`const BOOT_WAIT = 45_000`).
- * Accepted gap, stated: a numeric constant named without TIMEOUT/WAIT, and
- * `expect.configure({ timeout })` with such a constant — review catches those.
+ * Review I-m4 appended (the first five alternatives are unchanged): every
+ * `set…Timeout(<n>)` — `setDefaultTimeout`, `setDefaultNavigationTimeout`,
+ * `test.info().setTimeout`, `testInfo.setTimeout`; any option key with timeout
+ * in its name (`actionTimeout: <n>`, `navigationTimeout: <n>`, `timeout : <n>`,
+ * `timeoutMs: <n>`); the spaced calls; and camelCase names (`const bootWait`,
+ * `let navTimeout`). Accepted gaps, stated: a numeric constant whose name says
+ * neither timeout nor wait (`const BOOT = 45_000`), a number reaching a timeout
+ * through such a constant, and the non-spec helpers under e2e/ (not scanned:
+ * load-guard.ts and boot-timeout.ts hold the policy's own constants) — review
+ * catches those.
  */
 const OFFENDER =
-  /\btimeout:\s*\d[\d_]*|\btest\.setTimeout\(\s*\d[\d_]*|\bwaitForTimeout\(\s*\d|\btest\.slow\(|\bconst\s+\w*(?:TIMEOUT|WAIT)\w*\s*=\s*\d/g;
+  /\btimeout:\s*\d[\d_]*|\btest\.setTimeout\(\s*\d[\d_]*|\bwaitForTimeout\(\s*\d|\btest\.slow\(|\bconst\s+\w*(?:TIMEOUT|WAIT)\w*\s*=\s*\d|\bset(?:Default)?(?:Navigation)?Timeout\s*\(\s*\d[\d_]*|\b\w*[Tt]imeout\w*\s*:\s*\d[\d_]*|\bwaitForTimeout\s*\(\s*\d[\d_]*|\btest\.slow\s*\(|\b(?:const|let|var)\s+\w*(?:TIMEOUT|WAIT|[Tt]imeout|[Ww]ait)\w*\s*=\s*\d[\d_]*/g;
 
 /**
  * 49 expect-option sites + the explore override at 971d0850. Raise freely as
@@ -231,5 +239,46 @@ describe('the ratchet scans code, not comments — a // or /* inside a string, t
   it('counts a bootTimeout() wait that follows a URL toward the floor (and none inside a comment)', () => {
     expect(bootWaitSites(`await page.goto('http://localhost:1522/x', { timeout: bootTimeout() });`)).toBe(1);
     expect(bootWaitSites(`// { timeout: bootTimeout() }`)).toBe(0);
+  });
+});
+
+// Review I-m4: every Playwright way to set a wait with a number, one sentinel
+// each. The 971d0850 shapes first (unchanged), then the ones the review listed.
+describe('the ratchet refuses every numeric timeout shape, and none of the bootTimeout() forms', () => {
+  it('the plan shapes: timeout: <n>, test.setTimeout(<n>), waitForTimeout(<n>), test.slow(), const *TIMEOUT/*WAIT = <n>', () => {
+    expect(offendersIn(`await x({ timeout: 30_000 });`)).toEqual(['timeout: 30_000']);
+    expect(offendersIn(`test.setTimeout(150_000);`)).toEqual(['test.setTimeout(150_000']);
+    expect(offendersIn(`await page.waitForTimeout(500);`)).toEqual(['waitForTimeout(5']);
+    expect(offendersIn(`test.slow();`)).toEqual(['test.slow(']);
+    expect(offendersIn(`const BOOT_WAIT = 45_000;`)).toEqual(['const BOOT_WAIT = 4']);
+  });
+
+  it('setDefaultTimeout / setDefaultNavigationTimeout / test.info().setTimeout / testInfo.setTimeout with a number', () => {
+    expect(offendersIn(`page.setDefaultTimeout(60_000);`)).toEqual(['setDefaultTimeout(60_000']);
+    expect(offendersIn(`context.setDefaultNavigationTimeout(60000);`)).toEqual(['setDefaultNavigationTimeout(60000']);
+    expect(offendersIn(`test.info().setTimeout(60_000);`)).toEqual(['setTimeout(60_000']);
+    expect(offendersIn(`testInfo.setTimeout(60_000);`)).toEqual(['setTimeout(60_000']);
+  });
+
+  it('any *timeout* option key with a number: actionTimeout, navigationTimeout, `timeout :`, timeoutMs', () => {
+    expect(offendersIn(`test.use({ actionTimeout: 10_000 });`)).toEqual(['actionTimeout: 10_000']);
+    expect(offendersIn(`test.use({ navigationTimeout: 30_000 });`)).toEqual(['navigationTimeout: 30_000']);
+    expect(offendersIn(`await x({ timeout : 30_000 });`)).toEqual(['timeout : 30_000']);
+    expect(offendersIn(`await x({ timeoutMs: 30_000 });`)).toEqual(['timeoutMs: 30_000']);
+  });
+
+  it('spaced calls and camelCase names: waitForTimeout (<n>), test.slow (), const bootWait / let navTimeout = <n>', () => {
+    expect(offendersIn(`await page.waitForTimeout (500);`)).toEqual(['waitForTimeout (500']);
+    expect(offendersIn(`test.slow ();`)).toEqual(['test.slow (']);
+    expect(offendersIn(`const bootWait = 45_000;`)).toEqual(['const bootWait = 45_000']);
+    expect(offendersIn(`let navTimeout = 45_000;`)).toEqual(['let navTimeout = 45_000']);
+  });
+
+  it('leaves the policy forms and plain JavaScript timers alone', () => {
+    expect(offendersIn(`await expect(x).toBeVisible({ timeout: bootTimeout() });`)).toEqual([]);
+    expect(offendersIn(`test.setTimeout(bootTimeout() * 5);`)).toEqual([]);
+    expect(offendersIn(`setTimeout(() => done(), 100);`)).toEqual([]);
+    expect(offendersIn(`const waitForBoot = bootTimeout();`)).toEqual([]);
+    expect(offendersIn(`expect.configure({ soft: true });`)).toEqual([]);
   });
 });
