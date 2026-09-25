@@ -1045,6 +1045,24 @@ describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D
     );
     expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toContain('nothing invested');
   });
+
+  it('A-12 (review C3-m4, CR-C3-C {label}): the lock clause names the scenario the reading is about — with no "Moderate" row, pickModerateEntry falls back to the 2nd entry and the clause says "Steady:", never a hardcoded "Moderate:"', async () => {
+    primeStores({
+      scenarios: [
+        { label: 'Conservative', rate: 0.01 },
+        { label: 'Steady', rate: 0.02 },
+      ],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard('path-to-fi');
+    await toStop();
+    expect(screen.queryByText('Scenario:')).toBeNull(); // P18 state guard
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · Steady: never reached if you keep contributing — returns at or below inflation',
+    );
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toContain('Moderate');
+  });
 });
 
 /* B3 (R4 ruling 7): the rail's years-to-retirement default follows the LOCAL
