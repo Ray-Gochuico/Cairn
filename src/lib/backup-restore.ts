@@ -16,6 +16,7 @@ import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { stashRestoreFailureNotice } from './boot-notices';
+import { parsePreUpdateCopyName } from './pre-update-names';
 
 /** The plugin connection URL the app loads (and the key both Rust commands
  * resolve their pool/path from). Single source of truth here. */
@@ -118,14 +119,22 @@ export async function runBackup(now: Date = new Date()): Promise<string> {
   return dest;
 }
 
-/** One rotating backup file, surfaced to the in-app Restore list. */
+/** One backup file, surfaced to the in-app Restore lists. */
 export interface BackupEntry {
-  /** The on-disk filename, e.g. `cairn-20260602-235000.db`. */
+  /** The on-disk filename, e.g. `cairn-20260602-235000.db` or
+   * `cairn-pre-update-53-to-55-20260925-101500.db`. */
   name: string;
   /** Absolute path, ready to hand to `validateBackupFile`/`restoreFromBackup`. */
   path: string;
   /** When the backup was taken, parsed from the filename in LOCAL time. */
   takenAt: Date;
+  /** `manual` — "Back up now"; `pre-update` — the copy init.ts takes before
+   * migrations (v1.7.1 U1). The two families rotate independently. */
+  kind: 'manual' | 'pre-update';
+  /** Pre-update copies only: the schema the file holds and the one the
+   * update was moving to. */
+  schemaFrom?: number;
+  schemaTo?: number;
 }
 
 /** Filename matcher shared with rotation: `cairn-YYYYMMDD-HHMMSS.db`, capturing
@@ -133,8 +142,8 @@ export interface BackupEntry {
 const BACKUP_NAME_RE = /^cairn-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
 
 /**
- * List the rotating `cairn-*.db` backups for the in-app Restore picker, newest
- * first. The hidden `backups/` folder (under the app config dir) is not
+ * List the manual `cairn-*.db` backups AND the `cairn-pre-update-*` copies for
+ * the in-app Restore lists, newest first. The hidden `backups/` folder (under the app config dir) is not
  * browsable in Finder, so the UI lists its contents directly instead of relying
  * on a file dialog.
  *
@@ -159,11 +168,16 @@ export async function listBackups(): Promise<BackupEntry[]> {
   const parsed = entries.flatMap((e): Array<Omit<BackupEntry, 'path'>> => {
     if (!e.isFile) return [];
     const m = BACKUP_NAME_RE.exec(e.name);
-    if (!m) return [];
-    const [, y, mo, d, h, mi, s] = m.map(Number);
-    // Local time — must mirror backupFilename's getFullYear()/getHours()/…
-    const takenAt = new Date(y, mo - 1, d, h, mi, s);
-    return [{ name: e.name, takenAt }];
+    if (m) {
+      const [, y, mo, d, h, mi, s] = m.map(Number);
+      // Local time — must mirror backupFilename's getFullYear()/getHours()/…
+      return [{ name: e.name, takenAt: new Date(y, mo - 1, d, h, mi, s), kind: 'manual' }];
+    }
+    const pre = parsePreUpdateCopyName(e.name);
+    if (pre) {
+      return [{ name: e.name, takenAt: pre.takenAt, kind: 'pre-update', schemaFrom: pre.schemaFrom, schemaTo: pre.schemaTo }];
+    }
+    return [];
   });
   // Pass 2 — attach the absolute, platform-correct path to each survivor.
   const rows = await Promise.all(
@@ -182,6 +196,16 @@ export async function validateBackupFile(path: string): Promise<BackupValidation
 // reason at render time without a Tauri import. Re-exported here so existing
 // importers (DataSection, tests) keep their path.
 export { RESTORE_FAILURE_NOTICE_KEY, takeRestoreFailureNotice } from './boot-notices';
+
+/** The plugin's rejection when `db` was never loaded (tauri-plugin-sql 2.4.0
+ * error.rs:15 `database {0} not loaded`, serialized as a PLAIN STRING). Exact
+ * equality on purpose: any other close failure means the pool may be alive. */
+const NOT_LOADED_REJECTION = `database ${DB_URL} not loaded`;
+
+function isNotLoadedRejection(e: unknown): boolean {
+  const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+  return message === NOT_LOADED_REJECTION;
+}
 
 /**
  * Restore the live database from `source`, corruption-safely:
@@ -215,17 +239,31 @@ export { RESTORE_FAILURE_NOTICE_KEY, takeRestoreFailureNotice } from './boot-not
  * surfaces it against the still-live DB.
  *
  * `reload` is injectable for tests; it defaults to `window.location.reload`.
+ * `tolerateNotLoaded` (boot screens only) accepts the plugin's exact
+ * not-loaded rejection as 'no pool to drain'.
  */
 export async function restoreFromBackup(
   source: string,
-  opts: { reload?: () => void } = {},
+  opts: { reload?: () => void; tolerateNotLoaded?: boolean } = {},
 ): Promise<void> {
   const reload = opts.reload ?? (() => window.location.reload());
 
   // Deterministically close the EXISTING live pool (drains + closes every
   // connection, checkpoints WAL). Do NOT use Database.load here — see above.
   // A failure here is BEFORE the point of no return: propagate without reload.
-  await invoke('plugin:sql|close', { db: DB_URL });
+  //
+  // BOOT PATH (v1.7.1 U2, `tolerateNotLoaded`): on the generic boot-failure
+  // screen Database.load itself may have thrown, so no pool was ever
+  // registered and the plugin rejects with the exact not-loaded message —
+  // there is nothing to drain and the swap is safe. Only that exact message
+  // is tolerated; the default (Settings) path is unchanged.
+  // U4: closeLiveDatabase() will wrap this invoke — keep the tolerated branch
+  // on its rejection.
+  try {
+    await invoke('plugin:sql|close', { db: DB_URL });
+  } catch (e) {
+    if (!(opts.tolerateNotLoaded && isNotLoadedRejection(e))) throw e;
+  }
 
   // Point of no return: the pool is closed. From here we MUST reload no matter
   // what, or the session is stuck on a dead pool (M-4).
