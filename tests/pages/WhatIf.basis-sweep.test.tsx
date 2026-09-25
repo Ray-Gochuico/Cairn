@@ -197,6 +197,14 @@ const state = (netWorth: number) => ({
   events: [],
 });
 
+/** A-13: month 0 with NOTHING invested — the engine seed the page's
+ *  engineStartsAtZero reads (WhatIf.tsx: totalInvestments(first) + first.cash
+ *  === 0). The stores are already seeded without accounts or snapshots
+ *  (whatif-store-seed.ts), so the provenance reads 'no account snapshots yet'
+ *  and G2 fires. netWorth is kept so the Compare card's 30y figures and the
+ *  G11 rows render exactly as in the default state. */
+const zeroSeed = (netWorth: number) => ({ ...state(netWorth), investmentsByAccount: {}, cash: 0 });
+
 function setSettings(over: Record<string, unknown> = {}) {
   useSettingsStore.setState({
     settings: {
@@ -230,15 +238,40 @@ describe('W5.1 basis-audit sweep — the /what-if page (FI cards + Compare + pro
     expectBasisDiscipline(
       <MemoryRouter><WhatIf /></MemoryRouter>,
       {
-        figures: [...WHATIF_FI_BASIS_FIGURES, ...COMPARE_BASIS_FIGURES_BL3, ...WHATIF_PAGE_BASIS_FIGURES],
+        figures: [
+          ...WHATIF_FI_BASIS_FIGURES,
+          ...COMPARE_BASIS_FIGURES_BL3,
+          // A-13: G2 renders only on a zero engine seed — the zero-seed sweep
+          // below carries it (the B2 stress-sweep per-state precedent).
+          ...WHATIF_PAGE_BASIS_FIGURES.filter((f) => f.testId !== 'whatif-model-gap-portfolio-zero'),
+        ],
         charts: [],
       },
       { pageId: WHATIF_PAGE_ID },
     );
+    // state guard: the $200,000 seed keeps G2 silent (the filter above is a state, not a hole)
+    expect(screen.queryByTestId('whatif-model-gap-portfolio-zero')).toBeNull();
   });
 
   it('C2 review: the G11 $0 rows render in this harness — the sweep above exercises their registration, never vacuously', () => {
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    expect(screen.getAllByTestId('whatif-model-gap-expense-base')).toHaveLength(2);
+  });
+
+  it('A-13 (v1.7.1): a ZERO engine seed renders G2 ("the portfolio starts at $0 in these projections") — its $0 is registered invariant; every other figure keeps its class; no loose $', () => {
+    h.projections = new Map<number, unknown[]>([[1, [zeroSeed(900_000)]], [2, [zeroSeed(400_000)]]]);
+    expectBasisDiscipline(
+      <MemoryRouter><WhatIf /></MemoryRouter>,
+      {
+        figures: [...WHATIF_FI_BASIS_FIGURES, ...COMPARE_BASIS_FIGURES_BL3, ...WHATIF_PAGE_BASIS_FIGURES], // the FULL page registry — G2 renders here
+        charts: [],
+      },
+      { pageId: WHATIF_PAGE_ID },
+    );
+    // state guard + non-vacuous: G2 rendered once, byte-exact; G11 still renders (both states exercise it)
+    const g2 = screen.getAllByTestId('whatif-model-gap-portfolio-zero');
+    expect(g2).toHaveLength(1);
+    expect(g2[0].textContent).toBe('No account snapshots yet — the portfolio starts at $0 in these projections.');
     expect(screen.getAllByTestId('whatif-model-gap-expense-base')).toHaveLength(2);
   });
 });

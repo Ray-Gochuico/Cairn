@@ -970,6 +970,99 @@ describe('PathToFiCard — the nothing-invested register (B3, v1.7.0; CR-B3-2, D
       screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
     ).toBeInTheDocument();
   });
+
+  /** 12 monthly contributions of `amount` inside the trailing year (the
+   *  primeStores default shape at a different amount). */
+  const monthly = (amount: number) =>
+    Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(PINNED_DATE);
+      d.setMonth(d.getMonth() - i);
+      return { amount, date: d.toISOString().slice(0, 10) };
+    });
+
+  it('A-12 (v1.7.1, CR-C3-B): STOP with pv 0 / pmt 0 — the KEEP reading states the cause (nothing invested), never "Moderate — yrs"; the register stays KEEP-only (D-B3-3)', async () => {
+    primeNothing();
+    renderCard('path-to-fi');
+    await toStop();
+    // The headline is NOT read here: with a cardId, CalculatorCard stamps
+    // `path-to-fi-headline` on its status container AND PathToFiCard stamps the
+    // same testid on the inner span (P18) — getByTestId throws on the pair. The
+    // `0% of CoastFI` headline under this fixture is already pinned by the
+    // D-B3-3 STOP test above (renderCard() without a cardId).
+    // State guard (P18): no rail override and no bar edit → no "Scenario: "
+    // prefix inside the meaning node, so the exact textContent pin is valid.
+    expect(screen.queryByText('Scenario:')).toBeNull();
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · never reached with nothing invested',
+    );
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toMatch(/— yrs/);
+    expect(screen.queryByTestId('path-to-fi-nothing-invested')).toBeNull();
+    expect(screen.queryByText(NOTHING_INVESTED_LINE)).toBeNull();
+  });
+
+  it('A-12 (CR-C3-A control): STOP with pv 0 / pmt $24,000 at 6%/3% — the KEEP solve is FINITE (36.1 yrs), so the landed reading is byte-exact', async () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.06 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+    });
+    renderCard('path-to-fi');
+    await toStop();
+    expect(screen.queryByText('Scenario:')).toBeNull(); // P18 state guard
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · Moderate 36.1 yrs if you keep contributing', // t* = 36.12 (B3 Appendix D.5)
+    );
+  });
+
+  it('A-12 (CR-C3-C): STOP with pv $200,000 / pmt 0 at 2%/3% — the KEEP solve is locked by the rate; the reading names the lock, not "nothing invested"; the per-scenario note keeps rendering (the rate IS the reason)', async () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard('path-to-fi');
+    await toStop();
+    expect(screen.queryByText('Scenario:')).toBeNull(); // P18 state guard
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · Moderate: never reached if you keep contributing — returns at or below inflation',
+    );
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toContain('nothing invested');
+    expect(
+      screen.getByText('Returns at or below inflation — this scenario never reaches the target in real terms.'),
+    ).toBeInTheDocument();
+  });
+
+  it('A-12 (CR-C3-C discriminator): STOP with pv 0 / pmt $12,000 at 2%/3% — an infinite KEEP solve WITH contributions on the bar is the rate lock (asymptote $1,236,000 < the $1,500,000 target), never "nothing invested" — the cause keys on the BAR\'s contribution, not STOP\'s zero', async () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0.02 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 0 }],
+      contributionAmounts: monthly(1_000),
+    });
+    renderCard('path-to-fi');
+    await toStop();
+    expect(screen.queryByText('Scenario:')).toBeNull(); // P18 state guard
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · Moderate: never reached if you keep contributing — returns at or below inflation',
+    );
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toContain('nothing invested');
+  });
+
+  it('A-12 (review C3-m4, CR-C3-C {label}): the lock clause names the scenario the reading is about — with no "Moderate" row, pickModerateEntry falls back to the 2nd entry and the clause says "Steady:", never a hardcoded "Moderate:"', async () => {
+    primeStores({
+      scenarios: [
+        { label: 'Conservative', rate: 0.01 },
+        { label: 'Steady', rate: 0.02 },
+      ],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 }],
+      contributionAmounts: [],
+    });
+    renderCard('path-to-fi');
+    await toStop();
+    expect(screen.queryByText('Scenario:')).toBeNull(); // P18 state guard
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).toBe(
+      'of the coast amount · Steady: never reached if you keep contributing — returns at or below inflation',
+    );
+    expect(screen.getByTestId('path-to-fi-meaning').textContent).not.toContain('Moderate');
+  });
 });
 
 /* B3 (R4 ruling 7): the rail's years-to-retirement default follows the LOCAL

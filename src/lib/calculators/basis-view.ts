@@ -162,7 +162,6 @@ export interface PathToFiCoastRow {
 
 export interface PathToFiBasisView extends BasisView {
   fmt: { targetFv: string; monthlyExpenses: string };
-  scopeExclusionsFmt: { jointPortfolio: string; unattributedContribution: string } | null;
   chartData: Record<string, number>[];
   chartLabel: string;
   /** Future mode only — the pinned teaching line's bridge clause (C13). */
@@ -186,7 +185,7 @@ export function usePathToFiBasisView(args: {
   horizon: number;
   targetFv: number;
 }): PathToFiBasisView | null {
-  const { engine, scopeExclusions } = useScenarioAssumptions();
+  const { engine } = useScenarioAssumptions();
   const inflation = engine.inflation;
   const [basis] = useDollarBasis(CALCULATORS_PAGE_ID);
   const { fiSeries, mode, yearsUntilRetirement, horizon, targetFv } = args;
@@ -227,12 +226,6 @@ export function usePathToFiBasisView(args: {
         targetFv: formatCurrency(targetFv),
         monthlyExpenses: formatCurrency(engine.monthlyExpenses),
       },
-      scopeExclusionsFmt: scopeExclusions
-        ? {
-            jointPortfolio: formatCurrency(scopeExclusions.jointPortfolio),
-            unattributedContribution: formatCurrency(scopeExclusions.unattributedContribution),
-          }
-        : null,
       chartData,
       chartLabel: `Path to FI ${suffix}`,
       teachingBridge: basis === 'future' ? PATH_TO_FI_BRIDGE : null,
@@ -249,7 +242,6 @@ export function usePathToFiBasisView(args: {
     engine.portfolio,
     engine.annualContribution,
     engine.monthlyExpenses,
-    scopeExclusions,
   ]);
 }
 

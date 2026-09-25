@@ -142,6 +142,11 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
+          // A-13 (v1.7.1, CR-C3-3): the basis-audit sweep (tests/helpers/
+          // basis-discipline.tsx) keeps glossary tooltip BODIES out of its
+          // completeness scan by this hook — teaching prose that reads the
+          // same in either basis. Nothing else reads it.
+          data-glossary-tooltip=""
           // Wave-4 a11y: no role override — Radix's default role="dialog"
           // is the truthful role; the tooltip role forbids the interactive
           // "Learn more" link this popover contains.

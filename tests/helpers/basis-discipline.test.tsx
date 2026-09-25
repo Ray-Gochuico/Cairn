@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { useEffect, useRef } from 'react';
+import { cleanup, render, screen } from '@testing-library/react';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { createPortal } from 'react-dom';
 import { expectBasisDiscipline, type BasisRegistry } from './basis-discipline';
 import {
@@ -540,5 +544,107 @@ describe('expectBasisDiscipline — B2 markTestId (the statement is a declared e
         charts: [],
       }),
     ).toThrow(/fig-far: markTestId is a pinned-figure option/);
+  });
+
+  it('A-12 (v1.7.1): a mark element that itself carries a $ figure is covered ONLY when it is registered in its own right — an unregistered mark\'s $ is LOOSE (the rule "registered itself OR no $-digit text" holds by the completeness scan, no separate clause)', () => {
+    // The ERC shape: CP-31's criterion carries $ figures AND is the CP-32
+    // probes' mark — legal because the criterion is registered pinned itself.
+    // The same mark left unregistered is exactly what the scan must reject.
+    const WithDollar = mkMarkedCard(() => "All figures in today's dollars — from your $300 start.");
+    expect(() => expectBasisDiscipline(<WithDollar />, FAR_PINNED)).toThrow(
+      /UNREGISTERED dollar figure outside the registry: "All figures in today's dollars — from your \$300 start\."/,
+    );
+    cleanup();
+    expect(() =>
+      expectBasisDiscipline(<WithDollar />, {
+        figures: [
+          ...FAR_PINNED.figures,
+          { testId: 'basis-line', cls: 'pinned', pinnedBasis: 'today' }, // the mark registered in its own right (mark in the node)
+        ],
+        charts: [],
+      }),
+    ).not.toThrow();
+  });
+});
+
+/* ── v1.7.1 A-13 (CR-C3-3): glossary tooltip BODIES are OUT of the completeness
+   scan; portaled Radix Dialogs stay IN. The sentinel is the NOMINAL entry's
+   "$1M" (src/lib/glossary.ts:354-360, byte-frozen under D-W51-11 — read, never
+   edited): the only $ a glossary body carries today, reachable from
+   document.body once a trigger is open. The exclusion is the glossary hook
+   alone (data-glossary-tooltip) — the What-If lever popovers are Radix
+   DIALOGS and stay in, as the IN arm proves. ── */
+
+/** TermTooltip owns its open state; a mount-time click opens it INSIDE the
+ *  sweep's own render (RTL wraps render in act, so the portaled content is in
+ *  document.body before collect runs). */
+function OpenGlossaryTooltip({ term }: { term: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.querySelector('button')?.click();
+  }, []);
+  return (
+    <div ref={ref}>
+      <TermTooltip term={term} />
+    </div>
+  );
+}
+const EMPTY: BasisRegistry = { figures: [], charts: [] };
+
+describe('expectBasisDiscipline — A-13 glossary tooltip bodies are OUT; portaled Dialogs stay IN (CR-C3-3)', () => {
+  beforeEach(() => {
+    cleanup();
+    sessionStorage.clear();
+    __resetDollarBasisForTests();
+  });
+
+  it('non-vacuous: the fixture opens the NOMINAL tooltip synchronously, its body carries the $1M, and the content carries the glossary hook', () => {
+    render(<OpenGlossaryTooltip term="NOMINAL" />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('$1M');
+    expect(dialog).toHaveAttribute('data-glossary-tooltip');
+  });
+
+  it('OUT: the open NOMINAL tooltip\'s $1M is NOT a loose figure when collecting from document.body', () => {
+    expect(() =>
+      expectBasisDiscipline(<OpenGlossaryTooltip term="NOMINAL" />, EMPTY, { root: document.body }),
+    ).not.toThrow();
+  });
+
+  it('IN: a $ inside a portaled Radix Dialog is still loose — the exclusion is the glossary hook, never the portal or role=dialog', () => {
+    const InDialog = () => (
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Sentinel</DialogTitle>
+          <DialogDescription>A portaled dialog carrying a loose figure.</DialogDescription>
+          <span>$50</span>
+        </DialogContent>
+      </Dialog>
+    );
+    expect(() => expectBasisDiscipline(<InDialog />, EMPTY, { root: document.body })).toThrow(
+      /UNREGISTERED dollar figure outside the registry: "\$50"/,
+    );
+  });
+
+  it('IN (review C3-m3): a $ inside a plain, NON-glossary Radix Popover is still loose — the exclusion is the glossary hook, never the popper wrapper D-C3-6 rejected', () => {
+    // The Dialog sentinel above cannot see a popper-scoped widening (Dialogs are
+    // never popper-positioned); this one sits exactly where freshness-badge,
+    // ChartColorsSection and DataHealthPopover put their content.
+    const InPopover = () => (
+      <Popover open>
+        <PopoverTrigger>Sentinel</PopoverTrigger>
+        <PopoverContent>
+          <span>$50</span>
+        </PopoverContent>
+      </Popover>
+    );
+    expect(() => expectBasisDiscipline(<InPopover />, EMPTY, { root: document.body })).toThrow(
+      /UNREGISTERED dollar figure outside the registry: "\$50"/,
+    );
+    // Non-vacuous: the figure really sits inside Radix's popper wrapper, and
+    // outside any glossary hook — the exact subtree a popper exclusion would hide.
+    const figure = screen.getByText('$50');
+    expect(figure.closest('[data-radix-popper-content-wrapper]')).not.toBeNull();
+    expect(figure.closest('[data-glossary-tooltip]')).toBeNull();
   });
 });

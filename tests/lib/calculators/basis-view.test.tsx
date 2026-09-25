@@ -265,6 +265,17 @@ describe('usePathToFiBasisView (the conversion boundary, D-T5)', () => {
     const { result: nul } = renderHook(() => usePathToFiBasisView({ ...ARGS, fiSeries: null }));
     expect(nul.current).toBeNull();
   });
+
+  it('A-12 (v1.7.1): the bundle carries NO scopeExclusionsFmt — B3 moved the scope line onto ScopeExclusionsLine, which formats from the hook itself; the field was dead', () => {
+    const { result } = renderHook(() => usePathToFiBasisView(ARGS));
+    expect(result.current).not.toHaveProperty('scopeExclusionsFmt');
+    // Shape pin (the bundle, not the frozen registration contract): a dead
+    // field cannot grow back unnoticed; a future additive field re-targets
+    // this list deliberately.
+    expect(Object.keys(result.current!).sort()).toEqual(
+      ['basis', 'chartData', 'chartLabel', 'coastRows', 'fmt', 'phrase', 'suffix', 'teachingBridge'],
+    );
+  });
 });
 
 /* ── W2 D-UB13: the additive PINNED arm (History fan view bundle) ────────── */
