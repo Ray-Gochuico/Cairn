@@ -19,6 +19,7 @@ import { RELEASES_URL } from '@/lib/releases-url';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripComments } from '../policy/source-walker';
+import { DatabaseInitError } from '@/db/boot-errors';
 
 describe('renderBootError', () => {
   let root: HTMLElement;
@@ -132,6 +133,8 @@ const now = () => clockMs;
 const pastGuard = () => { clockMs += 1000; };
 const armedLabel = 'Confirm restore — replaces your current data';
 const whenOf = (d: Date) => d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+/** CR-U-12: a failure that initDatabase's real branch threw (tagged). */
+const dbInit = (msg: string) => new DatabaseInitError(new Error(msg));
 const clickWith = (el: HTMLElement, detail: number) =>
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail }));
 
@@ -149,7 +152,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
   for (const [label, err] of [
     ['DatabaseCorruptError', new DatabaseCorruptError('page 4 is never used')],
     ['SchemaTooNewError', new SchemaTooNewError(99, 55)],
-    ['generic', new Error('something else broke')],
+    ['generic', dbInit('something else broke')],
     ['MigrationFailedError', new MigrationFailedError(new Error('duplicate column name'), PRE.path)],
   ] as const) {
     it(`${label}: lists backups, pre-update first with its caption, manual after — each with a Restore button`, async () => {
@@ -206,7 +209,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
 
   it('a restore that rejects before the swap reports it in the row and re-enables the controls', async () => {
     mRestore.mockRejectedValue(new Error('close failed'));
-    renderBootError(root, new Error('x'), { now });
+    renderBootError(root, dbInit('x'), { now });
     await settled(root, 2);
     const btn = rows(root)[0].querySelector('button')!;
     btn.click();
@@ -219,10 +222,10 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
 
   it('empty folder → the calm empty line; a read failure → the reason', async () => {
     mList.mockResolvedValue([]);
-    renderBootError(root, new Error('x'));
+    renderBootError(root, dbInit('x'));
     await vi.waitFor(() => expect(root.textContent).toContain('No backups were found in the backups folder.'));
     mList.mockRejectedValue(new Error('EACCES'));
-    renderBootError(root, new Error('x'));
+    renderBootError(root, dbInit('x'));
     await vi.waitFor(() => expect(root.textContent).toContain('Could not read your backups: EACCES'));
   });
 
@@ -237,7 +240,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
   });
 
   it('generic: after the list settles the text is STILL free of "may be corrupt" / "update cairn" (pin)', async () => {
-    renderBootError(root, new Error('something else broke'));
+    renderBootError(root, dbInit('something else broke'));
     await settled(root, 2);
     expect(root.textContent).not.toMatch(/may be corrupt/i);
     expect(root.textContent).not.toMatch(/update cairn/i);
@@ -256,13 +259,13 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
 
   it('the hydrator is total: a non-array listing renders the read-failure line, never an unhandled rejection (PR-16)', async () => {
     mList.mockResolvedValue(undefined);
-    renderBootError(root, new Error('x'));
+    renderBootError(root, dbInit('x'));
     await vi.waitFor(() => expect(root.textContent).toContain('Could not read your backups: '));
   });
 
   it('generic: a row alert quotes the validator reason verbatim; the phrase pin covers the screen copy, not interpolated Rust text (PR-21, documented)', async () => {
     mValidate.mockResolvedValue({ ok: false, user_version: 0, max_supported_version: 55, reason: 'The backup failed an integrity check (quick_check returned "x"). It may be corrupt.' });
-    renderBootError(root, new Error('something else broke'));
+    renderBootError(root, dbInit('something else broke'));
     await settled(root, 2);
     expect(root.textContent).not.toMatch(/may be corrupt/i);  // the pinned state
     rows(root)[0].querySelector('button')!.click();
@@ -281,7 +284,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
   });
 
   it('Reveal on the new screens calls revealBackupsDir', async () => {
-    renderBootError(root, new Error('x'));
+    renderBootError(root, dbInit('x'));
     await settled(root, 2);
     [...root.querySelectorAll('button')].find((b) => b.textContent === 'Reveal backups in Finder')!.click();
     await vi.waitFor(() => expect(mReveal).toHaveBeenCalledTimes(1));
@@ -469,6 +472,47 @@ describe('CR-U-10 — while a restore is in flight, every button on the screen i
   });
 });
 
+describe('CR-U-12 — the restore section only for a DATABASE failure (U1-m33)', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([MANUAL, PRE]);
+    mValidate.mockResolvedValue(OK);
+  });
+
+  it('a non-database bootstrap failure (a plain Error) gets the 1.7.0 generic screen: no section, no notice read, no buttons, never lists', async () => {
+    sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'disk full during restore');
+    const err = new Error('Failed to fetch dynamically imported module');
+    renderBootError(root, err);
+    await new Promise((r) => setTimeout(r, 20));               // give a wrongly-wired hydrator a tick
+    expect(root.querySelector('h1')?.textContent).toBe('Database initialization failed');
+    expect(root.querySelector('pre')?.textContent).toBe(`${err.message}\n\n${err.stack}`);
+    expect(root.textContent).not.toContain('Restore a copy');
+    expect(buttons(root)).toEqual([]);
+    expect(mList).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBe('disk full during restore'); // left for Settings
+  });
+
+  it('a DatabaseInitError gets the generic heading, its CAUSE in the pre, and the restore section', async () => {
+    const cause = new Error('finance.db is locked');
+    renderBootError(root, new DatabaseInitError(cause));
+    expect(root.querySelector('h1')?.textContent).toBe('Database initialization failed');
+    expect(root.querySelector('pre')?.textContent).toBe(`finance.db is locked\n\n${cause.stack}`);
+    await settled(root, 2);
+    expect(root.textContent).toContain('Restore a copy');
+  });
+
+  it('defense in depth (D-U1-20): a DatabaseInitError while the explore flag is set renders no section and never lists', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, '2026-07-08T12:00:00.000Z');
+    renderBootError(root, dbInit('x'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mList).not.toHaveBeenCalled();
+    expect(root.textContent).not.toContain('Restore a copy');
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });
@@ -537,7 +581,7 @@ describe('v1.7.1 U2 — the sample-boot failure screen (critic b)', () => {
 
 describe('v1.7.1 — the restore-failure notice is read and cleared on every DB screen', () => {
   for (const [label, err] of [
-    ['corrupt', new DatabaseCorruptError('x')], ['too-new', new SchemaTooNewError(99, 55)], ['generic', new Error('x')],
+    ['corrupt', new DatabaseCorruptError('x')], ['too-new', new SchemaTooNewError(99, 55)], ['generic', dbInit('x')],
     ['pre-update', new PreUpdateCopyError('x')], ['migration', new MigrationFailedError(new Error('x'), null)],
   ] as const) {
     it(label, () => {

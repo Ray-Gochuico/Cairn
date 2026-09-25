@@ -17,6 +17,7 @@ import { MAX_SCHEMA_VERSION, loadAllMigrations, pendingMigrations, readUserVersi
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
 import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNotice, setSkipOnce, takeSkipOnce } from '@/lib/boot-notices';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+import { DatabaseInitError } from '@/db/boot-errors';
 
 const COPY = '/x/backups/cairn-pre-update-53-to-55-20260925-101500.db';
 
@@ -177,5 +178,63 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
     expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true });
     await runMigrations(db, all);
     expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false });
+  });
+});
+
+describe('CR-U-12 — every raw failure of the real-profile database boot is tagged DatabaseInitError', () => {
+  let db: SqliteAdapter;
+  let all: Migration[];
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    localStorage.removeItem(EXPLORE_FLAG_KEY);
+    db = new SqliteAdapter(':memory:');
+    all = await loadAllMigrations();
+    load.mockImplementation(async () => db);
+    isTauri.mockReturnValue(true);
+    takePreUpdateCopy.mockResolvedValue({ path: COPY, reused: false });
+  });
+  afterEach(async () => { await db.close(); });
+
+  it('a load failure: DatabaseInitError, the message verbatim, the original as `cause`', async () => {
+    const cause = new Error('finance.db is locked');
+    load.mockRejectedValueOnce(cause);
+    const p = initDatabase();
+    await expect(p).rejects.toBeInstanceOf(DatabaseInitError);
+    await expect(p).rejects.toMatchObject({ name: 'DatabaseInitError', message: 'finance.db is locked', cause });
+  });
+
+  it('a runMigrations failure with nothing pending (PR-1) is a DatabaseInitError, not an update failure', async () => {
+    await runMigrations(db, all);
+    await db.execute('PRAGMA query_only = 1');
+    const p = initDatabase();
+    await expect(p).rejects.toMatchObject({ name: 'DatabaseInitError' });
+    await expect(p).rejects.toThrow(/readonly/i);
+  });
+
+  it('a non-Error rejection is tagged too (String(cause) as the message)', async () => {
+    load.mockRejectedValueOnce('database sqlite:finance.db not loaded');
+    await expect(initDatabase()).rejects.toMatchObject({
+      name: 'DatabaseInitError',
+      message: 'database sqlite:finance.db not loaded',
+    });
+  });
+
+  it('the typed boot errors pass through UNTAGGED: DatabaseCorruptError (quick_check), SchemaTooNewError, PreUpdateCopyError, MigrationFailedError', async () => {
+    const real = db;
+    load.mockImplementationOnce(async () => ({
+      ...real,
+      execute: real.execute.bind(real),
+      executeBatch: real.executeBatch.bind(real),
+      close: real.close.bind(real),
+      select: async (sql: string, params?: unknown[]) =>
+        sql === 'PRAGMA quick_check' ? [{ quick_check: 'page 3 is never used' }] : real.select(sql, params),
+    }));
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'DatabaseCorruptError' });
+
+    await runMigrations(db, all);
+    await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION + 7}`);
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'SchemaTooNewError' });
   });
 });

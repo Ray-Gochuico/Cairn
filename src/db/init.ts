@@ -27,6 +27,7 @@ import { resetSampleDb } from '@/db/sample-reset';
 import { isTauriRuntime } from '@/lib/tauri-runtime';
 import { takePreUpdateCopy } from '@/lib/pre-update-copy';
 import { stashPostUpdateNotice, takeSkipOnce } from '@/lib/boot-notices';
+import { tagDatabaseInitError } from './boot-errors';
 
 /**
  * Decide whether to run the background market-data refresh on launch.
@@ -166,8 +167,21 @@ export async function initDatabase(): Promise<void> {
     }
     return;
   }
-  // ——— existing path, unchanged from here ———
+  // ——— the real profile ———
   const skipCopy = takeSkipOnce(); // every real boot consumes "Continue without a copy" (PR-13, D-U1-13)
+  try {
+    await initRealDatabase(skipCopy);
+  } catch (e) {
+    // CR-U-12 (U1-m33): tag every raw failure of the real-profile DATABASE
+    // boot, so the boot screen offers its restore list only for a database
+    // failure. The typed errors (corrupt, too new, the pre-update copy, a
+    // failed update) pass through with their own screens.
+    throw tagDatabaseInitError(e);
+  }
+}
+
+/** The real-profile boot: the pre-v1.7.1 path plus the U1 copy seam. */
+async function initRealDatabase(skipCopy: boolean): Promise<void> {
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
 

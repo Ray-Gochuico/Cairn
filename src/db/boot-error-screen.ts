@@ -15,8 +15,11 @@
  *     Reveal backups, the releases page.
  *   - `ExploreBootError` (v1.7.1 U2): the SAMPLE data could not open → Try
  *     again only. The real profile's backups are never listed on it.
- * Anything else falls back to the original message + stack pane, now with the
- * restore list too.
+ *   - `DatabaseInitError` (v1.7.1 CR-U-12): any other failure of the
+ *     real-profile DATABASE boot → the generic heading + pane, then the
+ *     restore list.
+ * Anything else (not a database failure: a lazy App import, a theme module)
+ * falls back to the 1.7.0 message + stack pane, with nothing destructive.
  *
  * The restore list (every DB screen except the fail-closed and sample ones)
  * is filled asynchronously through a lazy import of `@/lib/backup-restore`,
@@ -525,12 +528,31 @@ export function renderBootError(
     return;
   }
 
-  // Generic fallback — original message + stack pane, then the restore list.
+  // A DATABASE failure the real-profile boot threw without a typed name of
+  // its own (CR-U-12): the generic heading, the cause's message + stack, then
+  // the restore list.
+  if (name === 'DatabaseInitError') {
+    const container = makeContainer(ERROR_COLOR);
+    const cause = (e as { cause?: unknown }).cause;
+    const pre = makePre(
+      cause instanceof Error
+        ? cause.message + '\n\n' + cause.stack
+        : message + '\n\n' + (e as Error).stack,
+    );
+    pre.style.fontSize = '';
+    container.append(makeHeading('Database initialization failed'), pre);
+    appendFailureNotice(container);
+    appendRestoreSection(container, { reveal: true, releases: false, reload, now });
+    root.replaceChildren(container);
+    return;
+  }
+
+  // Generic fallback — the 1.7.0 screen: original message + stack pane, and
+  // nothing destructive. Not a database failure (a lazy App import, a theme
+  // module, …), so no restore list and no notice read (U1-m33).
   const container = makeContainer(ERROR_COLOR);
   const pre = makePre(e instanceof Error ? message + '\n\n' + e.stack : String(e));
   pre.style.fontSize = '';
   container.append(makeHeading('Database initialization failed'), pre);
-  appendFailureNotice(container);
-  appendRestoreSection(container, { reveal: true, releases: false, reload, now });
   root.replaceChildren(container);
 }
