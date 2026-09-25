@@ -166,7 +166,7 @@ function collect(container: HTMLElement, registry: BasisRegistry): Snapshot {
  *    mark as loose (self-test "a mark element that itself carries a $
  *    figure"), so a mark that is itself a figure (ERC's criterion) must be
  *    registered too.
- *  - charts:the caption names the active basis (convertible) or the declared
+ *  - charts: the caption names the active basis (convertible) or the declared
  *    pinnedBasis, in both bases.
  *  - chart DATA (W-I, only when rowsTestId is declared): the hook's data-rows
  *    inside the chart subtree is byte-identical across bases for pinned charts
