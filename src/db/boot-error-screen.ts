@@ -16,8 +16,8 @@
  *   - `ExploreBootError` (v1.7.1 U2): the SAMPLE data could not open → Try
  *     again only. The real profile's backups are never listed on it.
  *   - `DatabaseInitError` (v1.7.1 CR-U-12): any other failure of the
- *     real-profile DATABASE boot → the generic heading + pane, then the
- *     restore list.
+ *     real-profile DATABASE boot → the generic heading + pane, Try again
+ *     (CR-U-13), then the restore list.
  * Anything else (not a database failure: a lazy App import, a theme module)
  * falls back to the 1.7.0 message + stack pane, with nothing destructive.
  *
@@ -540,7 +540,9 @@ export function renderBootError(
         : message + '\n\n' + (e as Error).stack,
     );
     pre.style.fontSize = '';
-    container.append(makeHeading('Database initialization failed'), pre);
+    // CR-U-13 (U1-m15): transient failures land here (a lock, a full disk),
+    // so the non-destructive retry comes first.
+    container.append(makeHeading('Database initialization failed'), pre, makeReloadButton(reload));
     appendFailureNotice(container);
     appendRestoreSection(container, { reveal: true, releases: false, reload, now });
     root.replaceChildren(container);

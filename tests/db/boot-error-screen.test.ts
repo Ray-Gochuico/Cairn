@@ -244,7 +244,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     await settled(root, 2);
     expect(root.textContent).not.toMatch(/may be corrupt/i);
     expect(root.textContent).not.toMatch(/update cairn/i);
-    expect(buttons(root)).toEqual(['Restore', 'Restore', 'Reveal backups in Finder']);
+    expect(buttons(root)).toEqual(['Try again', 'Restore', 'Restore', 'Reveal backups in Finder']); // CR-U-13: Try again first
   });
 
   it('a failure AFTER a successful sample boot (the explore flag still set) never lists or restores backups of the real profile (PR-8)', async () => {
@@ -510,6 +510,22 @@ describe('CR-U-12 — the restore section only for a DATABASE failure (U1-m33)',
     await new Promise((r) => setTimeout(r, 20));
     expect(mList).not.toHaveBeenCalled();
     expect(root.textContent).not.toContain('Restore a copy');
+  });
+});
+
+describe('CR-U-13 — the generic DB screen offers Try again (U1-m15)', () => {
+  it('Try again is the FIRST button and reloads; nothing is restored', async () => {
+    vi.clearAllMocks();
+    mList.mockResolvedValue([PRE]);
+    const root = document.createElement('div');
+    const reload = vi.fn();
+    renderBootError(root, dbInit('database is locked'), { reload });
+    await settled(root, 1);
+    const first = root.querySelector('button')!;
+    expect(first.textContent).toBe('Try again');
+    first.click();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(mRestore).not.toHaveBeenCalled();
   });
 });
 
