@@ -16,9 +16,10 @@ import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { AccountType, SnapshotSource } from '@/types/enums';
 import NetWorth from '@/pages/NetWorth';
 
-// Its own file (not a NetWorth.test.tsx describe): the stores' de-duped load
-// is module state, and a page from an earlier test in the same module can
-// leave an in-flight load behind that this page's mount would join. Harness
+// Its own file, so no other test's store state can reach it. (Appended to
+// NetWorth.test.tsx these arms first failed because a test there stubbed the
+// snapshots store's `load` and never restored it, so every later mount loaded
+// no snapshots; that file now restores its stubs after each test.) Harness
 // mirrors NetWorth.test.tsx (real in-memory DB, the page's own hydration).
 function resetStores() {
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });

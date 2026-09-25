@@ -176,7 +176,9 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
   // math one; do not gate here.
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
-  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // LOCAL calendar day (v1.7.0 R4 review), the same calendar as this
+  // popover's new-row default and the What-If page's own today.
+  const todayISO = useMemo(() => localTodayISO(), []);
   const currentObligationsMonthly = useMemo(
     () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
     [housingPayments, vehicleLeases, todayISO],

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -148,5 +148,55 @@ describe('never-pays-off guard (wave-7 W1)', () => {
     await user.type(input, '300');
     expect(screen.getAllByText(/Payoff: .+ → was .+ \(–\d+ months\)/)[0]).toBeInTheDocument();
     expect(screen.queryByTestId(/whatif-extra-never-payoff/)).not.toBeInTheDocument();
+  });
+});
+
+// v1.7.0 R4 review MINOR 1: the payoff preview re-anchors each loan at its
+// next due date on or after "today" (nextPaymentDateFrom), and today was the
+// UTC day. A loan due the local day was pushed a month out on a New York
+// evening (UTC is already past the due date); on an Auckland morning a loan
+// due the local YESTERDAY (still the UTC today) stayed in this month. The
+// preview anchors on the local day. Loan: $1,000 at 12%, $510/mo — two
+// payments, so the baseline payoff is the month after the next due date.
+describe('ExtraLoanPaymentsPopover — the preview anchors on the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const loan = (id: number, name: string, firstPaymentDate: string) => ({
+    id, householdId: 1, name, type: 'PERSONAL', currentBalance: 1000, interestRate: 0.12,
+    monthlyPayment: 510, termMonths: 24, firstPaymentDate,
+  });
+  function seedLoans(loans: ReturnType<typeof loan>[]) {
+    useLoansStore.setState({ loans: loans as never, isLoading: false, error: null, load: async () => {} } as never);
+    const payload = emptyLeverPayload();
+    payload.extraLoanPayments = loans.map((l) => ({ loanId: l.id, extraMonthly: 100 }));
+    useScenariosStore.setState({
+      scenarios: [{ ...useScenariosStore.getState().scenarios[0], leverPayload: payload }] as Scenario[],
+    });
+    render(<MemoryRouter><ExtraLoanPaymentsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+  }
+  const previewOf = (name: string) => screen.getByText(name).parentElement!.textContent ?? '';
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): due the local 24th → paid off in October', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    seedLoans([loan(7, 'Due today', '2026-01-24')]);
+    expect(previewOf('Due today')).toMatch(/was Oct 2026/);
+  });
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): due the local 25th → October; due the local 24th → November', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    seedLoans([loan(7, 'Due today', '2026-01-25'), loan(8, 'Due yesterday', '2026-01-24')]);
+    expect(previewOf('Due today')).toMatch(/was Oct 2026/);
+    expect(previewOf('Due yesterday')).toMatch(/was Nov 2026/);
   });
 });

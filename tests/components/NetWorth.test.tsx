@@ -67,6 +67,14 @@ const loadAssetValueSnapshotsMigration = () =>
     'utf-8',
   );
 
+// The stores' real loads, captured before any test stubs one. Two tests below
+// stub a `load` (the W10 M5 skeleton test: snapshots; the p1-view test:
+// persons); resetStores() never touched `load`, so a stub leaked into every
+// later mount in this module — a snapshots stub left the page loading no
+// snapshots at all. The describe's afterEach puts the real ones back.
+const REAL_SNAPSHOTS_LOAD = useSnapshotsStore.getState().load;
+const REAL_PERSONS_LOAD = usePersonsStore.getState().load;
+
 function resetStores() {
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
@@ -196,6 +204,8 @@ describe('NetWorth page', () => {
   });
 
   afterEach(async () => {
+    useSnapshotsStore.setState({ load: REAL_SNAPSHOTS_LOAD });
+    usePersonsStore.setState({ load: REAL_PERSONS_LOAD });
     await db.close();
   });
 
@@ -568,9 +578,17 @@ describe('NetWorth — hero chart toggle (W14 chart merge)', () => {
     await db.close();
   });
 
+  // Two investment accounts: the investments surface's header reads its
+  // full-set label ("Total investments") only over more than one included
+  // account — a single one reads its own name. These tests used to pass on
+  // ONE account because the leaked snapshots `load` stub (see
+  // REAL_SNAPSHOTS_LOAD) left the surface with no eligible account at all,
+  // whose empty-state label is the same string.
   async function seedBasic() {
     const accountId = await seedAccount(db, 'Schwab');
     await seedSnapshot(db, accountId, '2024-06-28', 150000);
+    const second = await seedAccount(db, 'Fidelity');
+    await seedSnapshot(db, second, '2024-06-28', 50000);
     await seedProperty(db, 400000);
   }
 

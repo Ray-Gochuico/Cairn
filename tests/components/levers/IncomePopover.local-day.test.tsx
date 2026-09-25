@@ -78,3 +78,50 @@ describe('IncomePopover — a new event\'s When is the LOCAL day', () => {
     expect(await addEventWhen()).toBe('2026-10-01');
   });
 });
+
+// v1.7.0 R4 review MINOR 0: the popover's recurring-obligations figure (rent +
+// leases active "today", subtracted from the surplus) read the UTC day while
+// its new-row default and month key were local. An obligation ending the local
+// day dropped out a day early on a New York evening; one starting the local
+// day was not yet counted on an Auckland morning. It reads the local day.
+describe('IncomePopover — the obligations as-of is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    seedStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const OBLIGATION = { id: 1, householdId: 1, ownerPersonId: null, name: 'X', monthlyAmount: 1000 };
+  function gapDollars(): number {
+    const { unmount } = render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const text = screen.getByTestId('income-monthly-gap').textContent ?? '';
+    unmount();
+    const n = Number(text.replace(/[^0-9.]/g, ''));
+    return text.includes('−') ? -n : n;
+  }
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): a lease ending the local 24th still counts', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    const without = gapDollars();
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [{ ...OBLIGATION, startDate: '2024-09-25', endDate: '2026-09-24' }] as never,
+    });
+    expect(gapDollars()).toBe(without - 1000);
+  });
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): rent starting the local 25th already counts', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    const without = gapDollars();
+    useHousingPaymentsStore.setState({
+      housingPayments: [{ ...OBLIGATION, startDate: '2026-09-25', endDate: null }] as never,
+    });
+    expect(gapDollars()).toBe(without - 1000);
+  });
+});
