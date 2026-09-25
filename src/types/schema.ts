@@ -17,8 +17,12 @@ import {
   LearningDifficulty,
   GrantType,
 } from './enums';
+import { localTodayISO } from '@/lib/dates';
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The LOCAL calendar day (v1.7.0 R4 smoke): the app's writers stamp the local
+// day, so a UTC-day cap refused a morning entry dated today east of UTC and
+// let an evening entry dated tomorrow through west of it.
+const today = () => localTodayISO();
 
 const isoDateString = z
   .string()

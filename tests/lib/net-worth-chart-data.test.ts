@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   AccountType,
   LoanType,
@@ -369,5 +369,46 @@ describe('buildNetWorthChartData — as-of semantics (spec §5.1)', () => {
     const byEnd = Object.fromEntries(rows.map((r) => [r.bucketEnd, r['loan:9']]));
     expect(byEnd['2024-12-31']).toBe(-350000);            // anchor bucket: currentBalance verbatim
     expect(byEnd['2024-11-30'] as number).toBeLessThan(-350000); // one month back-walked → higher balance → more negative
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): with no `today` the spine ended at the UTC
+// day of the wall clock — an Auckland-morning balance (local ahead of UTC)
+// fell past the newest bucket, and a New York evening's newest bucket was the
+// NEXT local day. The default is the LOCAL day.
+describe('buildNetWorthChartData — the default today is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const newestRow = (snaps: Array<[string, number]>) => {
+    const rows = buildNetWorthChartData({
+      accounts: [mkAccount(1, 'Brokerage')],
+      snapshots: snaps.map(([d, v], i) => mkSnapshot(i + 1, 1, d, v)),
+      properties: [], vehicles: [], loans: [], assetValueSnapshots: [],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      granularity: 'DAY',
+      cutoff: null,
+    });
+    const last = rows[rows.length - 1];
+    return { bucketEnd: last.bucketEnd, netWorth: last.netWorth };
+  };
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): the newest bucket is the local 25th, with its balance', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    expect(newestRow([['2026-09-20', 100_000], ['2026-09-25', 120_000]]))
+      .toEqual({ bucketEnd: '2026-09-25', netWorth: 120_000 });
+  });
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): the newest bucket is the local 24th, not the next day', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    expect(newestRow([['2026-09-20', 100_000], ['2026-09-24', 120_000], ['2026-09-25', 150_000]]))
+      .toEqual({ bucketEnd: '2026-09-24', netWorth: 120_000 });
   });
 });

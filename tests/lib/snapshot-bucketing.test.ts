@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   bucketSnapshots,
   cutoffForWindow,
@@ -125,5 +125,36 @@ describe('cutoffForWindow — 6M and YTD', () => {
   it('existing windows are unchanged', () => {
     expect(cutoffForWindow('3M', new Date(Date.UTC(2026, 5, 12)))).toBe('2026-03-12');
     expect(cutoffForWindow('ALL')).toBeNull();
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): the no-argument default read the UTC day of
+// the wall clock; the window now starts from the LOCAL day.
+describe('cutoffForWindow — the default today is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): 3M starts at the local 25th minus 3 months', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    expect(cutoffForWindow('3M')).toBe('2026-06-25');
+    expect(cutoffForWindow('YTD')).toBe('2026-01-01');
+  });
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): 3M starts at the local 24th minus 3 months', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    expect(cutoffForWindow('3M')).toBe('2026-06-24');
+  });
+
+  it('New Year\'s Eve, 20:00 EST (01:00 UTC Jan 1): YTD is still the local year', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2027-01-01T01:00:00Z'));
+    expect(cutoffForWindow('YTD')).toBe('2026-01-01');
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -491,5 +491,61 @@ describe('AssetsDonut', () => {
         screen.getByRole('button', { name: /Included · 0 of 3/ }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): each wedge is the latest value on or before
+// "today", and today was the UTC day of the wall clock. The writers stamp the
+// LOCAL day, so an Auckland-morning balance (local ahead of UTC) was missing
+// from the donut until local noon, and a New York evening counted a row dated
+// the NEXT local day. Today is the local day.
+describe('AssetsDonut — "latest on or before today" is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  function seed(accountRows: Array<[string, number]>, propertyRows: Array<[string, number]>) {
+    useAccountsStore.setState({ accounts: [mkAccount(1, 'Brokerage')], isLoading: false, error: null });
+    useSnapshotsStore.setState({
+      snapshots: accountRows.map(([d, v], i) => mkSnapshot(i + 1, 1, d, v)),
+      isLoading: false, error: null,
+    });
+    usePropertiesStore.setState({
+      properties: [mkProperty(10, 'Home', { currentEstimatedValue: 400000 })],
+      isLoading: false, error: null,
+    });
+    useAssetValueSnapshotsStore.setState({
+      assetValueSnapshots: propertyRows.map(([snapshotDate, value], i) => (
+        { id: i + 1, ownerType: 'PROPERTY', ownerId: 10, snapshotDate, value } as AssetValueSnapshot
+      )),
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
+  }
+
+  it('Pacific/Auckland, 09:00 NZST (21:00 UTC the previous day): the local 25th\'s values are the wedges', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    seed([['2026-09-20', 100000], ['2026-09-25', 120000]], [['2026-09-20', 500000], ['2026-09-25', 520000]]);
+    expect(screen.getByTestId('slice-Brokerage')).toHaveAttribute('data-value', '120000');
+    expect(screen.getByTestId('slice-Home')).toHaveAttribute('data-value', '520000');
+  });
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): the local 24th\'s values, not the next day\'s', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    seed(
+      [['2026-09-20', 100000], ['2026-09-24', 120000], ['2026-09-25', 150000]],
+      [['2026-09-20', 500000], ['2026-09-24', 520000], ['2026-09-25', 550000]],
+    );
+    expect(screen.getByTestId('slice-Brokerage')).toHaveAttribute('data-value', '120000');
+    expect(screen.getByTestId('slice-Home')).toHaveAttribute('data-value', '520000');
   });
 });

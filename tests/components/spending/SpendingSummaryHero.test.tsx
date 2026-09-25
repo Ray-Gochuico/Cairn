@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CategoryType } from '@/types/enums';
@@ -132,5 +132,39 @@ describe('data-anchored default range (round-3 S12)', () => {
   it('current-month data keeps This month', () => {
     render(<SpendingSummaryHero transactions={txns} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
     expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): with no injected asOf the hero anchored its
+// ranges on a LOCAL-midnight Date read through UTC accessors (rangeBounds,
+// the default-range pick) — the PREVIOUS day east of UTC, so on an Auckland
+// 1st "This month" was still last month. The anchor is the local day in
+// every zone. The New York arm guards the west (where the old anchor already
+// agreed) against a UTC-day-of-the-instant anchor, which is already October.
+describe('SpendingSummaryHero — ranges anchor on the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Pacific/Auckland, 10:00 NZDT Oct 1 (21:00 UTC Sep 30): today\'s purchase opens This month, October', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-30T21:00:00Z'));
+    const october = [txn({ id: 1, date: '2026-10-01', categoryId: 1, amount: 50 })];
+    render(<SpendingSummaryHero transactions={october} categories={cats} monthlyBudget={0} />);
+    expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('spending-hero-total')).toHaveTextContent('$50');
+  });
+
+  it('New York, 23:33 EDT Sep 30 (03:33 UTC Oct 1): today\'s purchase opens This month, September', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-10-01T03:33:00Z'));
+    const september = [txn({ id: 1, date: '2026-09-30', categoryId: 1, amount: 50 })];
+    render(<SpendingSummaryHero transactions={september} categories={cats} monthlyBudget={0} />);
+    expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('spending-hero-total')).toHaveTextContent('$50');
   });
 });

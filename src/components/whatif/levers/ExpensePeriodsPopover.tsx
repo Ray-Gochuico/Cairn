@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import LeverPopoverShell from './LeverPopoverShell';
+import { localTodayISO } from '@/lib/dates';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,8 @@ function baseSourceLabel(source: ExpenseSource, rollingMonths: number): string {
 }
 
 function emptyRow(): ExpensePeriod {
-  const today = new Date().toISOString().slice(0, 10);
+  // LOCAL day (v1.7.0 R4 smoke) — the same calendar as todayMonthISO below.
+  const today = localTodayISO();
   return { start: today, monthlyDelta: 0, durationMonths: 1, label: '' };
 }
 

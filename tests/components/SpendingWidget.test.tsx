@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -235,5 +235,43 @@ describe('SpendingWidget', () => {
     // The Select is a radix component — we just confirm the props plumb the
     // accounts. The trigger is rendered with the placeholder for "all".
     expect(screen.getByTestId('spending-widget-account-select')).toBeInTheDocument();
+  });
+});
+
+// v1.7.0 R4 smoke (reader half): the dashboard widget's ranges share the
+// hero's anchor — a LOCAL-midnight Date read through rangeBounds' UTC
+// accessors, the PREVIOUS day east of UTC. The anchor is the local day. The
+// New York arm guards the west against a UTC-day-of-the-instant anchor.
+describe('SpendingWidget — ranges anchor on the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const renderUnanchored = () => render(
+    <MemoryRouter>
+      <SpendingWidget transactions={[]} categories={[]} accounts={[]} />
+    </MemoryRouter>,
+  );
+
+  it('Pacific/Auckland, 10:00 NZDT Oct 1 (21:00 UTC Sep 30): This month is October', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-30T21:00:00Z'));
+    renderUnanchored();
+    const bounds = screen.getByTestId('spending-widget-date-bounds');
+    expect(bounds).toHaveTextContent('Oct 1, 2026');
+    expect(bounds).toHaveTextContent('Oct 31, 2026');
+  });
+
+  it('New York, 23:33 EDT Sep 30 (03:33 UTC Oct 1): This month is September', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-10-01T03:33:00Z'));
+    renderUnanchored();
+    const bounds = screen.getByTestId('spending-widget-date-bounds');
+    expect(bounds).toHaveTextContent('Sep 1, 2026');
+    expect(bounds).toHaveTextContent('Sep 30, 2026');
   });
 });

@@ -6,6 +6,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { localTodayISO } from '@/lib/dates';
 import {
   latestAssetValue,
   latestSnapshotForAccount,
@@ -107,7 +108,7 @@ export default function AssetsDonut() {
     slices: DonutSlice[];
     pickerItems: DonutEntityPickerItem[];
   }>(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localTodayISO(); // LOCAL calendar day (v1.7.0 R4 smoke) — the writers' day
     const sl: DonutSlice[] = [];
     const pi: DonutEntityPickerItem[] = [];
 

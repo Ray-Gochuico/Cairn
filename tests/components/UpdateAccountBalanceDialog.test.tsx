@@ -9,8 +9,10 @@ import { AccountsRepo } from '@/domain/accounts';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { AccountType } from '@/types/enums';
+import { localTodayISO } from '@/lib/dates';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { roadmapReadsOf } from '../helpers/roadmap-local-day-reads';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -109,5 +111,80 @@ describe('UpdateAccountBalanceDialog', () => {
     // Save button should be disabled when amount is empty
     const saveButton = screen.getByRole('button', { name: /^save$/i });
     expect(saveButton).toBeDisabled();
+  });
+});
+
+/**
+ * v1.7.0 R4 smoke regression: the dialog's "As of" default was the UTC day,
+ * so an evening update west of UTC saved a snapshot dated TOMORROW — outside
+ * the Roadmap's local-day reads. The default is now the LOCAL day.
+ */
+describe('UpdateAccountBalanceDialog — the As-of default is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
+      { version: '0024_cash_apy', sql: loadCashApyMigration() },
+    ]);
+    setDatabase(db);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+    await db.close();
+  });
+
+  async function saveDefaultDatedBalance(): Promise<{ accountId: number; snapshotDate: string; totalValue: number }> {
+    const accountId = await seedAccount(db, 'College 529');
+    const user = userEvent.setup();
+    render(
+      <UpdateAccountBalanceDialog
+        open={true}
+        onOpenChange={vi.fn()}
+        accountId={accountId}
+        accountName="College 529"
+      />
+    );
+    await user.type(screen.getByLabelText(/current balance/i), '12500');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(async () => {
+      expect(await new AccountSnapshotsRepo(db).listForAccount(accountId)).toHaveLength(1);
+    });
+    const [row] = await new AccountSnapshotsRepo(db).listForAccount(accountId);
+    return { accountId, snapshotDate: row.snapshotDate, totalValue: row.totalValue };
+  }
+
+  it('New York, 23:33 EDT (03:33 UTC the next day): saved as of the local 24th, and the Roadmap sees it', async () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    expect(localTodayISO()).toBe('2026-09-24'); // the arm's premise
+
+    const saved = await saveDefaultDatedBalance();
+    const { collegeLine, invested } = roadmapReadsOf(saved);
+    expect(collegeLine).toMatch(/^\$12,500 across 529 accounts plus \$500\/mo grows to/);
+    expect(invested).toBe(12_500);
+    expect(saved.snapshotDate).toBe('2026-09-24');
+  });
+
+  it('Pacific/Kiritimati, 02:00 (12:00 UTC the previous day): saved as of the local 25th, ahead of UTC', async () => {
+    process.env.TZ = 'Pacific/Kiritimati';
+    vi.setSystemTime(new Date('2026-09-24T12:00:00Z'));
+    expect(localTodayISO()).toBe('2026-09-25'); // the arm's premise
+
+    const saved = await saveDefaultDatedBalance();
+    expect(saved.snapshotDate).toBe('2026-09-25');
+    const { collegeLine, invested } = roadmapReadsOf(saved);
+    expect(collegeLine).toMatch(/^\$12,500 across 529 accounts plus \$500\/mo grows to/);
+    expect(invested).toBe(12_500);
   });
 });

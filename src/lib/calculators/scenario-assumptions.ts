@@ -1,5 +1,6 @@
 import type { Account, AppSettings, Household } from '@/types/schema';
 import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
+import { localTodayISO } from '@/lib/dates';
 import { pickModerateEntry } from '@/lib/growth-scenario';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
@@ -142,7 +143,9 @@ export function rolling12MonthContribution(
  * never disagree with the number.
  */
 export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDefaultsResult {
-  const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
+  // LOCAL calendar day (v1.7.0 R4 smoke) — the day the writers stamp; the
+  // calculators' prefill (use-scenario-assumptions) takes this default.
+  const todayIso = input.todayIso ?? localTodayISO();
   const { household, settings } = input;
 
   const scope = input.scope ?? null;

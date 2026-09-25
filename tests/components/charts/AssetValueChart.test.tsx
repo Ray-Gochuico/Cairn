@@ -794,3 +794,44 @@ describe('AssetValueChart — investments surface', () => {
     expect(within(dialog).queryByLabelText('Bob Brokerage')).not.toBeInTheDocument();
   });
 });
+
+// v1.7.0 R4 smoke (reader half): the chart's "today" (spine end, window
+// cutoff, display clamp) was the UTC day of the wall clock. The writers stamp
+// the LOCAL day. The default 1Y view buckets by week (ending Saturday), so
+// these arms sit where the local and UTC days fall in DIFFERENT weeks: an
+// Auckland Sunday morning (still Saturday in UTC) and a New York Saturday
+// evening (already Sunday in UTC).
+describe('AssetValueChart — "today" is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  function seedOneAccount(rows: Array<[string, number]>) {
+    seedEmptyStores();
+    useAccountsStore.setState({
+      accounts: [mkAccount(1, 'Schwab')], isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: rows.map(([d, v], i) => mkSnapshot(i + 1, 1, d, v)),
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  }
+
+  it('Pacific/Auckland, Sunday 09:00 NZDT (Saturday 20:00 UTC): the local Sunday\'s balance is the header value', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-26T20:00:00Z')); // local Sun 2026-09-27
+    seedOneAccount([['2026-09-20', 100000], ['2026-09-27', 120000]]);
+    renderChart('netWorth');
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$120,000');
+  });
+
+  it('New York, Saturday 23:33 EDT (Sunday 03:33 UTC): the local Saturday\'s balance, not the next day\'s', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-27T03:33:00Z')); // local Sat 2026-09-26
+    seedOneAccount([['2026-09-20', 100000], ['2026-09-26', 120000], ['2026-09-27', 150000]]);
+    renderChart('netWorth');
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$120,000');
+  });
+});

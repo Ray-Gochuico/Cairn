@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -586,5 +586,44 @@ describe('Retirement401kWithdrawalCard — page scope (Wave B)', () => {
       'aria-pressed',
       'true',
     );
+  });
+});
+
+// v1.7.0 R4 review MINOR 2: the default age read the UTC day, so it ticked a
+// day early on a birthday's eve west of UTC and a day late on the birthday
+// morning east of UTC — disagreeing with currentAge (B3, the local day) that
+// the other calculators and the interview kernel use. It is currentAge now.
+describe('Retirement401kWithdrawalCard — the default age is the LOCAL-day age', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  function defaultAgeFor(dateOfBirth: string): number {
+    primeStores();
+    usePersonsStore.setState({
+      persons: [{ ...usePersonsStore.getState().persons[0], dateOfBirth }],
+    });
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    return Number((screen.getByLabelText(/age at withdrawal/i) as HTMLInputElement).value);
+  }
+
+  it('Pacific/Auckland, 09:00 NZST Sep 25 (21:00 UTC Sep 24): born Sep 25, 1960 → 66 on the local birthday', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-24T21:00:00Z'));
+    expect(defaultAgeFor('1960-09-25')).toBe(66);
+  });
+
+  it('New York, 23:33 EDT Sep 24 (03:33 UTC Sep 25): born Sep 25, 1960 → still 65 on the local birthday eve', () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-09-25T03:33:00Z'));
+    expect(defaultAgeFor('1960-09-25')).toBe(65);
   });
 });

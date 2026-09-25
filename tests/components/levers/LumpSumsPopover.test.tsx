@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -72,5 +72,42 @@ describe('LumpSumsPopover', () => {
     expect(updateLever).toHaveBeenCalledWith(1, expect.objectContaining({
       lumpSums: [expect.objectContaining({ amount: -8000 })],
     }));
+  });
+});
+
+// v1.7.0 R4 smoke regression: a new row's When defaulted to the UTC day. The
+// engine fires a lump sum in `when.slice(0, 7)`'s month against a projection
+// that starts in the LOCAL month, so on a month's last local evening west of
+// UTC the default landed a month late, and on a local 1st east of UTC it
+// landed in the month BEFORE the projection starts. It is now the local day.
+describe('LumpSumsPopover — a new row\'s When is the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStore();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  async function addRowWhen(): Promise<string> {
+    const user = userEvent.setup();
+    render(<MemoryRouter><LumpSumsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /add event/i }));
+    return (screen.getByLabelText('When') as HTMLInputElement).value;
+  }
+
+  it('New York, 23:33 EDT on Sep 30 (03:33 UTC Oct 1): September 30', async () => {
+    process.env.TZ = 'America/New_York';
+    vi.setSystemTime(new Date('2026-10-01T03:33:00Z'));
+    expect(await addRowWhen()).toBe('2026-09-30');
+  });
+
+  it('Pacific/Auckland, 10:00 NZDT on Oct 1 (21:00 UTC Sep 30): October 1', async () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-09-30T21:00:00Z'));
+    expect(await addRowWhen()).toBe('2026-10-01');
   });
 });

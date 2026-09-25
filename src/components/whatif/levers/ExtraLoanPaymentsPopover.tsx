@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { buildLoanPreviewInput, previewExtraLoanPayment } from '@/lib/whatif/extra-loan-preview';
+import { localTodayISO } from '@/lib/dates';
 import type { ExtraLoanPayment } from '@/lib/scenarios';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
@@ -48,8 +49,9 @@ export default function ExtraLoanPaymentsPopover({ open, onOpenChange }: Props) 
   }, [open, loans, active?.leverPayload]);
 
   // Component code — the real-clock policy governs test files. The lib takes
-  // the date explicitly so it stays clock-free testable.
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // the date explicitly so it stays clock-free testable. The LOCAL calendar
+  // day (v1.7.0 R4 review) — the What-If page's own today.
+  const todayIso = useMemo(() => localTodayISO(), []);
 
   const previews = useMemo(() => {
     return draft.map((row) => {

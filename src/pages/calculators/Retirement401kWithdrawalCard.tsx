@@ -15,18 +15,10 @@ import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { currentAge } from '@/lib/dates';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
-}
-
-function yearsBetween(dobISO: string, todayISO: string): number {
-  const dob = new Date(`${dobISO}T00:00:00Z`);
-  const today = new Date(`${todayISO}T00:00:00Z`);
-  let age = today.getUTCFullYear() - dob.getUTCFullYear();
-  const m = today.getUTCMonth() - dob.getUTCMonth();
-  if (m < 0 || (m === 0 && today.getUTCDate() < dob.getUTCDate())) age--;
-  return age;
 }
 
 export function Retirement401kWithdrawalCard({
@@ -62,10 +54,12 @@ export function Retirement401kWithdrawalCard({
   );
   const earner = persons.find((p) => p.id === earnerId) ?? persons[0] ?? null;
   const defaults = useMemo(() => {
-    const todayISO = new Date().toISOString().slice(0, 10);
     const defaultW2 = earner?.annualSalaryPretax ?? 0;
+    // currentAge (B3): the same whole-years rule the removed local helper
+    // applied, on the LOCAL calendar day (v1.7.0 R4 review) — it had read the
+    // UTC day, a day off around a birthday.
     const defaultAge = earner?.dateOfBirth
-      ? yearsBetween(earner.dateOfBirth, todayISO)
+      ? currentAge(earner.dateOfBirth)
       : 67;
     return {
       withdrawalAmount: 0,

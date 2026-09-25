@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CategorySchema, MerchantOverrideSchema, MerchantSeedSchema, AppSettingsSchema } from '@/types/schema';
 import { RefreshCadence } from '@/types/enums';
+import { localTodayISO } from '@/lib/dates';
 
 describe('CategorySchema', () => {
   it('accepts a valid category and a null parent', () => {
@@ -77,7 +78,10 @@ import {
   GoalType,
 } from '@/types/enums';
 
-const futureDate = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+// Tomorrow on the LOCAL calendar — the `pastOrTodayDate` cap is the local day
+// (v1.7.0 R4 smoke). The UTC day of now+24h is local TODAY in a UTC+ zone's
+// morning, which the cap rightly accepts.
+const futureDate = () => localTodayISO(new Date(Date.now() + 86400000));
 
 describe('HouseholdSchema', () => {
   it('accepts a valid household', () => {
@@ -162,7 +166,7 @@ describe('PersonSchema', () => {
   });
 
   it('rejects DOB in the future', () => {
-    const futureDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const futureDate = localTodayISO(new Date(Date.now() + 86400000)); // local tomorrow — see top
     const invalid = {
       id: 1,
       householdId: 1,

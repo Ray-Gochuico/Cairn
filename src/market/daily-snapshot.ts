@@ -3,6 +3,7 @@ import type { HoldingsRepo } from '@/domain/holdings';
 import type { AccountSnapshotsRepo } from '@/domain/snapshots';
 import type { Holding } from '@/types/schema';
 import { SnapshotSource } from '@/types/enums';
+import { localTodayISO } from '@/lib/dates';
 import type { PriceCacheAPI } from './price-cache';
 
 export interface DailySnapshotDeps {
@@ -56,7 +57,10 @@ export async function deriveTodaysSnapshot(
   deps: DailySnapshotDeps,
   today: Date = new Date()
 ): Promise<DailySnapshotResult> {
-  const todayIso = today.toISOString().slice(0, 10);
+  // LOCAL calendar day (v1.7.0 R4 smoke): the same day a MANUAL balance
+  // entered that evening carries, so the same-date MANUAL-wins upsert still
+  // resolves them — the UTC day is already tomorrow west of UTC.
+  const todayIso = localTodayISO(today);
   const allAccounts = await deps.accounts.list();
   const allHoldings = await deps.holdings.listAll();
 

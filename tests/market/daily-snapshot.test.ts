@@ -122,7 +122,9 @@ describe('deriveTodaysSnapshot', () => {
       costBasis: null,
     });
 
-    const today = new Date(Date.UTC(2026, 4, 19)); // 2026-05-19
+    // Local NOON on May 19 — the writer stamps the LOCAL day (v1.7.0 R4 smoke),
+    // and a UTC-midnight instant is still May 18 anywhere west of UTC.
+    const today = new Date(2026, 4, 19, 12); // 2026-05-19
     await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices }, today);
 
     const snaps = await snapshots.listForAccount(acctId);
@@ -140,7 +142,7 @@ describe('deriveTodaysSnapshot', () => {
       costBasis: null,
     });
 
-    const today = new Date(Date.UTC(2026, 4, 19));
+    const today = new Date(2026, 4, 19, 12); // local noon — see above
     await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices }, today);
     await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices }, today);
 
@@ -256,5 +258,46 @@ describe('deriveTodaysSnapshot', () => {
     expect(result.partial).toContain(dirtyAcct);
     const dirtySnaps = await snapshots.listForAccount(dirtyAcct);
     expect(dirtySnaps).toEqual([]);
+  });
+
+  // v1.7.0 R4 smoke regression: the refresh's AUTO_DERIVED snapshot was dated
+  // the UTC day — tomorrow in the evening west of UTC — so it sat past the
+  // Roadmap's local-day reads AND out of the same-date MANUAL-wins upsert
+  // against a balance the user entered that evening. It is the LOCAL day now.
+  describe('the AUTO_DERIVED row is dated the LOCAL day', () => {
+    const ORIGINAL_TZ = process.env.TZ;
+    afterEach(() => {
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
+
+    it.each([
+      { zone: 'America/New_York', instant: '2026-09-25T03:33:00Z', local: '2026-09-24' },
+      { zone: 'Pacific/Auckland', instant: '2026-09-24T21:00:00Z', local: '2026-09-25' },
+    ])('$zone at $instant: $local', async ({ zone, instant, local }) => {
+      process.env.TZ = zone;
+      const acctId = await makeAccount('Brokerage', AccountType.ACCOUNT_BROKERAGE);
+      await holdings.create({
+        accountId: acctId, ticker: 'VTI', shareCount: 1, targetAllocationPct: null, costBasis: null,
+      });
+      await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices }, new Date(instant));
+      const snaps = await snapshots.listForAccount(acctId);
+      expect(snaps.map((s) => s.snapshotDate)).toEqual([local]);
+    });
+
+    it('New York evening: a MANUAL balance entered that evening still wins the same-day upsert', async () => {
+      process.env.TZ = 'America/New_York';
+      const acctId = await makeAccount('Brokerage', AccountType.ACCOUNT_BROKERAGE);
+      await holdings.create({
+        accountId: acctId, ticker: 'VTI', shareCount: 1, targetAllocationPct: null, costBasis: null,
+      });
+      await snapshots.upsert({
+        accountId: acctId, snapshotDate: '2026-09-24', totalValue: 999, source: SnapshotSource.MANUAL,
+      });
+      await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices }, new Date('2026-09-25T03:33:00Z'));
+      const snaps = await snapshots.listForAccount(acctId);
+      expect(snaps).toHaveLength(1);
+      expect(snaps[0]).toMatchObject({ snapshotDate: '2026-09-24', totalValue: 999, source: SnapshotSource.MANUAL });
+    });
   });
 });
