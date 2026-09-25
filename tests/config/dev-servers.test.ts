@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -86,5 +87,16 @@ describe('E2E_PORT_BASE (v1.7.1 A-6, CR-I-2) — an opt-in base for the two Play
     expect(message).not.toMatch(/!/);
     expect(message).not.toMatch(/you should/i);
     expect(message).toContain('unset it for the fixed 1422/1423.');
+  });
+});
+
+const PKG = JSON.parse(readFileSync(path.resolve(__dirname, '..', '..', 'package.json'), 'utf8')) as {
+  scripts: Record<string, string>;
+};
+
+describe('the two Playwright scripts (v1.7.1 A-6) — the port is computed in vite.config.ts', () => {
+  it('pass no --port; --strictPort and the explicit role stay (byte-exact)', () => {
+    expect(PKG.scripts['dev:browser:seed']).toBe('VITE_BROWSER_SHIM=1 VITE_SEED_DEMO=1 CAIRN_DEV_ROLE=seed vite --strictPort');
+    expect(PKG.scripts['dev:browser:fresh']).toBe('VITE_BROWSER_SHIM=1 CAIRN_DEV_ROLE=fresh vite --strictPort');
   });
 });
