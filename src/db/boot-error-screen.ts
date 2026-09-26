@@ -595,7 +595,7 @@ export function renderBootError(
       typeof copyPath === 'string' && copyPath.length > 0
         ? fromBeforeUpdate
           ? `The update stopped partway. A copy of your data from before the update was saved: ${basename(copyPath)}. ` +
-            'Restoring it puts your data back the way it was; Cairn tries the update again when it opens. ' +
+            'Restoring it puts your data back the way it was; Cairn does not run the update again until you choose Try the update again. ' +
             'To use that data without the update, the previous version of Cairn is on the releases page.'
           : `The update stopped partway. A copy of your data was saved before this attempt: ${basename(copyPath)}. ` +
             'An earlier attempt had already changed part of your data, so this copy is not from before the update.'
