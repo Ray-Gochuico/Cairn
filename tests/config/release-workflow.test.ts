@@ -230,13 +230,15 @@ describe('release.yml — every build job needs the test gate directly (v1.8.0 T
 // row and this release's, so a later edit of an intermediate row ('v1.8.0': 56
 // → 57) would drop a shipped schema from the upgrade harness with every test
 // green. The release gate also runs the guard's --all mode, which re-checks
-// every tag's row against the tag itself; the tag exists by then, so --all can
-// pass (before `git tag` it refuses the new row). Pinned the P5 way, like the
-// U3 steps above: live name line, exact run line, no if: / continue-on-error:,
-// inside the test gate, after the tag-mode guard.
+// every tag's row against the tag itself, BOUNDED by the tag being released
+// (fix round: a hotfix on an older line after a newer release is never refused
+// for the newer tag's row). The tag exists by then, so the bound has its tag.
+// Pinned the P5 way, like the U3 steps above: live name line, exact run line
+// with the bound, no if: / continue-on-error:, inside the test gate, after the
+// tag-mode guard.
 const ALL_TAGS_STEP = {
-  name: 'Released-schema guard (every tag)',
-  run: 'node scripts/released-schema-guard.mjs --all',
+  name: 'Released-schema guard (every tag up to this one)',
+  run: 'node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"',
 } as const;
 
 /** Why the test gate does NOT run the guard's --all mode as a live, blocking step after the tag-mode guard ([] = it does). */
@@ -260,7 +262,7 @@ function allTagsGuardProblems(yml: string): string[] {
 }
 
 describe('release.yml — the test gate re-checks every released tag with the guard (v1.8.0 T12, post-release review L18)', () => {
-  it('runs `node scripts/released-schema-guard.mjs --all` live and blocking in the test gate, after the tag-mode guard, once in the file', () => {
+  it('runs `node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"` (bounded by the tag) live and blocking in the test gate, after the tag-mode guard, once in the file', () => {
     expect(allTagsGuardProblems(YML)).toEqual([]);
     expect(YML.split(`        run: ${ALL_TAGS_STEP.run}\n`).length - 1).toBe(1);
   });
@@ -282,6 +284,10 @@ describe('release.yml — the test gate re-checks every released tag with the gu
       'if: false': YML.replace(NAME_LINE, `${NAME_LINE}        if: false\n`),
       '|| true': YML.replace(RUN_LINE, RUN_LINE.replace(/\n$/, ' || true\n')),
       'tag mode instead of --all': YML.replace(RUN_LINE, '        run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"\n'),
+      'bound dropped (unbounded --all refuses a hotfix on an older line)': YML.replace(
+        RUN_LINE,
+        '        run: node scripts/released-schema-guard.mjs --all\n',
+      ),
       renamed: YML.replace(NAME_LINE, '      - name: Released-schema guard\n'),
       'moved into its own job': without.replace(
         '\n  build-macos-arm64:\n',

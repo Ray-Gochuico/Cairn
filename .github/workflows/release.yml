@@ -107,13 +107,9 @@ jobs:
         # A non-final tag (v1.8.0-rc1) stops here: exit 2, "not a release tag", nothing builds (shipped behaviour; CR-T12-3).
         run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"
 
-      - name: Released-schema guard (every tag)
-        # v1.8.0 T12 (post-release review L18): tag mode checks only the previous
-        # tag's row and this release's; this re-checks every tag's row against
-        # the tag itself, so a later edit of an intermediate row cannot drop a
-        # shipped schema from the upgrade harness. The tag exists here, so every
-        # row has one (before `git tag`, --all refuses the new row).
-        run: node scripts/released-schema-guard.mjs --all
+      - name: Released-schema guard (every tag up to this one)
+        # Every release tag up to and including this one still matches its row in tests/db/released-schemas.ts (v1.8.0 T12, L18).
+        run: node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"
 
       - name: Upgrade path from every released schema
         # v1.7.1 U3: already inside the unit suite above; run by name so the

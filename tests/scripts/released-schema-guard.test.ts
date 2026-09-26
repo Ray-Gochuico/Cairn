@@ -245,4 +245,53 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
       rmSync(other, { recursive: true, force: true });
     }
   });
+
+  // v1.8.0 T12 fix round (coordinator ruling; code review of L18): the release
+  // gate runs --all BOUNDED by the tag being released, so a hotfix tagged on an
+  // older line after a newer release is not refused for the newer tag's row,
+  // which that line's released-schemas.ts never carries. The bound itself must
+  // exist as a tag and have its row; with no bound, --all is unchanged.
+  it('--all <vX.Y.Z> checks only the final tags up to and including the bound, and the bound must be a tag with its row', () => {
+    const hot = mkdtempSync(path.join(tmpdir(), 'cairn-guard-bound-'));
+    const run = (...args: string[]) => spawnSync(process.execPath, [SCRIPT, ...args], { cwd: hot, env: hermeticEnv(), encoding: 'utf8' });
+    try {
+      buildFixtureRepo(hot);                                            // v0.1.0 ships 3, v0.2.0 ships 4
+      writeFileSync(path.join(hot, 'src/db/migrations.ts'), 'export const MAX_SCHEMA_VERSION = 5;\n');
+      writeFileSync(path.join(hot, 'src-tauri/src/db_backup.rs'), 'pub const MAX_SCHEMA_VERSION: i64 = 5;\n');
+      gitIn(hot, 'add', '-A');
+      gitIn(hot, 'commit', '-q', '--no-verify', '-m', 'v0.3.0');
+      gitIn(hot, 'tag', 'v0.3.0');                                      // a newer release, schema 5
+      gitIn(hot, 'tag', 'v0.2.1', 'v0.2.0');                            // the hotfix on the older line, schema 4
+      gitIn(hot, 'tag', 'v0.2.1-rc1', 'v0.2.0');                        // a non-final tag: never read
+      // The hotfix line's rows: no 'v0.3.0' row, as on a branch cut before v0.3.0.
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.2.1': 4,\n", hot);
+      expect(run('--all')).toMatchObject({ status: 1, stderr: "v0.3.0: no row in tests/db/released-schemas.ts. Add 'v0.3.0': 5, to it.\n" });
+      expect(run('--all', 'v0.2.1')).toMatchObject({
+        status: 0,
+        stderr: '',
+        stdout:
+          'v0.1.0: src/db/migrations.ts 3, src-tauri/src/db_backup.rs 3, tests/db/released-schemas.ts 3.\n' +
+          'v0.2.0: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n' +
+          'v0.2.1: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n',
+      });
+      // The bound still needs its own row, and a wrong row below it still fails.
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n", hot);
+      expect(run('--all', 'v0.2.1')).toMatchObject({ status: 1, stderr: "v0.2.1: no row in tests/db/released-schemas.ts. Add 'v0.2.1': 4, to it.\n" });
+      recorded("  'v0.1.0': 4,\n  'v0.2.0': 4,\n  'v0.2.1': 4,\n", hot);
+      expect(run('--all', 'v0.2.1')).toMatchObject({ status: 1, stderr: 'v0.1.0: tests/db/released-schemas.ts records 4; the tag shipped 3.\n' });
+      // A row below the bound for a tag that does not exist still fails; the bound must be a tag.
+      recorded("  'v0.1.0': 3,\n  'v0.1.5': 3,\n  'v0.2.0': 4,\n  'v0.2.1': 4,\n", hot);
+      expect(run('--all', 'v0.2.1')).toMatchObject({ status: 1, stderr: 'tests/db/released-schemas.ts has rows for tags that do not exist: v0.1.5.\n' });
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.2.1': 4,\n", hot);
+      expect(run('--all', 'v0.2.2')).toMatchObject({
+        status: 1,
+        stdout: '',
+        stderr: 'v0.2.2: no such tag. --all v0.2.2 reads the tags up to it, so tag the release first.\n',
+      });
+      expect(run('--all', 'v0.2.1-rc1')).toMatchObject({ status: 2, stderr: 'not a release tag: v0.2.1-rc1 (expected vX.Y.Z)\n' });
+      expect(run('--all', '0.2.1').status).toBe(2);
+    } finally {
+      rmSync(hot, { recursive: true, force: true });
+    }
+  });
 });
