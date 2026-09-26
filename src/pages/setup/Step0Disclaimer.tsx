@@ -55,23 +55,13 @@ function Step0Disclaimer({ onComplete, onExploreEntering }: Props) {
    */
   const firstRun = persons.length === 0 && !isSetupDismissed();
 
-  // First-run path — the user has nothing to "diff from." Build a
-  // first-run document that drops diffFromPrevious so the modal doesn't
-  // surface a confusing "what changed since you last accepted" banner
-  // to someone who hasn't accepted anything yet. Re-prompts come through
-  // AppDisclaimerGate, which DOES preserve diffFromPrevious — see
-  // that file.
-  const firstRunDoc = {
-    id: 'app_wide' as const,
-    version: DISCLOSURES.app_wide.version,
-    title: DISCLOSURES.app_wide.title,
-    body: DISCLOSURES.app_wide.body,
-    acceptanceCheckboxLabel: DISCLOSURES.app_wide.acceptanceCheckboxLabel,
-  };
-
   return (
     <DisclosureModal
-      document={firstRunDoc}
+      // A-7(3) (v1.7.1): the registry entry itself. The modal alone
+      // decides the what-changed box (R3, D-R3-2: only over a recorded EARLIER
+      // acceptance of this id), so a first-run household sees no box without
+      // Step 0 dropping the diff.
+      document={{ id: 'app_wide', ...DISCLOSURES.app_wide }}
       continueLabel="Continue to setup"
       heroHeader={
         <div className="px-6 pt-6 pb-2">
@@ -98,7 +88,7 @@ function Step0Disclaimer({ onComplete, onExploreEntering }: Props) {
           try {
             // 1. Acceptance on the REAL DB — the same write path the primary
             //    action uses; the flag is not set yet, so getDatabase() is real.
-            await acceptDisclaimer('app_wide', firstRunDoc.version);
+            await acceptDisclaimer('app_wide', DISCLOSURES.app_wide.version);
             // 2. close (flush) → flag → navigate('/'): explore boot takes over.
             //    The seed then writes the app_wide acceptance into the SAMPLE
             //    DB at the registry version — justified because the flag is

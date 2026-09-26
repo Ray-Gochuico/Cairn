@@ -164,6 +164,24 @@ describe('SetupWizard route handler', () => {
     ).not.toBeInTheDocument();
   });
 
+  // A-7(3) (v1.7.1): Step 0 passes the registry entry itself (its diff included);
+  // the box stays off on the fresh route and with the post-reset store shape on
+  // the revisit route (seeded, not driven through ResetDisclaimersDialog; smoke
+  // S3 drives the dialog), because the modal shows it only over a recorded
+  // EARLIER acceptance (R3, D-R3-2).
+  it('A-7(3): a fresh visit — Step 0 shows no what-changed box', () => {
+    renderAt(['/setup']);
+    expect(screen.getByRole('heading', { name: /disclaimer/i })).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+  });
+
+  it('A-7(3): the post-reset store shape on the revisit route — Step 0 shows no what-changed box', () => {
+    resetStores({ household: makeHousehold(), persons: [{ id: 1, name: 'Alice' }] }); // acceptances cleared by the reset
+    renderAt(['/setup?origin=revisit']);
+    expect(screen.getByRole('heading', { name: /disclaimer/i })).toBeInTheDocument();
+    expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
+  });
+
   it('W4 entry rule: a true first run at /setup DOES get the explore action', () => {
     renderAt(['/setup']);
     expect(

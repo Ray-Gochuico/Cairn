@@ -122,9 +122,10 @@ export function DisclosureModal({
   // prior; the same version (the AppDisclaimerGate fail-closed path with a
   // cached current version) means nothing changed since. Every gate
   // (app_wide, roadmap, learning, backtest, interview) inherits the rule with
-  // no consumer edit; Step0Disclaimer's first-run diff drop is now redundant
-  // (left as is). ⚑ R3-F2 override: `Boolean(document.diffFromPrevious)`
-  // plus a first-time heading (CR-R3-3b in the R3 plan).
+  // no consumer edit; Step0Disclaimer passes the registry entry itself and
+  // relies on this rule alone (A-7(3), v1.7.1). ⚑ R3-F2 override:
+  // `Boolean(document.diffFromPrevious)` plus a first-time heading (CR-R3-3b
+  // in the R3 plan).
   const priorAcceptedVersion = useAcceptancesStore(
     (s) => s.acceptedVersions[document.id] ?? null,
   );
