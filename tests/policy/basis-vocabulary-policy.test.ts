@@ -20,7 +20,7 @@ import { FUTURE_SUFFIX, TODAY_SUFFIX } from '@/lib/calculators/basis-vocabulary'
  * quoting the mark is a draft of copy, and stripComments would also swallow a
  * literal that follows a `//` inside a URL on the same line. The apostrophe
  * spellings caught are exactly SHORT_MARK_RE's list: straight, escaped (\'),
- * curly (U+2019), the JS/JSON escapes \x27 ' ’ \u{2019}, and the
+ * curly (U+2019), the JS/JSON escapes \x27 \u0027 \u2019 \u{2019}, and the
  * HTML entities &apos; &rsquo; &#39; &#8217; &#x27; &#x2019;.
  */
 
