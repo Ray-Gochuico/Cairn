@@ -1377,7 +1377,11 @@ mod tests {
         let mut ro = std::fs::metadata(&backup).unwrap().permissions();
         ro.set_readonly(true); // mode 0444 on unix; the Read-only attribute on Windows
         std::fs::set_permissions(&backup, ro).unwrap();
+        let backup_before = std::fs::read(&backup).unwrap();
         replace_database_file(&backup, &live).expect("a read-only backup restores");
+        // NIT (b): the BACKUP itself is untouched — still read-only, same bytes.
+        assert!(std::fs::metadata(&backup).unwrap().permissions().readonly(), "the backup keeps its read-only mode");
+        assert_eq!(std::fs::read(&backup).unwrap(), backup_before, "the backup's bytes are untouched");
         assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
         assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
         assert!(!restore_tmp_path(&live).exists());
