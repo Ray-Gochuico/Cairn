@@ -191,6 +191,21 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
     expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: all.length, now: expect.any(Date), originFrom: 53 });
   });
 
+  it('U1-m9: the copy is "from before the update" only when its `from` is the chain origin; a partway file with no origin copy gets an honest flag', async () => {
+    await atSchema53();
+    await db.execute('ALTER TABLE tickers ADD COLUMN regular_market_change REAL'); // 0055 will collide
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', copyIsFromBeforeUpdate: true });
+    // No origin copy this time (the first attempt continued without one): the
+    // copy written now is of the half-migrated file, named from = applied (54).
+    const partwayCopy = '/x/backups/cairn-pre-update-54-to-55-20260925-101500.db';
+    takePreUpdateCopy.mockResolvedValue({ path: partwayCopy, reused: false });
+    await expect(initDatabase()).rejects.toMatchObject({
+      name: 'MigrationFailedError',
+      preUpdateCopyPath: partwayCopy,
+      copyIsFromBeforeUpdate: false,
+    });
+  });
+
   it('a too-new file: no copy (nothing is pending by name), SchemaTooNewError passes through UNWRAPPED', async () => {
     await runMigrations(db, all);
     await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION + 7}`);
@@ -200,11 +215,11 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
 
   it('maybeTakePreUpdateCopy alone: { copyPath, updating }, with the path in Tauri while updating, a null path in the browser, and updating false once migrated', async () => {
     await atSchema53();
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true, copyIsFromBeforeUpdate: true });
     isTauri.mockReturnValue(false);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true, copyIsFromBeforeUpdate: false });
     await runMigrations(db, all);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false, copyIsFromBeforeUpdate: false });
   });
 });
 

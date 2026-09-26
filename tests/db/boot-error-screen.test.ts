@@ -672,6 +672,15 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  it('U1-m9: a copy that is NOT from before the update (a partway file with no origin copy) is named honestly', () => {
+    const partway = '/x/backups/cairn-pre-update-54-to-55-20260925-101500.db';
+    renderBootError(root, new MigrationFailedError(new Error('x'), partway, false));
+    expect(root.textContent).toContain(
+      'The update stopped partway. A copy of your data was saved before this attempt: cairn-pre-update-54-to-55-20260925-101500.db. An earlier attempt had already changed part of your data, so this copy is not from before the update.',
+    );
+    expect(root.textContent).not.toContain('from before the update was saved');
+  });
+
   it('without a copy: says so', () => {
     renderBootError(root, new MigrationFailedError(new Error('x'), null));
     expect(root.textContent).toContain('The update stopped partway. No copy was saved before it started.');

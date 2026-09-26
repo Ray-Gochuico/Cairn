@@ -54,11 +54,15 @@ export class SchemaTooNewError extends Error {
  * the path of the pre-update copy taken this boot (null when none was —
  * "Continue without a copy", or a copy that was not needed). A
  * SchemaTooNewError is never wrapped: it is thrown before any migration runs.
+ * `copyIsFromBeforeUpdate` is false when the named copy was taken of a file an
+ * earlier attempt had already changed partway (no origin copy existed), so
+ * the screen never calls it the data from before the update (U1-m9).
  */
 export class MigrationFailedError extends Error {
   readonly cause: unknown;
   readonly preUpdateCopyPath: string | null;
-  constructor(cause: unknown, preUpdateCopyPath: string | null) {
+  readonly copyIsFromBeforeUpdate: boolean;
+  constructor(cause: unknown, preUpdateCopyPath: string | null, copyIsFromBeforeUpdate = true) {
     super(
       'Cairn could not finish updating your data: ' +
         (cause instanceof Error ? cause.message : String(cause)),
@@ -66,6 +70,7 @@ export class MigrationFailedError extends Error {
     this.name = 'MigrationFailedError';
     this.cause = cause;
     this.preUpdateCopyPath = preUpdateCopyPath;
+    this.copyIsFromBeforeUpdate = copyIsFromBeforeUpdate;
     Object.setPrototypeOf(this, MigrationFailedError.prototype);
   }
 }

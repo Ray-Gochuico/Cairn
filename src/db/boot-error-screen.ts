@@ -547,11 +547,18 @@ export function renderBootError(
   if (name === 'MigrationFailedError') {
     const container = makeContainer();
     const copyPath = (e as { preUpdateCopyPath?: unknown }).preUpdateCopyPath;
+    // U1-m9: 'from before the update' only when the copy's `from` is the
+    // chain origin; a copy of a file an earlier attempt changed partway is
+    // named for what it is.
+    const fromBeforeUpdate = (e as { copyIsFromBeforeUpdate?: unknown }).copyIsFromBeforeUpdate !== false;
     const body =
       typeof copyPath === 'string' && copyPath.length > 0
-        ? `The update stopped partway. A copy of your data from before the update was saved: ${basename(copyPath)}. ` +
-          'Restoring it puts your data back the way it was; Cairn tries the update again when it opens. ' +
-          'To use that data without the update, the previous version of Cairn is on the releases page.'
+        ? fromBeforeUpdate
+          ? `The update stopped partway. A copy of your data from before the update was saved: ${basename(copyPath)}. ` +
+            'Restoring it puts your data back the way it was; Cairn tries the update again when it opens. ' +
+            'To use that data without the update, the previous version of Cairn is on the releases page.'
+          : `The update stopped partway. A copy of your data was saved before this attempt: ${basename(copyPath)}. ` +
+            'An earlier attempt had already changed part of your data, so this copy is not from before the update.'
         : 'The update stopped partway. No copy was saved before it started.';
     // The cause's stack points at the failing migration; fall back to ours.
     const cause = (e as { cause?: unknown }).cause;

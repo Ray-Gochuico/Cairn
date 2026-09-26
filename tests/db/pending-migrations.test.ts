@@ -79,4 +79,9 @@ describe('MigrationFailedError', () => {
     expect(e.message).toBe('Cairn could not finish updating your data: bare string');
     expect(e.preUpdateCopyPath).toBeNull();
   });
+
+  it('U1-m9: carries whether the named copy is from before the update (default true)', () => {
+    expect(new MigrationFailedError('x', '/x/a.db').copyIsFromBeforeUpdate).toBe(true);
+    expect(new MigrationFailedError('x', '/x/a.db', false).copyIsFromBeforeUpdate).toBe(false);
+  });
 });
