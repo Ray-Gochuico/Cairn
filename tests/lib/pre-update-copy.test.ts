@@ -340,6 +340,51 @@ describe('CR-U-11 — the sweep deletes a family file ONLY on a definitive rejec
   });
 });
 
+describe('CR-U-16 — pins for the surviving mutants (U1-m24/m25/m27)', () => {
+  it('U1-m24: origin reuse needs a VALID copy — a definitively invalid origin is swept, not reused, and a new copy is written', async () => {
+    const origin = 'cairn-pre-update-53-to-55-20260920-090000.db';
+    mockReadDir.mockResolvedValue([file(origin)]);
+    wireInvoke({ [`${DIR}/${origin}`]: BAD });
+    const r = await takePreUpdateCopy({ from: 54, to: 55, now: NOW, originFrom: 53 });
+    expect(removed()).toEqual([`${DIR}/${origin}`]);
+    expect(r.reused).toBe(false);
+    expect(calls('db_backup')).toHaveLength(1);
+  });
+
+  it('U1-m25: the too-new boundary is exactly MAX+1 — never validated or removed; a from=MAX file IS validated', async () => {
+    const nextBuild = `cairn-pre-update-${MAX_SCHEMA_VERSION + 1}-to-${MAX_SCHEMA_VERSION + 2}-20260924-090000.db`;
+    const thisBuild = `cairn-pre-update-${MAX_SCHEMA_VERSION}-to-${MAX_SCHEMA_VERSION + 1}-20260923-090000.db`;
+    mockReadDir.mockResolvedValue([file(nextBuild), file(thisBuild)]);
+    wireInvoke({ [`${DIR}/${nextBuild}`]: BAD, [`${DIR}/${thisBuild}`]: OK });
+    await takePreUpdateCopy({ from: 53, to: 55, now: NOW });
+    const validated = calls('db_validate_backup').map((c) => (c[1] as { path: string }).path);
+    expect(validated).not.toContain(`${DIR}/${nextBuild}`);
+    expect(validated).toContain(`${DIR}/${thisBuild}`);
+    expect(mockRemove).not.toHaveBeenCalled();
+  });
+
+  it('U1-m25: a MAX+1 file is outside the rotation pool; a from=MAX file is inside it', async () => {
+    const nextBuild = `cairn-pre-update-${MAX_SCHEMA_VERSION + 1}-to-${MAX_SCHEMA_VERSION + 2}-20250101-000000.db`; // the OLDEST
+    mockReadDir.mockResolvedValue([
+      file(nextBuild),
+      file('cairn-pre-update-50-to-51-20260301-000000.db'),
+      file('cairn-pre-update-51-to-52-20260601-000000.db'),
+      file(`cairn-pre-update-${MAX_SCHEMA_VERSION}-to-${MAX_SCHEMA_VERSION + 1}-20260801-000000.db`),
+    ]);
+    await takePreUpdateCopy({ from: 53, to: 55, now: NOW });
+    expect(removed()).toEqual([`${DIR}/cairn-pre-update-50-to-51-20260301-000000.db`]);
+  });
+
+  it('U1-m27: a failed VACUUM INTO whose partial-target cleanup ALSO fails (ENOENT) still reports the Rust reason', async () => {
+    wireInvoke({}, { backupRejects: 'db_backup: VACUUM INTO failed: unable to open database file' });
+    mockRemove.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+    await expect(takePreUpdateCopy({ from: 53, to: 55, now: NOW })).rejects.toMatchObject({
+      name: 'PreUpdateCopyError',
+      reason: 'db_backup: VACUUM INTO failed: unable to open database file',
+    });
+  });
+});
+
 describe('THE LOOP PROOF (critic a): a failed-migration boot + restore never evicts a manual backup', () => {
   it('ten same-day boots with a FULL manual pool: one write, then nine reuses; zero removes; the pool is byte-identical', async () => {
     let listing = [...MANUAL_POOL];
@@ -348,6 +393,10 @@ describe('THE LOOP PROOF (critic a): a failed-migration boot + restore never evi
       if (cmd === 'db_backup') { listing = [...listing, file(args.dest!.slice(DIR.length + 1))]; return undefined; }
       return OK;
     });
+    // U1-m29: the fake remove REALLY removes from the folder listing, so the
+    // byte-identical check below can fail on its own (not only via the
+    // not-called check).
+    mockRemove.mockImplementation(async (p: string) => { listing = listing.filter((f) => `${DIR}/${f.name}` !== p); });
     const before = MANUAL_POOL.map((f) => f.name);
 
     const results = [];
