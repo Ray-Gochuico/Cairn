@@ -307,6 +307,25 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     ).toBeInTheDocument();
   });
 
+  it('an install failure with no reason says so without a dangling colon, at click time and after the landing', async () => {
+    const update = fakeUpdate([], {
+      download: async () => {
+        throw new Error('');
+      },
+    });
+    const { user, install, view } = await reachAvailable(update);
+    await user.click(install);
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      "Couldn't install the update. Your data was not changed.",
+    );
+    view.unmount();
+    sessionStorage.setItem(FAILURE_KEY, '');
+    render(<UpdaterSection reload={vi.fn()} />);
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      "Couldn't install the update. Your data was not changed.",
+    );
+  });
+
   it('while exploring, the real profile notes stay put: the raw updater keys show neither the end line nor the alert (D-S7, prefKey)', async () => {
     localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
     sessionStorage.setItem(INSTALLED_KEY, '1.7.1');

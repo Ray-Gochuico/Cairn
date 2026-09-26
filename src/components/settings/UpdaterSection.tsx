@@ -433,6 +433,9 @@ export function UpdaterSection({
             >
               {state.kind === 'check' ? (
                 <>Couldn't check for updates: {state.message}</>
+              ) : withoutTrailingPeriod(state.message).trim() === '' ? (
+                // No reason came back: say so without a dangling ": ."
+                <>Couldn't install the update. Your data was not changed.</>
               ) : (
                 <>
                   Couldn't install the update: {withoutTrailingPeriod(state.message)}. Your data
