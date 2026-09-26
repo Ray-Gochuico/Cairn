@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   PRE_UPDATE_KEEP,
   PRE_UPDATE_NAME_RE,
@@ -45,7 +47,13 @@ describe('pre-update copy names (CR-U-3 family)', () => {
   });
 
   it("the manual regex from backup-restore cannot match the family (both directions)", () => {
-    const manualRe = /^cairn-\d{8}-\d{6}\.db$/; // backup-restore.ts:90, verbatim
+    // U1-m30: read the REAL rotation regex out of rotateBackups (never a copied
+    // literal), so a widened rotation regex turns this test red.
+    const src = readFileSync(resolve(__dirname, '../../src/lib/backup-restore.ts'), 'utf8');
+    const literal = /\.filter\(\(e\) => e\.isFile && \/(.+?)\/\.test\(e\.name\)\)/.exec(src);
+    expect(literal, 'rotateBackups’ filter regex must be found').not.toBeNull();
+    const manualRe = new RegExp(literal![1]);
+    expect(manualRe.test('cairn-20260925-101500.db')).toBe(true); // it IS the manual matcher
     expect(manualRe.test('cairn-pre-update-53-to-55-20260925-101500.db')).toBe(false);
     expect(PRE_UPDATE_NAME_RE.test('cairn-20260925-101500.db')).toBe(false);
   });

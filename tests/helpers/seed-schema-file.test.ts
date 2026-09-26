@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import BetterSqlite3 from 'better-sqlite3';
-import { seedSchemaFile } from './seed-schema-file';
+import { assertSeedTargetAllowed, seedSchemaFile } from './seed-schema-file';
 
 describe('seedSchemaFile — a released-schema file for the isolated smoke (U1) and the upgrade harness (U3)', () => {
   let dir: string;
@@ -49,6 +49,13 @@ describe('seedSchemaFile — a released-schema file for the isolated smoke (U1) 
     }
     const underRealShape = '/Users/nobody-cairn-seed-guard/Library/Application Support/com.raymondgochuico.cairn/inner.smoke/finance.db';
     await expect(seedSchemaFile(underRealShape, 53)).rejects.toThrow(/refusing/);
+    expect(existsSync('/Users/nobody-cairn-seed-guard')).toBe(false);
+  });
+
+  it('U1-m28: allows a *.smoke profile folder OUTSIDE tmp — the path the isolated smoke uses (checked, never written)', () => {
+    // assertSeedTargetAllowed only stats paths (existsSync/realpathSync): nothing is created.
+    const smokePath = '/Users/nobody-cairn-seed-guard/Library/Application Support/com.raymondgochuico.cairn.smoke/finance.db';
+    expect(() => assertSeedTargetAllowed(smokePath)).not.toThrow();
     expect(existsSync('/Users/nobody-cairn-seed-guard')).toBe(false);
   });
 
