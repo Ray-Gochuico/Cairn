@@ -1,6 +1,6 @@
 // Pre-commit path mapping: staged file list (stdin, one per line) → extra
 // vitest paths (stdout, space-separated). Used by scripts/hooks/pre-commit's
-// fast lane to close two verified `vitest --changed` blind spots:
+// fast lane to close three verified `vitest --changed` blind spots:
 //
 //   1. tests/policy — policy tests read source files via node:fs, so the
 //      import graph never links them to anything; --changed NEVER selects
@@ -10,12 +10,17 @@
 //      `import('./migrations/NNNN_name.sql?raw')`, so a staged migration
 //      .sql runs ZERO tests on the fast lane. Any staged
 //      src/db/migrations/*.sql maps to the whole tests/db suite.
+//   3. tests/e2e-harness — the spec-timeout ratchet reads e2e/*.spec.ts
+//      through node:fs, so a staged spec selects nothing (v1.8.0 T12;
+//      code-review-I m11). Any staged path under e2e/ maps to the whole
+//      tests/e2e-harness suite (a few seconds).
 //
 // Pure function + thin stdin wrapper so tests/scripts/extra-test-paths.test.ts
 // can unit-test the mapping without spawning a process. Zero dependencies —
 // this runs inside the git hook.
 
 const MIGRATION_SQL_RE = /^src\/db\/migrations\/[^/]+\.sql$/;
+const E2E_PATH_RE = /^e2e\//;
 
 /**
  * @param {string[]} stagedFiles repo-relative paths (git always emits `/`
@@ -26,6 +31,9 @@ export function extraTestPaths(stagedFiles) {
   const out = ['tests/policy'];
   if (stagedFiles.some((f) => MIGRATION_SQL_RE.test(f))) {
     out.push('tests/db');
+  }
+  if (stagedFiles.some((f) => E2E_PATH_RE.test(f))) {
+    out.push('tests/e2e-harness');
   }
   return out;
 }
