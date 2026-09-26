@@ -346,6 +346,37 @@ describe('TransactionEditDialog', () => {
       expect(await stored(t.id!)).toEqual({ merchant: 'Skyline Bistro', reimbursable: 0, reimbursed_at: null, reimbursed_amount: null });
     });
 
+    it('a recorded $0.00 reimbursement: the confirm names it and leaves out the totals sentence, since its full amount already counts (CR-R10-5)', async () => {
+      const user = userEvent.setup();
+      const t = await createRow({ reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 0 });
+      renderRow(t);
+      await user.click(screen.getByLabelText('Reimbursable'));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      const confirmDialog = await screen.findByRole('dialog', { name: CONFIRM_TITLE });
+      expect(confirmDialog).toHaveAccessibleDescription(
+        'Unchecking Reimbursable clears the recorded reimbursement: Reimbursed $0.00 on Jun 25, 2026.',
+      );
+    });
+
+    it('a settled row in a Transfer category: the confirm leaves out the totals sentence, since the row counts in no spending total (CR-R10-5)', async () => {
+      const user = userEvent.setup();
+      // Seeded by 0009_seed_categories: id 41 'Transfer', type TRANSFER.
+      const transfer: Category = { id: 41, name: 'Transfer', parentCategoryId: null, color: null, icon: null,
+        type: 'TRANSFER', isCapital: false, systemManaged: true };
+      const t = await createRow({ merchant: 'Card Payment', amount: 200, categoryId: 41,
+        reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 200 });
+      render(
+        <TransactionEditDialog transaction={t} categories={[...categories, transfer]}
+          properties={[]} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
+      );
+      await user.click(screen.getByLabelText('Reimbursable'));
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      const confirmDialog = await screen.findByRole('dialog', { name: CONFIRM_TITLE });
+      expect(confirmDialog).toHaveAccessibleDescription(
+        'Unchecking Reimbursable clears the recorded reimbursement: Reimbursed $200.00 on Jun 25, 2026.',
+      );
+    });
+
     it('a row saved before R10 with Reimbursable off and a stale record is normalized by its next save, with no confirm (D-R10-3)', async () => {
       const user = userEvent.setup();
       const t = await createRow({ merchant: 'Legacy Hotel', amount: 80, reimbursable: false, reimbursedAt: '2026-06-25', reimbursedAmount: 80 });

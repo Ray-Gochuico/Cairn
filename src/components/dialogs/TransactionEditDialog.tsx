@@ -10,6 +10,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { reimbursementState, reimbursementStatusLine } from '@/lib/reimbursement-status';
+import { isRealSpending } from '@/lib/spending-analysis';
 import type { Transaction, Category, Property, Vehicle } from '@/types/schema';
 
 interface TransactionEditDialogProps {
@@ -67,12 +68,18 @@ export function TransactionEditDialog({
     // names it. Cancel leaves the dialog open and writes nothing.
     if (!reimbursable && reimbursementState(transaction) === 'reimbursed') {
       // The totals sentence is said only when a recorded amount is netted
-      // today (spending-analysis counts amount - reimbursedAmount); a record
-      // with no amount already counts the full amount, so clearing it moves
-      // no total.
-      const totalsLine = (transaction.reimbursedAmount ?? 0) > 0
-        ? ' Spending totals then count its full amount.'
-        : '';
+      // today, by the same rule the totals use (CR-R10-5): the saved row is
+      // real spending (isRealSpending — a positive charge outside the
+      // Income / Transfer categories) and its recorded amount is > 0
+      // (spending-analysis counts amount - reimbursedAmount). A record with
+      // no amount or $0 already counts the full amount, and a non-spending
+      // row counts in no total, so clearing either moves no total.
+      const categoriesById = new Map<number, Category>();
+      for (const c of categories) if (c.id != null) categoriesById.set(c.id, c);
+      const totalsLine =
+        isRealSpending(transaction, categoriesById) && (transaction.reimbursedAmount ?? 0) > 0
+          ? ' Spending totals then count its full amount.'
+          : '';
       const ok = await confirm({
         title: 'Clear the recorded reimbursement?',
         description: `Unchecking Reimbursable clears the recorded reimbursement: ${reimbursementStatus}${totalsLine}`,
