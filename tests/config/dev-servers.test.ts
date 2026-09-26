@@ -132,16 +132,11 @@ describe('E2E_PORT_BASE (v1.7.1 I-(h2)) — never a WHATWG Fetch bad port for se
     expect(message).not.toMatch(/!/);
   });
 
-  it('drift receipt: THIS Node\'s fetch refuses every listed port before any connection (cause "bad port")', async () => {
-    for (const p of FETCH_BAD_PORTS) {
-      const err = await fetch(`http://127.0.0.1:${p}/`).then(
-        () => null,
-        (e: unknown) => e as Error & { cause?: { message?: string } },
-      );
-      expect(err?.cause?.message, String(p)).toBe('bad port');
-    }
-  });
-
+  // CR-P5-5: a second receipt that probed THIS runtime's built-in fetch against
+  // every listed port was removed. CI's unit job runs Node 20 (test.yml) and a
+  // local tree may run a newer Node; Node's bundled fetch list varies by
+  // version, so that probe could red on CI for no code reason. The installed
+  // undici below is locked by package-lock.json — the same list on every runtime.
   it('drift receipt: the installed undici (the Fetch implementation jsdom ships) lists exactly these from 1024 up — a spec addition reds here', () => {
     const req = createRequire(path.join(__dirname, 'dev-servers.test.ts'));
     const { badPorts } = req('undici/lib/web/fetch/constants.js') as { badPorts: readonly string[] };
