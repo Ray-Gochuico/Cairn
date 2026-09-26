@@ -51,7 +51,7 @@ describe('GrowthCard — horizon chips', () => {
     await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
     const headline = screen.getByTestId('growth-headline');
     expect(headline).toHaveTextContent('−$5,000'); // v1.7.1 M1: exact
-    expect(headline).toHaveTextContent('(-5.0%)');
+    expect(headline.textContent).toBe('−$5,000(−5.0%)'); // v1.7.1 M1: re-targeted — one glyph for the dollar and the percent
     expect(headline).toHaveClass('text-3xl');
     const context = screen.getByTestId('growth-context');
     expect(context).toHaveTextContent('Now $95,000');

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { formatCurrency, formatDate, withTrueMinus } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { HorizonGrowth } from '@/lib/growth-horizons';
 
@@ -23,11 +23,12 @@ export interface GrowthCardProps {
   valueFormatter?: (n: number) => string;
 }
 
-/** "+10.0%" / "-3.4%" from a fraction (0.1 -> "+10.0%"). */
+/** "+10.0%" / "−3.4%" from a fraction (0.1 -> "+10.0%"). v1.7.1 M1: the
+ *  negative glyph is U+2212, the minus formatCurrency prints beside it. */
 function formatPct(fraction: number): string {
   const pct = fraction * 100;
   const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(1)}%`;
+  return withTrueMinus(`${sign}${pct.toFixed(1)}%`);
 }
 
 // Short chip label per horizon key; the full label rides on aria-label.

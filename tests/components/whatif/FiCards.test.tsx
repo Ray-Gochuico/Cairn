@@ -198,6 +198,19 @@ describe('FiCards', () => {
     expect(fiProgress).toHaveTextContent('25%'); // 300k / 1.2M
   });
 
+  it('M1 (D-M1-5): a negative liquid net worth reads "−$60,000 / $1,200,000 · −5%" — the percent carries the dollar\'s true minus', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(-60_000, 0)]]);
+    renderWithRouter(
+      <FiCards
+        scenarios={[makeScenario()]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson()]}
+      />,
+    );
+    expect(screen.getByTestId('whatif-fi-number-progress').textContent).toBe('−$60,000 / $1,200,000 · −5%');
+  });
+
   it('returns null when household has no growth scenarios', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
     const { container } = renderWithRouter(

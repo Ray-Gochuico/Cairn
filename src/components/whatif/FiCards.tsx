@@ -147,7 +147,7 @@ function FiCard({ testId, title, target, liquidNw, explainer }: FiCardProps) {
         <div className="text-xs text-muted-foreground mt-1">{explainer}</div>
         <div className="mt-2 text-xs tabular-nums" data-testid={`${testId}-progress`}>
           {formatCurrency(liquidNw)} / {formatCurrency(target)} ·{' '}
-          <span className="font-medium">{pct.toFixed(0)}%</span>
+          <span className="font-medium">{withTrueMinus(pct.toFixed(0))}%</span>
         </div>
       </CardContent>
     </Card>
