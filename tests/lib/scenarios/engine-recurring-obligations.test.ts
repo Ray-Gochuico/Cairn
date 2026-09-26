@@ -50,7 +50,6 @@ function makeRealState(
     persons: [],
     appSettings: {
       defaultInflation: 0, // disable inflation so we test raw delta
-      defaultReturnRate: 0,
       defaultCashApy: null,
       defaultDrawdownTaxRate: null,
     },

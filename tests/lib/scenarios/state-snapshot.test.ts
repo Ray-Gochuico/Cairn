@@ -49,7 +49,7 @@ const inputs: RealStateInputs = {
   transactions: [baseTx(1, '2026-04-15', 1500)],
   household,
   persons: [],
-  appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+  appSettings: { defaultInflation: 0.025 },
   startISO: '2026-05-01',
   taxRules: [],
 };
@@ -314,7 +314,7 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     const real = captureRealState({
       accounts: [], holdings: [], loans: [], loanPayments: [],
       household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
-      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      persons: [], appSettings: { defaultInflation: 0.03, defaultCashApy: null, defaultDrawdownTaxRate: null },
       startISO: '2026-05', taxRules: [],
       transactions, categories,
     });
@@ -337,7 +337,7 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     const real = captureRealState({
       accounts: [], holdings: [], loans: [], loanPayments: [],
       household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
-      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      persons: [], appSettings: { defaultInflation: 0.03, defaultCashApy: null, defaultDrawdownTaxRate: null },
       startISO: '2026-05', taxRules: [],
       transactions, categories,
     });
@@ -349,7 +349,7 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     const real = captureRealState({
       accounts: [], holdings: [], loans: [], loanPayments: [],
       household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
-      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      persons: [], appSettings: { defaultInflation: 0.03, defaultCashApy: null, defaultDrawdownTaxRate: null },
       startISO: '2026-05', taxRules: [],
       transactions: [], categories: [],
     });
@@ -384,7 +384,7 @@ describe('captureRealState — initialPhysicalAssets (Wave 2 §5)', () => {
   const baseInputs = () => ({
     accounts: [], accountSnapshots: [], holdings: [], loans: [], loanPayments: [],
     transactions: [], household, persons: [],
-    appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    appSettings: { defaultInflation: 0.025, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-05', taxRules: [],
   });
 

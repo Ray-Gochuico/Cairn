@@ -6,7 +6,6 @@ import { latestCompleteMonthBaseline, rolling12mBaselineDetail } from '@/lib/exp
 
 export interface AppSettingsSlice {
   defaultInflation: number;
-  defaultReturnRate: number;
   defaultCashApy: number | null;
   /**
    * Household-default blended effective tax rate applied to gross-up Trad
