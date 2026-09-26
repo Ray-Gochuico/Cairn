@@ -959,6 +959,14 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     r.remove();
   });
 
+  it("U1F-m18: a STRING cause (the real db_execute_batch rejection) never repeats the heading in the pane", () => {
+    const err = new MigrationFailedError('db_execute_batch: duplicate column name: vehicle_repair_category_ids', PRE.path);
+    renderBootError(root, err);
+    const pane = root.querySelector('pre')!.textContent!;
+    expect(pane.startsWith('db_execute_batch: duplicate column name: vehicle_repair_category_ids\n\n')).toBe(true);
+    expect(pane).not.toContain('Cairn could not finish updating your data');
+  });
+
   it('without a copy: says so', () => {
     renderBootError(root, new MigrationFailedError(new Error('x'), null));
     expect(root.textContent).toContain('The update stopped partway. No copy was saved before it started.');

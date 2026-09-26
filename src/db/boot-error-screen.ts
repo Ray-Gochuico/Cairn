@@ -640,7 +640,17 @@ export function renderBootError(
         : 'The update stopped partway. No copy was saved before it started.';
     // The cause's stack points at the failing migration; fall back to ours.
     const cause = (e as { cause?: unknown }).cause;
-    const stack = cause instanceof Error && cause.stack ? cause.stack : (e as Error).stack;
+    // U1F-m18: a non-Error cause (Tauri rejects with a plain string) falls
+    // back to this error's own stack, whose V8 header line repeats the
+    // heading ('MigrationFailedError: Cairn could not finish …') — drop it.
+    const ownStack = (e as Error).stack ?? '';
+    const ownHeader = `${name}: ${message}`;
+    const stack =
+      cause instanceof Error && cause.stack
+        ? cause.stack
+        : ownStack.startsWith(ownHeader)
+          ? ownStack.slice(ownHeader.length).replace(/^\n/, '')
+          : ownStack;
     // U1-m18: the cause's own message — `message` repeats the heading.
     const causeMessage = cause === undefined ? message : messageOf(cause);
     container.append(

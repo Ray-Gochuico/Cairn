@@ -210,8 +210,9 @@ function isNotLoadedRejection(e: unknown): boolean {
 /**
  * Restore the live database from `source`, corruption-safely:
  *   1. close the live pool so no connection holds the file/WAL open;
- *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file +
- *      clears the stale `-wal`/`-shm` sidecars — see src-tauri/src/db_backup.rs);
+ *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file,
+ *      setting the old `-wal`/`-shm` sidecars aside and putting them back if
+ *      the swap fails — see src-tauri/src/db_backup.rs replace_database_file);
  *   3. ALWAYS reload the webview so boot re-inits a fresh pool.
  *
  * STEP 1 invokes the plugin's `close` command directly rather than
@@ -228,11 +229,14 @@ function isNotLoadedRejection(e: unknown): boolean {
  * session is running on a CLOSED pool; every subsequent query would fail, so
  * leaving the app running (e.g. because `db_restore` threw) would brick it until
  * a manual restart. We therefore reload whether step 2 succeeds OR throws. This
- * is only safe because of H-1: a failed `db_restore` leaves the ORIGINAL
- * `finance.db` byte-for-byte intact, so the post-reload boot re-inits cleanly on
- * valid data. On failure we stash the reason in the session store first
- * (boot-notices.ts) so the app can surface it after reload (best-effort;
- * never blocks the reload).
+ * rests on H-1: a failed `db_restore` leaves the ORIGINAL `finance.db` intact
+ * and puts its set-aside sidecars back — with ONE exception (CR-U-15): when a
+ * sidecar cannot be put back, its error says so ("could not be put back",
+ * put_back_or_report) and names where the set-aside file is, and the reload
+ * then opens finance.db WITHOUT that -wal. That reason is stashed like every
+ * other (boot-notices.ts) and is shown in the app chrome on the next
+ * successful boot (RestoreProblemNote), so nothing may treat the boot after a
+ * failed restore as a clean one (best-effort; never blocks the reload).
  *
  * If the CLOSE itself fails (step 1, before the point of no return), the pool
  * may still be alive — we do NOT reload and propagate the error so the caller
@@ -279,10 +283,12 @@ export async function restoreFromBackup(
     await invoke('db_restore', { db: DB_URL, source });
     restored = true;
   } catch (e) {
-    // H-1 guarantees the original finance.db is intact on a failed restore, so
-    // the reload below re-inits on valid data. Stash the reason for the app to
-    // show post-reload; boot-notices swallows any storage error (never blocks
-    // the reload).
+    // H-1: the original finance.db is intact on a failed restore and its
+    // set-aside sidecars were put back — unless the reason says a sidecar
+    // "could not be put back" (CR-U-15), in which case the reload opens it
+    // without that -wal. Either way, stash the reason for the app to show
+    // post-reload (the chrome shows a put-back failure, CR-U-20b);
+    // boot-notices swallows any storage error (never blocks the reload).
     stashRestoreFailureNotice(e instanceof Error ? e.message : String(e));
   } finally {
     if (restored) {
