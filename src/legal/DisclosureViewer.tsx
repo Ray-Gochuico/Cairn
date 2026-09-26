@@ -31,6 +31,37 @@ const VIEWER_MARKDOWN_COMPONENTS: Components = {
 };
 
 /**
+ * A-7(5) (v1.7.1): the what-changed note of a disclosure entry, shared by every
+ * READ-ONLY surface: this viewer (Settings → Disclosures) and the Roadmap and
+ * interview "Read full →" sheets, so each reads the same note the same way.
+ * Native <details>, collapsed by default (the Settings idiom, DataSection /
+ * PrivacySection); renders nothing for an entry without a diff (roadmap and
+ * learning today). The same prose classes as the modal's box, and the same
+ * VIEWER_MARKDOWN_COMPONENTS heading map as the body (A-11(2), unchanged). No
+ * date, no acceptance state: a pure function of the registry entry. The
+ * testids are the viewer's own, so the Settings pins read it unchanged.
+ */
+export function DisclosureChangeNote({ document }: Props) {
+  if (!document.diffFromPrevious) return null;
+  return (
+    <details
+      data-testid="disclosure-viewer-diff"
+      className="mt-3 rounded-md border border-border/60 px-3 py-2 text-sm"
+    >
+      <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+        What changed in version {document.version}
+      </summary>
+      <div
+        data-testid="disclosure-viewer-diff-body"
+        className="mt-2 text-sm leading-relaxed text-foreground space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold"
+      >
+        <ReactMarkdown components={VIEWER_MARKDOWN_COMPONENTS}>{document.diffFromPrevious}</ReactMarkdown>
+      </div>
+    </details>
+  );
+}
+
+/**
  * Read-only renderer for a consented disclosure document.
  *
  * This is the non-interactive twin of {@link DisclosureModal}: it shows the
@@ -75,28 +106,11 @@ export function DisclosureViewer({ document }: Props) {
       <p className="mt-0.5 text-xs text-muted-foreground">Version {document.version}</p>
       {/*
         R3 (v1.7.0): the what-changed note has a permanent, read-only home here
-        so the text stays readable after the acceptance modal is gone. Native
-        <details>, collapsed by default (the Settings idiom — DataSection /
-        PrivacySection); rendered only for entries that ship a diff. Same
-        react-markdown path and prose classes as the modal's box. No date, no
-        acceptance state — the viewer stays a pure function of the registry entry.
+        so the text stays readable after the acceptance modal is gone.
+        A-7(5) (v1.7.1): the note is DisclosureChangeNote (above), shared with the
+        Roadmap and interview "Read full →" sheets.
       */}
-      {document.diffFromPrevious && (
-        <details
-          data-testid="disclosure-viewer-diff"
-          className="mt-3 rounded-md border border-border/60 px-3 py-2 text-sm"
-        >
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-            What changed in version {document.version}
-          </summary>
-          <div
-            data-testid="disclosure-viewer-diff-body"
-            className="mt-2 text-sm leading-relaxed text-foreground space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold"
-          >
-            <ReactMarkdown components={VIEWER_MARKDOWN_COMPONENTS}>{document.diffFromPrevious}</ReactMarkdown>
-          </div>
-        </details>
-      )}
+      <DisclosureChangeNote document={document} />
       {/*
         Identical prose styling to DisclosureModal's body div so the read-only
         rendering matches the modal exactly (same heading/list/strong/link
