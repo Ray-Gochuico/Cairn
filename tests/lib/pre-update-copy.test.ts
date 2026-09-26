@@ -436,7 +436,7 @@ describe('CR-U-20d (U1F-m4) — the sweep phrases are pinned across the two lang
     const start = rust.indexOf('pub async fn validate_backup_file');
     const body = rust.slice(start, rust.indexOf('\n}\n', start));
     const literals = [...body.matchAll(/reject\(\s*(?:format!\(\s*)?"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]);
-    expect(literals.length).toBe(9);
+    expect(literals.length).toBe(8); // v1.7.2 (L8): opened by filename, so the URL-parse refusal is gone
     const definitive = literals.filter((l) => isDefinitivelyInvalidCopy(l.replace(/\{[^}]*\}/g, '')));
     expect(definitive).toEqual([
       expect.stringContaining('The backup failed an integrity check (quick_check returned'),

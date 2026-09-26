@@ -71,7 +71,6 @@ use serde::Serialize;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::{ConnectOptions, Connection, Pool, Row, Sqlite};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
@@ -152,18 +151,20 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
         reason: Some(reason),
     };
 
-    let path_str = match path.to_str() {
-        Some(s) => s,
-        None => return reject("Backup path is not valid UTF-8.".to_string()),
-    };
+    if path.to_str().is_none() {
+        return reject("Backup path is not valid UTF-8.".to_string());
+    }
 
     // Read-only connection: never create, never write. `immutable=true` is
-    // avoided so quick_check can still read the file normally; read_only is
-    // enough to guarantee we don't mutate the candidate.
-    let opts = match SqliteConnectOptions::from_str(&format!("sqlite:{path_str}")) {
-        Ok(o) => o.read_only(true).create_if_missing(false),
-        Err(e) => return reject(format!("Could not open backup: {e}")),
-    };
+    // avoided so quick_check can still read the file normally (a `-wal`
+    // beside it included); read_only is enough to guarantee we don't mutate
+    // the candidate's data. Opened BY FILENAME (v1.7.2, L8): a `sqlite:` URL
+    // would split the name at a '?' and percent-decode '%XX', so the file
+    // checked could differ from the file restored.
+    let opts = SqliteConnectOptions::new()
+        .filename(path)
+        .read_only(true)
+        .create_if_missing(false);
     let mut conn = match opts.connect().await {
         Ok(c) => c,
         Err(e) => {
@@ -1585,6 +1586,65 @@ mod tests {
         assert_eq!(count_rows(&live, "accounts").await, 2);
         assert!(!wal.exists() && !shm.exists(), "the replaced file's sidecars went with it");
         assert!(!restore_tmp_path(&live).exists());
+    }
+
+    // ---- v1.7.2 L8: the file named is the file checked and restored. ----
+
+    /// A valid backup named `name` in a fresh folder.
+    async fn backup_named(name: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = seeded_pool(&dir.path().join("seed.db")).await;
+        let path = dir.path().join(name);
+        backup_to(&pool, &path).await.unwrap();
+        pool.close().await;
+        (dir, path)
+    }
+
+    #[tokio::test]
+    async fn validate_reads_a_name_with_a_percent_escape_as_written() {
+        // No "Cairn backup.db" beside it: the '%20' is part of the name.
+        let (_dir, path) = backup_named("Cairn%20backup.db").await;
+        let v = validate_backup_file(&path).await;
+        assert!(v.ok, "{:?}", v.reason);
+    }
+
+    #[tokio::test]
+    async fn validate_never_checks_the_percent_decoded_sibling_instead() {
+        let (dir, _valid_sibling) = backup_named("cairn-old.db").await;
+        let junk = dir.path().join("cairn%2Dold.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let v = validate_backup_file(&junk).await;
+        assert!(!v.ok, "the file named is junk, whatever sits beside it");
+        assert!(v.reason.unwrap().contains("file is not a database"));
+    }
+
+    #[tokio::test]
+    async fn validate_reads_a_name_with_a_question_mark_as_written() {
+        let (_dir, path) = backup_named("backup?v=1.db").await;
+        let v = validate_backup_file(&path).await;
+        assert!(v.ok, "{:?}", v.reason);
+    }
+
+    #[tokio::test]
+    async fn restore_checked_restores_the_file_named_whatever_its_name() {
+        for name in ["Cairn%20backup.db", "backup?v=1.db"] {
+            let (dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+            let named = dir.path().join(name);
+            std::fs::copy(&backup, &named).unwrap();
+            restore_checked(&named, &live).await.unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(count_rows(&live, "accounts").await, 2, "{name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn restore_checked_refuses_junk_whose_decoded_name_is_a_valid_backup() {
+        let (dir, backup, live, wal, shm) = live_with_sidecars().await;
+        std::fs::copy(&backup, dir.path().join("cairn-old.db")).unwrap();
+        let junk = dir.path().join("cairn%2Dold.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let err = restore_checked(&junk, &live).await.unwrap_err();
+        assert!(err.contains("file is not a database"), "{err}");
+        assert_untouched(&live, &wal, &shm);
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
