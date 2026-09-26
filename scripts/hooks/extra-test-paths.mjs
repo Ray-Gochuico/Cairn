@@ -1,6 +1,6 @@
 // Pre-commit path mapping: staged file list (stdin, one per line) → extra
 // vitest paths (stdout, space-separated). Used by scripts/hooks/pre-commit's
-// fast lane to close three verified `vitest --changed` blind spots:
+// fast lane to close four verified `vitest --changed` blind spots:
 //
 //   1. tests/policy — policy tests read source files via node:fs, so the
 //      import graph never links them to anything; --changed NEVER selects
@@ -14,6 +14,10 @@
 //      through node:fs, so a staged spec selects nothing (v1.8.0 T12;
 //      code-review-I m11). Any staged path under e2e/ maps to the whole
 //      tests/e2e-harness suite (a few seconds).
+//   4. tests/config — its pins read src/lib/browser-shims/README.md,
+//      .claude/launch.json and .github/workflows/*.yml through node:fs, so a
+//      staged copy of one of them selects nothing (v1.8.0 T12 code review).
+//      Each maps to the whole tests/config suite (a few seconds).
 //
 // Pure function + thin stdin wrapper so tests/scripts/extra-test-paths.test.ts
 // can unit-test the mapping without spawning a process. Zero dependencies —
@@ -21,6 +25,7 @@
 
 const MIGRATION_SQL_RE = /^src\/db\/migrations\/[^/]+\.sql$/;
 const E2E_PATH_RE = /^e2e\//;
+const CONFIG_READ_RES = [/^src\/lib\/browser-shims\/README\.md$/, /^\.claude\/launch\.json$/, /^\.github\/workflows\//];
 
 /**
  * @param {string[]} stagedFiles repo-relative paths (git always emits `/`
@@ -34,6 +39,9 @@ export function extraTestPaths(stagedFiles) {
   }
   if (stagedFiles.some((f) => E2E_PATH_RE.test(f))) {
     out.push('tests/e2e-harness');
+  }
+  if (stagedFiles.some((f) => CONFIG_READ_RES.some((re) => re.test(f)))) {
+    out.push('tests/config');
   }
   return out;
 }

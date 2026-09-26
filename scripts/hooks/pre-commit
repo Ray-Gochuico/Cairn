@@ -12,7 +12,9 @@
 #                             --changed can't see (tests/policy always;
 #                             tests/db when migrations/*.sql staged;
 #                             tests/e2e-harness when anything under e2e/
-#                             is staged) via extra-test-paths.mjs.
+#                             is staged; tests/config when the shims
+#                             README, .claude/launch.json or a workflow is
+#                             staged) via extra-test-paths.mjs.
 #
 #   SKIP_PRE_COMMIT=full      Full suite, no --bail. Same surface area as
 #                             the previous behavior but every failure
