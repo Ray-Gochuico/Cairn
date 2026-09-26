@@ -906,6 +906,58 @@ mod tests {
         assert_eq!(count_rows(&live, "accounts").await, 2);
     }
 
+    /// CR-U-11 (U1-m2/m10): the JS pre-update sweep deletes a family copy only
+    /// when its rejection is DEFINITIVE, and it reads these phrases to decide
+    /// (src/lib/pre-update-copy.ts isDefinitivelyInvalidCopy). Pin them on real
+    /// files so a reworded reason cannot silently turn a sweep into "keep
+    /// forever" — or a transient failure into a deletion.
+    #[tokio::test]
+    async fn validate_reasons_carry_the_phrases_the_pre_update_sweep_reads() {
+        const DEFINITIVE: [&str; 4] = [
+            "The backup failed an integrity check",
+            "no schema_migrations table",
+            "file is not a database",
+            "database disk image is malformed",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let reason = |v: BackupValidation| v.reason.expect("a rejection carries a reason");
+
+        let junk = dir.path().join("junk.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        assert!(reason(validate_backup_file(&junk).await).contains("file is not a database"));
+
+        let empty = dir.path().join("empty.db");
+        std::fs::write(&empty, b"").unwrap();
+        assert!(reason(validate_backup_file(&empty).await).contains("no schema_migrations table"));
+
+        // A VACUUM INTO copy cut short mid-write: the crashed-copy leftover.
+        let src = dir.path().join("seed.db");
+        let pool = seeded_pool(&src).await;
+        let full = dir.path().join("full.db");
+        backup_to(&pool, &full).await.unwrap();
+        pool.close().await;
+        let bytes = std::fs::read(&full).unwrap();
+        let cut = dir.path().join("cut.db");
+        std::fs::write(&cut, &bytes[..4096]).unwrap();
+        assert!(reason(validate_backup_file(&cut).await).contains("database disk image is malformed"));
+
+        // A garbled page: quick_check itself reports the problem.
+        let mut garbled = bytes.clone();
+        for b in garbled.iter_mut().skip(4096).take(2000) {
+            *b = 0x5a;
+        }
+        let bad = dir.path().join("garbled.db");
+        std::fs::write(&bad, &garbled).unwrap();
+        assert!(reason(validate_backup_file(&bad).await).starts_with("The backup failed an integrity check"));
+
+        // A file that cannot be opened says nothing about the file: none of
+        // the definitive phrases, so the sweep keeps it.
+        let missing = dir.path().join("missing.db");
+        let r = reason(validate_backup_file(&missing).await);
+        assert!(r.contains("unable to open database file"), "{r}");
+        assert!(DEFINITIVE.iter().all(|p| !r.contains(p)), "{r}");
+    }
+
     // ---- CR-U-15 (U1-m23/m32): the old sidecars are SET ASIDE, never deleted
     // before the swap, and put back if it fails. The rename seam lets a test
     // fail one chosen step on any platform. ----
