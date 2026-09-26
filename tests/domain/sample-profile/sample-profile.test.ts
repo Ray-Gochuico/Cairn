@@ -32,7 +32,7 @@ import {
   evaluateTraditionalIra,
 } from '@/domain/roadmap/rules/iraBranch';
 import { formatCurrency } from '@/lib/format';
-import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
+import { reimbursementStatusLine } from '@/lib/reimbursement-status';
 import { HoldingsRepo } from '@/domain/holdings';
 import { HousingPaymentsRepo } from '@/domain/housing-payments';
 import { VehicleLeasesRepo } from '@/domain/vehicle-leases';

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TransactionEditDialog, reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
+import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
+import { reimbursementStatusLine } from '@/lib/reimbursement-status';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { setDatabase } from '@/db/db';
 import { runMigrations } from '@/db/migrations';

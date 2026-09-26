@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import DatePicker from '@/components/ui/DatePicker';
 import { useTransactionsStore } from '@/stores/transactions-store';
-import { formatCurrencyCents, formatDate } from '@/lib/format';
+import { reimbursementStatusLine } from '@/lib/reimbursement-status';
 import type { Transaction, Category, Property, Vehicle } from '@/types/schema';
 
 interface TransactionEditDialogProps {
@@ -23,24 +23,6 @@ interface TransactionEditDialogProps {
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
-
-/**
- * R2 (chip task_32707759): the row editor states a reimbursement's STATE,
- * not just the "Reimbursable" flag — before this, a settled reimbursement
- * showed nowhere except as its absence from Spending's "Awaiting
- * reimbursement" list. Reads the SAVED row, never the checkbox's live state:
- * the status is a fact about the transaction as stored, and the dialog's
- * save path leaves reimbursed_at / reimbursed_amount untouched on uncheck
- * (D-R2-9). Byte-exact copy: CR-R2-1 / CR-R2-2 / CR-R2-3.
- */
-export function reimbursementStatusLine(
-  t: Pick<Transaction, 'reimbursable' | 'reimbursedAt' | 'reimbursedAmount'>,
-): string | null {
-  if (!t.reimbursable) return null;
-  if (t.reimbursedAt == null) return 'Awaiting reimbursement.';
-  if (t.reimbursedAmount == null) return `Reimbursed on ${formatDate(t.reimbursedAt)}.`;
-  return `Reimbursed ${formatCurrencyCents(t.reimbursedAmount)} on ${formatDate(t.reimbursedAt)}.`;
-}
 
 export function TransactionEditDialog({
   transaction, categories, properties, vehicles, persons, onClose, onSaved,
