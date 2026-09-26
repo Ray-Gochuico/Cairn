@@ -320,6 +320,8 @@ export function DataSection() {
                   >
                     <span className="text-sm">
                       {formatTakenAt(b.takenAt)}
+                      {/* U1-m22: a real space, so the time and the caption never read as one run. */}
+                      {b.kind === 'pre-update' && ' '}
                       {b.kind === 'pre-update' && (
                         <span className="ml-2 text-xs text-muted-foreground">Before update</span>
                       )}

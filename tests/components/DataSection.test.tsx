@@ -326,6 +326,8 @@ describe('DataSection — desktop (Tauri) path', () => {
     const rows = await screen.findAllByTestId('backup-row');
     expect(within(rows[0]).getByText('Before update')).toBeInTheDocument();
     expect(within(rows[1]).queryByText('Before update')).toBeNull();
+    // U1-m22: a real space separates the time and the caption for screen readers.
+    expect(rows[0].querySelector('span')!.textContent!.endsWith(' Before update')).toBe(true);
     expect(within(rows[0]).getByRole('button', { name: /^restore the copy from before the update, /i })).toBeInTheDocument();
     expect(within(rows[1]).getByRole('button', { name: /^restore backup from/i })).toBeInTheDocument();
   });

@@ -31,6 +31,9 @@ export function PostUpdateNote() {
         onClick={() => {
           clearPostUpdateNotice();
           setCopyPath(null);
+          // U1-m22: the button unmounts under focus; hand focus to the page's
+          // main landmark (PageShell's <main id="main" tabIndex={-1}>).
+          document.getElementById('main')?.focus();
         }}
       >
         Dismiss

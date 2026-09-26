@@ -30,6 +30,20 @@ describe('PostUpdateNote (CR-U-4, one-time)', () => {
     expect(sessionStorage.getItem(PRE_UPDATE_NOTICE_KEY)).toBeNull();
   });
 
+  it('U1-m22: Dismiss hands focus to the main landmark instead of dropping it on <body>', () => {
+    stashPostUpdateNotice(COPY);
+    render(
+      <>
+        <main id="main" tabIndex={-1} />
+        <PostUpdateNote />
+      </>,
+    );
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    dismiss.focus();
+    fireEvent.click(dismiss);
+    expect(document.activeElement).toBe(document.getElementById('main'));
+  });
+
   it('has exactly one control', () => {
     stashPostUpdateNotice(COPY);
     render(<PostUpdateNote />);
