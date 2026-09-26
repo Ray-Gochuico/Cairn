@@ -478,11 +478,12 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
       // arm window. U1F-m16/CR-U-23b: a slow double-click setting can turn a
       // deliberate click into detail 2 — the multi-click drop is bounded to
       // MULTI_CLICK_WINDOW_MS, and the first drop says once what to do.
-      if (ev.detail > 1 && ctx.now() - armedAt < MULTI_CLICK_WINDOW_MS) {
-        if (!multiClickNoted) {
-          multiClickNoted = true;
-          ctx.status.textContent = 'Confirm restore is ready — select it once more to replace your data.';
-        }
+      // NIT (d): once the notice has been shown, the user was told to click
+      // again — the next click at or after the 500 ms guard is taken,
+      // whatever its detail.
+      if (ev.detail > 1 && ctx.now() - armedAt < MULTI_CLICK_WINDOW_MS && !multiClickNoted) {
+        multiClickNoted = true;
+        ctx.status.textContent = 'Confirm restore is ready — select it once more to replace your data.';
         return;
       }
       if (ctx.now() - armedAt < ARM_GUARD_MS) return;

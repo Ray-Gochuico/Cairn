@@ -319,9 +319,11 @@ describe('CR-U-9 — a double-click never both arms and confirms (U1-M3/M4); foc
 
   it('the second click of a double-click (detail 2) after arming restores nothing, even past the arm window', async () => {
     const btn = await armFirstRow();
-    pastGuard();
-    clickWith(btn, 2);
-    clickWith(btn, 3);
+    pastGuard();          // past the 500 ms guard, inside the 1500 ms multi-click window (CR-U-23b)
+    clickWith(btn, 2);    // the second click of a double-click
+    // (A further click after the notice is now taken on purpose — NIT (d),
+    // round 4; a triple-click's third click inside the guard is pinned in the
+    // CR-U-20g block.)
     await new Promise((r) => setTimeout(r, 20));
     expect(mRestore).not.toHaveBeenCalled();
     expect(btn.textContent).toBe(armedLabel); // still armed; a deliberate click can confirm
@@ -874,11 +876,15 @@ describe('CR-U-20g (U1F-m16) — a dropped multi-click on an armed row is announ
     const status = root.querySelector('[data-testid="boot-restore-status"]')!;
     clickWith(btn, 1);
     await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
-    pastGuard();
+    const armedAt = clockMs;
     let changes = 0;
     const obs = new MutationObserver((records) => { changes += records.length; });
     obs.observe(status, { childList: true, characterData: true, subtree: true });
+    // A fast triple-click: every click lands inside the 500 ms guard (the
+    // clicks after the notice are taken only from the guard on — NIT (d)).
+    clockMs = armedAt + 100;
     clickWith(btn, 2);
+    clockMs = armedAt + 200;
     clickWith(btn, 3);
     clickWith(btn, 4);
     await new Promise((r) => setTimeout(r, 20));
@@ -889,11 +895,32 @@ describe('CR-U-20g (U1F-m16) — a dropped multi-click on an armed row is announ
     [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
     clickWith(btn, 1);
     await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
-    pastGuard();
+    const reArmedAt = clockMs;
+    clockMs = reArmedAt + 100;
     clickWith(btn, 2);
     expect(status.textContent).toBe(NOTE);                  // announced again for the new arm
+    clockMs = reArmedAt + 600;
     clickWith(btn, 1);
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1)); // a single click still confirms
+  });
+
+  it('NIT (d): once the notice was shown, the next click at or after the 500 ms guard is accepted, whatever its detail', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    const armedAt = clockMs;
+    clockMs = armedAt + 100;
+    clickWith(btn, 2);                                        // the second click of a double-click: the notice
+    expect(root.querySelector('[data-testid="boot-restore-status"]')!.textContent).toBe(NOTE);
+    clockMs = armedAt + 499;
+    clickWith(btn, 2);                                        // still inside the absolute guard: nothing
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+    clockMs = armedAt + 500;
+    clickWith(btn, 2);                                        // the user was told to click again: taken
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
   });
 
   it('a click inside the arm window (detail 1) is not what this line is for — no announcement', async () => {
