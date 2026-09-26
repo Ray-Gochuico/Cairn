@@ -96,6 +96,8 @@ describe('formatCurrency (v1.7.1 M1 — one true minus for money)', () => {
   });
   it('one glyph, two helpers: every negative reads the same through formatCurrency and formatSignedCurrency', () => {
     for (const v of MONEY_SWEEP.filter((x) => x < 0)) expect(formatCurrency(v)).toBe(formatSignedCurrency(v));
+    // −0 fails `x < 0`, so the filter drops it; pin its agreement explicitly (M1 review).
+    expect(formatSignedCurrency(-0)).toBe(formatCurrency(-0));
   });
 });
 
