@@ -38,6 +38,8 @@ export function RestoreProblemNote() {
         variant="outline"
         size="sm"
         className="shrink-0"
+        // CR-U-23e: two Dismiss buttons can share the chrome slot — name each.
+        aria-label="Dismiss the restore notice"
         onClick={() => {
           clearRestoreFailureNotice();
           setReason(null);

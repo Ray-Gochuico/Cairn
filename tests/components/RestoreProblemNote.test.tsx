@@ -47,7 +47,7 @@ describe('RestoreProblemNote (CR-U-20b, one-time)', () => {
         <RestoreProblemNote />
       </>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss the restore notice' }));
     expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
     expect(sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBeNull();
     expect(document.activeElement).toBe(document.getElementById('main'));

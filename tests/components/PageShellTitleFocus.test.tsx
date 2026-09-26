@@ -162,4 +162,16 @@ describe('PageShell route title + focus', () => {
     renderAt('/');
     expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
   });
+
+  it('CR-U-23e: with both notes showing, each Dismiss is named for its note and dismisses only that one', () => {
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-53-to-55-20260925-101500.db');
+    stashRestoreFailureNotice('db_restore: x. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderAt('/');
+    const restoreDismiss = screen.getByRole('button', { name: 'Dismiss the restore notice' });
+    expect(screen.getByRole('button', { name: 'Dismiss the update notice' })).toBeInTheDocument();
+    act(() => restoreDismiss.click());
+    expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
+    expect(screen.getByRole('note', { name: 'Update notice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss the update notice' })).toHaveTextContent('Dismiss'); // the visible label is unchanged
+  });
 });

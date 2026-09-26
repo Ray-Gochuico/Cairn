@@ -31,6 +31,8 @@ export function PostUpdateNote() {
         variant="outline"
         size="sm"
         className="shrink-0"
+        // CR-U-23e: two Dismiss buttons can share the chrome slot — name each.
+        aria-label="Dismiss the update notice"
         onClick={() => {
           clearPostUpdateNotice();
           setNote(null);

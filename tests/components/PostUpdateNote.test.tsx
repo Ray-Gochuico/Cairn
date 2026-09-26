@@ -25,7 +25,7 @@ describe('PostUpdateNote (CR-U-4, one-time)', () => {
   it('Dismiss removes the note AND clears the key, so a reload shows nothing', () => {
     stashPostUpdateNotice(COPY);
     const { container } = render(<PostUpdateNote />);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss the update notice' }));
     expect(container).toBeEmptyDOMElement();
     expect(sessionStorage.getItem(PRE_UPDATE_NOTICE_KEY)).toBeNull();
   });
@@ -38,7 +38,7 @@ describe('PostUpdateNote (CR-U-4, one-time)', () => {
         <PostUpdateNote />
       </>,
     );
-    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    const dismiss = screen.getByRole('button', { name: 'Dismiss the update notice' });
     dismiss.focus();
     fireEvent.click(dismiss);
     expect(document.activeElement).toBe(document.getElementById('main'));
