@@ -698,7 +698,7 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
 });
 
 describe('v1.7.1 U2 — the sample-boot failure screen (critic b)', () => {
-  it('names the sample, offers ONLY Try again, and never lists, reveals or opens anything', async () => {
+  it('names the sample, offers ONLY the reload (labelled for what it does, U1-m19), and never lists, reveals or opens anything', async () => {
     vi.clearAllMocks();
     const root = document.createElement('div');
     const reload = vi.fn();
@@ -706,7 +706,9 @@ describe('v1.7.1 U2 — the sample-boot failure screen (critic b)', () => {
     expect(root.querySelector('h1')?.textContent).toBe('Sample data could not open');
     expect(root.textContent).toContain('Your own data was not opened and was not changed. Cairn opens your own profile next time.');
     expect(root.querySelector('pre')?.textContent).toBe('sample-explore.db is locked');
-    expect(buttons(root)).toEqual(['Try again']);
+    // U1-m19: the flag is already cleared, so the reload opens the REAL profile —
+    // the label says so instead of 'Try again'.
+    expect(buttons(root)).toEqual(['Open your own profile']);
     await new Promise((r) => setTimeout(r, 20));               // give a wrongly-wired hydrator a tick
     expect(mList).not.toHaveBeenCalled();
     expect(root.textContent).not.toContain('Restore a copy');

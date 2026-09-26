@@ -13,8 +13,9 @@
  *   - `MigrationFailedError` (v1.7.1 U1): the update stopped partway → Try
  *     again, a restore list (the copy taken before the update lists first),
  *     Reveal backups, the releases page.
- *   - `ExploreBootError` (v1.7.1 U2): the SAMPLE data could not open → Try
- *     again only. The real profile's backups are never listed on it.
+ *   - `ExploreBootError` (v1.7.1 U2): the SAMPLE data could not open → one
+ *     reload, labelled 'Open your own profile' (U1-m19). The real profile's
+ *     backups are never listed on it.
  *   - `UpdateHeldError` (v1.7.1 CR-U-14): the boot after a boot-screen restore
  *     of a pre-update copy held the update → the releases page, Try the
  *     update again, Reveal backups. No restore list.
@@ -480,16 +481,20 @@ export function renderBootError(
   const message = e instanceof Error ? e.message : String(e);
 
   // A SAMPLE boot failed (critic b). The real profile was never opened, so
-  // nothing of it is listed, revealed or restored here.
+  // nothing of it is listed, revealed or restored here. init.ts already
+  // cleared the explore flag, so the reload opens the REAL profile — the
+  // button says so (U1-m19).
   if (name === 'ExploreBootError') {
     const container = makeContainer();
+    const openOwn = makeButton('Open your own profile');
+    openOwn.addEventListener('click', () => reload());
     container.append(
       makeHeading('Sample data could not open'),
       makeParagraph(
         'Your own data was not opened and was not changed. Cairn opens your own profile next time.',
       ),
       makePre(message),
-      makeReloadButton(reload),
+      openOwn,
     );
     root.replaceChildren(container);
     return;
