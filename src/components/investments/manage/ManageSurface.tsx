@@ -6,6 +6,7 @@ import HoldingsPanel from './HoldingsPanel';
 import ContributionsPanel from './ContributionsPanel';
 import TickersPanel from './TickersPanel';
 import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
+import { cn } from '@/lib/utils';
 
 const PANEL_IDS = ['accounts', 'holdings', 'contributions', 'tickers'] as const;
 type PanelId = (typeof PANEL_IDS)[number];
@@ -68,8 +69,20 @@ export default function ManageSurface() {
     );
   };
 
+  // A-11(4) (v1.7.1): the settle-scroll above lands the region's top at the
+  // scroller's top (block:'start'), which needs at least a viewport of page
+  // below it — a short panel (the seeded Contributions at 1024×700) left the
+  // scroll at the container floor, 287 px short of flush (C1 smoke). While
+  // ?manage is in the URL (the same `raw` that arms the scroll) the region
+  // is at least one viewport tall. The tab strip writes ?manage too, so after
+  // a tab click the floor stays on and a short panel cannot shrink the
+  // scroller under the user; a plain visit keeps its natural height until then.
   return (
-    <section ref={regionRef} aria-labelledby="investments-manage-heading" className="border-t pt-6">
+    <section
+      ref={regionRef}
+      aria-labelledby="investments-manage-heading"
+      className={cn('border-t pt-6', raw && 'min-h-screen')}
+    >
       <h2 id="investments-manage-heading" className="text-xl font-semibold mb-1">
         Manage
       </h2>
