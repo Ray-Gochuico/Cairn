@@ -163,8 +163,9 @@ describe('card parity (R4 review MINOR 2): the Stress Test card\'s future input 
   // scenario-bar edits so values = defaults) + EarliestRetirementCard's rate
   // (pickModerateEntry → realRateView), target (annualExpenses ÷ swr) and
   // household age rule (two persons → the older; else the first). The hook
-  // omits todayIso (it reads the UTC day — MINOR 5, chipped), so the inputs
-  // coincide on the kernel's local day, passed here explicitly.
+  // omits todayIso and takes buildScenarioDefaults' default, the LOCAL day
+  // (v1.7.0 R4 smoke) — the kernel's own day — so the inputs coincide on it;
+  // passed here explicitly.
   const cardInputs = (ctx: InterviewContext, stockPct: number): StressDelayInput => {
     const { defaults } = buildScenarioDefaults({
       household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
