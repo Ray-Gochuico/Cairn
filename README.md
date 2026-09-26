@@ -90,9 +90,7 @@ version — they point at the same files listed on the
    from the little menu, then click **Open** in the warning — no trip to
    System Settings needed.
 
-**Updating on a Mac:** inside the app, go to **Settings → Updates →
-Check for updates**. Cairn downloads and installs the new version for
-you — no need to repeat any of the steps above.
+**Updating on a Mac:** inside the app, go to **Settings → Updates → Check for updates**, then **Install update**. When the card says **Update installed**, quit Cairn (**Cmd+Q**) and open it again to finish — no need to repeat any of the steps above.
 
 **Your data and updates:** installing an update replaces the program, never your data — the program and your database live in different places. When a new version changes how data is stored, Cairn first keeps a copy of your data, listed under **Settings → Data** as "Before update", and then updates your data the next time it opens.
 

@@ -208,6 +208,27 @@ function isNotLoadedRejection(e: unknown): boolean {
 }
 
 /**
+ * Close the live pool deterministically (v1.7.1 U4) — the one direct invoke of
+ * the plugin's `close` in src (the adapter's `Database.close()`, used by the
+ * explore transitions, reaches the same command through the plugin package).
+ * The command looks up the EXISTING `sqlite:finance.db` entry and awaits its
+ * pool's close, draining every connection and checkpointing the WAL (never
+ * `Database.load(url).close()` — see restoreFromBackup below). Two callers:
+ * restoreFromBackup (step 1) and the macOS updater in Settings → Updates
+ * (after the download, before the bundle swap). It drains only THIS process's
+ * pool; a second Cairn window is not covered (U1 chip p).
+ *
+ * It rejects with the plugin's error unchanged — the only rejection in
+ * tauri-plugin-sql 2.4.0 is the not-loaded one, before anything is closed —
+ * and each caller decides what a rejection means. Once it resolves, the
+ * session is on a closed pool: every later query fails until a reload
+ * re-inits one (M-4).
+ */
+export async function closeLiveDatabase(): Promise<void> {
+  await invoke('plugin:sql|close', { db: DB_URL });
+}
+
+/**
  * Restore the live database from `source`, corruption-safely:
  *   1. close the live pool so no connection holds the file/WAL open;
  *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file,
@@ -215,7 +236,7 @@ function isNotLoadedRejection(e: unknown): boolean {
  *      the swap fails — see src-tauri/src/db_backup.rs replace_database_file);
  *   3. ALWAYS reload the webview so boot re-inits a fresh pool.
  *
- * STEP 1 invokes the plugin's `close` command directly rather than
+ * STEP 1 invokes the plugin's `close` command (closeLiveDatabase) rather than
  * `Database.load(url).close()`. CRITICAL DISTINCTION: `Database.load` runs the
  * plugin's `load` command, which `Pool::connect`s a BRAND-NEW pool and
  * OVERWRITES the live one in `DbInstances` — `.close()` would then close that
@@ -269,10 +290,8 @@ export async function restoreFromBackup(
   // error says so truthfully when one cannot go back. On success they go with
   // the data the user chose to replace. Only that exact message is
   // tolerated; the default (Settings) path is unchanged.
-  // U4: closeLiveDatabase() will wrap this invoke — keep the tolerated branch
-  // on its rejection.
   try {
-    await invoke('plugin:sql|close', { db: DB_URL });
+    await closeLiveDatabase();
   } catch (e) {
     if (!(opts.tolerateNotLoaded && isNotLoadedRejection(e))) throw e;
   }

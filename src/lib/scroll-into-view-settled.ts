@@ -5,9 +5,10 @@
  * after mount (Recharts measures asynchronously), so an immediate
  * scrollIntoView lands, then the content above pushes the target back below
  * the fold — the deep-link class CalculatorsLayout first fixed inline (smoke
- * item 7). Extracted here (C1); since A-11(5) (v1.7.1) its three callers —
- * the Calculators #hash deep link, the Send-to-What-If arrival ring and the
- * Investments `?manage` deep link — share this one idiom, with no inline copy.
+ * item 7). Extracted here (C1); since A-11(5) (v1.7.1) its callers — the
+ * Calculators #hash deep link, the Send-to-What-If arrival ring, the
+ * Investments `?manage` deep link and (U4) the Updates card's post-reload
+ * install notice — share this one idiom, with no inline copy.
  *
  * Polls the target's top every 50ms until it is stable for two consecutive
  * ticks (bounded at 10), then scrolls ONCE — instantly under reduced motion
