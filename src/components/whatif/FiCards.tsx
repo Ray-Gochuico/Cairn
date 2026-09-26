@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { buildWhatIfCoastLeg, TODAY_PHRASE, type RegisteredFigure } from '@/lib/calculators/basis-view';
 import { currentAge } from '@/lib/dates';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, withTrueMinus } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
@@ -147,7 +147,7 @@ function FiCard({ testId, title, target, liquidNw, explainer }: FiCardProps) {
         <div className="text-xs text-muted-foreground mt-1">{explainer}</div>
         <div className="mt-2 text-xs tabular-nums" data-testid={`${testId}-progress`}>
           {formatCurrency(liquidNw)} / {formatCurrency(target)} ·{' '}
-          <span className="font-medium">{pct.toFixed(0)}%</span>
+          <span className="font-medium">{withTrueMinus(pct.toFixed(0))}%</span>
         </div>
       </CardContent>
     </Card>
@@ -442,9 +442,11 @@ export default function FiCards(props: FiCardsProps) {
   const ratePct = (rate * 100).toFixed(1);
   const withdrawalPct = (swr * 100).toFixed(1);
   // T17: state BOTH bases so the modal/chart real-dollar numbers are legible —
-  // "Moderate 7.0% nominal (≈4.4% real after 2.5% inflation)".
-  const realPct = (coast.realRateUnfloored * 100).toFixed(1);
-  const inflationPct = (inflation * 100).toFixed(1);
+  // "Moderate 7.0% nominal (≈4.4% real after 2.5% inflation)". v1.7.1 M1: a
+  // negative real rate (inflation above the nominal rate) or a negative
+  // inflation (the Inflation lever reaches −5%) reads with U+2212.
+  const realPct = withTrueMinus((coast.realRateUnfloored * 100).toFixed(1));
+  const inflationPct = withTrueMinus((inflation * 100).toFixed(1));
 
   return (
     <div className="space-y-2" data-testid="whatif-fi-cards-wrap">

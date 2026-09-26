@@ -142,6 +142,44 @@ describe('FiCards', () => {
     expect(coast).toHaveTextContent('$');
   });
 
+  it('M1 (v1.7.1): a negative REAL rate in the Coast explainer reads with one true minus — "(≈−1.0% real after 3.0% inflation)"', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(200_000, 50_000)]]);
+    renderWithRouter(
+      <FiCards
+        scenarios={[makeScenario()]}
+        projections={projections}
+        household={makeHousehold({
+          inflationAssumption: 0.03,
+          growthScenarios: [
+            { label: 'Conservative', rate: 0.01 },
+            { label: 'Moderate', rate: 0.02 },
+            { label: 'Aggressive', rate: 0.03 },
+          ],
+        })}
+        persons={[makePerson()]}
+      />,
+    );
+    // realRateUnfloored = 1.02 / 1.03 − 1 = −0.0097087… → toFixed(1) "-1.0" before M1.
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 2.0% nominal (≈−1.0% real after 3.0% inflation)');
+    expect(coast.textContent).not.toMatch(/-\d/);
+  });
+
+  it('M1 (D-M1-4): a negative INFLATION (the Inflation lever reaches −5%) reads "after −2.0% inflation"', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(200_000, 50_000)]]);
+    const leverPayload = { ...emptyLeverPayload(), inflation: { defaultRate: -0.02, overrides: {} } };
+    renderWithRouter(
+      <FiCards
+        scenarios={[makeScenario({ leverPayload })]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson()]}
+      />,
+    );
+    // real = 1.06 / 0.98 − 1 = 0.0816… → "8.2"; the scenario's inflation default outranks the household's (effective-inflation.ts:57-59).
+    expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈8.2% real after −2.0% inflation)');
+  });
+
   it('progress row shows liquid NW (investments + cash, no home equity)', () => {
     // Liquid NW must equal investments + cash. Set investments=200k, cash=100k
     // → liquid = 300k. Home equity (here baked into the seed snapshot at 0
@@ -158,6 +196,19 @@ describe('FiCards', () => {
     const fiProgress = screen.getByTestId('whatif-fi-number-progress');
     expect(fiProgress).toHaveTextContent('$300,000');
     expect(fiProgress).toHaveTextContent('25%'); // 300k / 1.2M
+  });
+
+  it('M1 (D-M1-5): a negative liquid net worth reads "−$60,000 / $1,200,000 · −5%" — the percent carries the dollar\'s true minus', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(-60_000, 0)]]);
+    renderWithRouter(
+      <FiCards
+        scenarios={[makeScenario()]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson()]}
+      />,
+    );
+    expect(screen.getByTestId('whatif-fi-number-progress').textContent).toBe('−$60,000 / $1,200,000 · −5%');
   });
 
   it('returns null when household has no growth scenarios', () => {
