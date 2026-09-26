@@ -253,6 +253,17 @@ describe('W5.1 basis-audit sweep — the /what-if page (FI cards + Compare + pro
     expect(screen.queryByTestId('whatif-model-gap-portfolio-zero')).toBeNull();
   });
 
+  // v1.7.1 A-5a (4) / C3 chip (c): the page registry pinned whole — the two
+  // sweeps here filter it per STATE, so an entry dropped or re-classed would
+  // leave both green while they check less.
+  it('registry shape: WHATIF_PAGE_BASIS_FIGURES is exactly the three invariant prose figures', () => {
+    expect(WHATIF_PAGE_BASIS_FIGURES).toEqual([
+      { testId: 'whatif-projection-footnote', cls: 'invariant' },
+      { testId: 'whatif-model-gap-expense-base', cls: 'invariant' },
+      { testId: 'whatif-model-gap-portfolio-zero', cls: 'invariant' },
+    ]);
+  });
+
   it('C2 review: the G11 $0 rows render in this harness — the sweep above exercises their registration, never vacuously', () => {
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
     expect(screen.getAllByTestId('whatif-model-gap-expense-base')).toHaveLength(2);

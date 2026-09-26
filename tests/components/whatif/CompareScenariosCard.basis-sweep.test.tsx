@@ -62,6 +62,23 @@ describe('W5.1 basis-audit sweep — Compare scenarios card (three rungs, both b
     __resetDollarBasisForTests();
   });
 
+  // v1.7.1 A-5a (4) / C3 chip (c): the three RUNG registries pinned whole, beside their sweeps.
+  it('registry shape: the BL-3, BL-1 + TR-NW and BL-6 rung registries, whole', () => {
+    expect(COMPARE_BASIS_FIGURES_BL3).toEqual([
+      { testId: 'compare-bottom-line', cls: 'convertible' },
+      { testId: 'compare-main-difference', cls: 'invariant' },
+    ]);
+    expect(COMPARE_BASIS_FIGURES_BL1_TRNW).toEqual([
+      { testId: 'compare-bottom-line', cls: 'invariant' },
+      { testId: 'compare-tradeoff', cls: 'convertible' },
+      { testId: 'compare-main-difference', cls: 'invariant' },
+    ]);
+    expect(COMPARE_BASIS_FIGURES_BL6).toEqual([
+      { testId: 'compare-bottom-line', cls: 'convertible' },
+      { testId: 'compare-main-difference', cls: 'invariant' },
+    ]);
+  });
+
   it("BL-3 bottom line: $205,993 (today's $) ↔ $500,000 (future $); MD_NONE invariant", () => {
     const scenarios = [sc(1, { name: 'Baseline', isBaseline: true, isActive: true, sortOrder: 0 }), sc(2, { name: 'Aggressive payoff' })];
     const milestones = new Map<number, Milestones>([[1, { netWorth30y: 900_000 }], [2, { netWorth30y: 400_000 }]]);

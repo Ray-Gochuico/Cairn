@@ -27,6 +27,16 @@ export interface DevPortEnv {
 const IMMOVABLE_PORTS: ReadonlySet<number> = new Set([DEV_ROLE_PORTS.tauri, DEV_ROLE_PORTS.browser]);
 
 /**
+ * v1.7.1 I-(h2): the WHATWG Fetch "bad ports" (https://fetch.spec.whatwg.org/#bad-port)
+ * from 1024 up — the only ones a base in 1024–65534 or its +1 can reach. Node's
+ * fetch (global-setup's identity check) and Chromium (ERR_UNSAFE_PORT) refuse
+ * them before connecting: base 1722 → fresh 1723 failed with undici's `bad port`.
+ */
+export const FETCH_BAD_PORTS: ReadonlySet<number> = new Set([
+  1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080,
+]);
+
+/**
  * v1.7.1 A-6 (CR-I-2): OPT-IN. Unset or empty → the fixed table, the very
  * same object (D-I12: 1420–1423, byte-identical). Set → seed = base and
  * fresh = base + 1; tauri and browser never move. Anything else THROWS: a
@@ -42,10 +52,13 @@ export function devPortsFromEnv(env: DevPortEnv): Readonly<Record<DevRole, numbe
     base >= 1024 &&
     base <= 65534 &&
     !IMMOVABLE_PORTS.has(base) &&
-    !IMMOVABLE_PORTS.has(base + 1);
+    !IMMOVABLE_PORTS.has(base + 1) &&
+    !FETCH_BAD_PORTS.has(base) &&
+    !FETCH_BAD_PORTS.has(base + 1);
   if (!usable) {
     throw new Error(
       `E2E_PORT_BASE must be an integer from 1024 to 65534, and neither it nor the port after it may be ${DEV_ROLE_PORTS.tauri} or ${DEV_ROLE_PORTS.browser} (got "${raw}"). ` +
+        `Neither may be a WHATWG Fetch "bad port" either (browsers and Node's fetch refuse them): ${[...FETCH_BAD_PORTS].join(', ')}. ` +
         `It moves only the seed and fresh ports (seed = base, fresh = base + 1); unset it for the fixed ${DEV_ROLE_PORTS.seed}/${DEV_ROLE_PORTS.fresh}.`,
     );
   }
