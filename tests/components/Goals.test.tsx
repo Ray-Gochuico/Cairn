@@ -864,3 +864,48 @@ describe('Goals page — a closed-but-mounted drawer ignores a late submit (A-11
     expect(create).not.toHaveBeenCalled();
   });
 });
+
+describe('v1.8.0 A-2′: Goals counts months-to-target and the contribution window on the LOCAL day', () => {
+  // computeGoalProgress and monthlyContributionAvg (→ minusMonths) read UTC accessors;
+  // the page hands them the local day at UTC noon. Target 2026-06-01; one $600
+  // contribution; moderate 6% (r = 0.005).
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('Pacific/Auckland, Sun Mar 1 11:00 NZDT (UTC day Feb 28): 3 mo to target; an Aug 30 contribution is outside the Sep 1 window ($0 recent)', () => {
+    // Local-midnight Mar 1 in Auckland is Feb 28 11:00Z: it read Feb (4 months) and the Aug 28 cutoff ($100 recent).
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-02-28T22:00:00Z'));
+    primeStores({
+      goals: [{ name: 'Trip', targetAmount: 10_000, targetDate: '2026-06-01', linkedAccountIds: [1] }],
+      accounts: [{ id: 1, name: 'Savings' }],
+      contributions: [{ accountId: 1, date: '2025-08-30', amount: 600 }],
+    });
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    expect(screen.getByTestId('goal-projected').parentElement!.textContent).toContain('3 mo to target · in future dollars');
+    expect(screen.getByTestId('goal-recent-contribution').textContent).toBe('$0');
+  });
+
+  it('Los Angeles, Tue Mar 31 20:00 PDT (UTC day Apr 1): 3 mo to target; a Sep 30 contribution is inside the window ($100 recent) — the local day, not the instant\'s UTC day', () => {
+    // minusMonths(Mar 31, 6) clamps to Sep 30; the UTC day of the instant (Apr 1) would read
+    // 2 months and the Oct 1 cutoff ($0).
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-04-01T03:00:00Z'));
+    primeStores({
+      goals: [{ name: 'Trip', targetAmount: 10_000, targetDate: '2026-06-01', linkedAccountIds: [1] }],
+      accounts: [{ id: 1, name: 'Savings' }],
+      contributions: [{ accountId: 1, date: '2025-09-30', amount: 600 }],
+    });
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    expect(screen.getByTestId('goal-projected').parentElement!.textContent).toContain('3 mo to target · in future dollars');
+    expect(screen.getByTestId('goal-recent-contribution').textContent).toBe('$100');
+  });
+});

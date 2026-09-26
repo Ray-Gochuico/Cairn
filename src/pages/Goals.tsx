@@ -47,7 +47,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
 import { monthlyContributionAvg, pickModerateRate } from '@/lib/growth-scenario';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
+import { utcNoonOf } from '@/lib/dates';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -415,9 +415,13 @@ export default function Goals() {
   );
 
   // Live LOCAL day (Wave 11 T9): re-derives at the midnight/month flip via
-  // useLocalToday; every projection memo keys on it.
+  // useLocalToday; every projection memo keys on it. v1.8.0 A-2′: both
+  // consumers (computeGoalProgress, monthlyContributionAvg → minusMonths)
+  // read UTC accessors, so they get the local day at UTC noon — a
+  // local-midnight Date is the PREVIOUS UTC day east of UTC (on the local
+  // 1st, the previous month).
   const todayISO = useLocalToday();
-  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
+  const today = useMemo(() => utcNoonOf(todayISO), [todayISO]);
 
   const annualRate = useMemo(() => pickModerateRate(household), [household]);
 

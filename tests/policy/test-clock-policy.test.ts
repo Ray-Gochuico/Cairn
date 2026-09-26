@@ -26,7 +26,9 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   // Dashboard.test.tsx was pruned from this allowlist 2026-07-09 (W13): its
   // briefing tests pin the clock via vi.useFakeTimers({ toFake: ['Date'] }),
   // which the detector counts as fake-timer usage.
-  'tests/components/Goals.test.tsx',
+  // Goals.test.tsx pruned 2026-09 (v1.8.0 A-2′): its local-day describe pins the
+  // clock via vi.useFakeTimers({ toFake: ['Date'] }). Its monthlyContribs helper
+  // still reads the real clock (the Dashboard W13 precedent; chip).
   'tests/components/Investments.test.tsx',
   'tests/components/MonthlyMiniWindow.test.tsx',
   'tests/components/Spending.test.tsx',
