@@ -591,6 +591,46 @@ describe('CR-U-14 — the update hold (U1-m8)', () => {
   });
 });
 
+describe('CR-U-16 — the confirm mutants (U1-m13)', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+
+  it('(a) after Cancel, Restore validates AGAIN and re-arms — it never restores on that click', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mValidate).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    expect(mRestore).not.toHaveBeenCalled();
+  });
+
+  it('(c) after a "Restore did not start" rejection the row reads Restore again and has no Cancel', async () => {
+    mRestore.mockRejectedValue(new Error('close failed'));
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
+    expect(btn.textContent).toBe('Restore');
+    expect([...rows(root)[0].querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Restore']);
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });
