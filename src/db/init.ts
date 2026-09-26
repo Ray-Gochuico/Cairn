@@ -121,23 +121,28 @@ async function initExploreDatabase(): Promise<void> {
  * A PreUpdateCopyError propagates: main.tsx renders the fail-closed choice
  * and nothing has been migrated.
  *
- * `holdUpdate` (CR-U-14, U1-m8) is the one-boot hold a boot-screen restore of
- * a pre-update copy sets: on an updating boot it throws UpdateHeldError
- * BEFORE any copy or migration, so the restored data stays as it was for
- * this boot (the hold screen offers the previous version or a retry).
+ * The one-boot update hold (CR-U-14, U1-m8), which a boot-screen restore of
+ * the failed update's pre-update copy sets, is taken HERE — by the boot that
+ * reaches this decision — not at the start of boot (CR-U-26): a boot that
+ * fails earlier (load, integrity) leaves it for the next attempt. On an
+ * updating boot it throws UpdateHeldError BEFORE any copy or migration, so
+ * the restored data stays as it was (the hold screen offers the previous
+ * version or a retry).
  */
 export async function maybeTakePreUpdateCopy(
   db: Database,
   migrations: Migration[],
-  opts: { skipCopy?: boolean; holdUpdate?: boolean } = {},
+  opts: { skipCopy?: boolean } = {},
 ): Promise<PreUpdateGate> {
   const { applied, pending } = await pendingMigrations(db, migrations);
   const updating = applied > 0 && pending.length > 0;
+  // CR-U-26: the boot that reaches the gate consumes the hold.
+  const holdUpdate = takeUpdateHold();
   const none = { copyPath: null, updating, copyIsFromBeforeUpdate: false, chainOrigin: null, chainTarget: null };
   if (!updating) return none;
   const userVersion = await readUserVersion(db);
   if (userVersion > MAX_SCHEMA_VERSION) return none;
-  if (opts.holdUpdate) throw new UpdateHeldError();
+  if (holdUpdate) throw new UpdateHeldError();
   const originFrom = userVersion > 0 && userVersion < applied ? userVersion : undefined;
   // CR-U-23a: the schema before ANY attempt of this update.
   const chainOrigin = originFrom ?? applied;
@@ -191,9 +196,9 @@ export async function initDatabase(): Promise<void> {
   }
   // ——— the real profile ———
   const skipCopy = takeSkipOnce(); // every real boot consumes "Continue without a copy" (PR-13, D-U1-13)
-  const holdUpdate = takeUpdateHold(); // …and the one-boot update hold (CR-U-14)
+  // (The one-boot update hold is taken at the gate instead, CR-U-26.)
   try {
-    await initRealDatabase({ skipCopy, holdUpdate });
+    await initRealDatabase({ skipCopy });
   } catch (e) {
     // CR-U-12 (U1-m33): tag every raw failure of the real-profile DATABASE
     // boot, so the boot screen offers its restore list only for a database
@@ -204,7 +209,7 @@ export async function initDatabase(): Promise<void> {
 }
 
 /** The real-profile boot: the pre-v1.7.1 path plus the U1 copy seam. */
-async function initRealDatabase(gateOpts: { skipCopy: boolean; holdUpdate: boolean }): Promise<void> {
+async function initRealDatabase(gateOpts: { skipCopy: boolean }): Promise<void> {
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
 

@@ -15,7 +15,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { initDatabase, maybeTakePreUpdateCopy } from '@/db/init';
 import { MAX_SCHEMA_VERSION, loadAllMigrations, pendingMigrations, readUserVersion, runMigrations, type Migration } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
-import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNote, peekPostUpdateNotice, setSkipOnce, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
+import { PRE_UPDATE_HOLD_KEY, PRE_UPDATE_NOTICE_KEY, peekPostUpdateNote, peekPostUpdateNotice, setSkipOnce, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
 import { DatabaseInitError } from '@/db/boot-errors';
 
@@ -341,6 +341,7 @@ describe('CR-U-14 — the one-boot update hold after a boot-screen restore of a 
     await atSchema53();
     setUpdateHold();
     await expect(initDatabase()).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    expect(takeUpdateHold()).toBe(false);                     // NIT (c): the held boot consumed it
     sessionStorage.clear();                                   // the app was quit and reopened: a new window
     await initDatabase();                                     // no 'Try the update again' press
     expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
@@ -354,17 +355,40 @@ describe('CR-U-14 — the one-boot update hold after a boot-screen restore of a 
     expect(takeUpdateHold()).toBe(false);
   });
 
-  it('the hold is consumed by a boot that fails BEFORE the gate too (it never outlives one boot)', async () => {
+  // CR-U-26 (ruled 2026-09-25, round 4): INVERTED on purpose. The hold is
+  // taken at the gate, so a boot that fails before it keeps the hold for the
+  // next attempt — CR-U1-4's 'the next screen lets you choose' stays true.
+  it('CR-U-26: a boot that fails BEFORE the gate (load) keeps the hold for the next attempt', async () => {
     setUpdateHold();
     load.mockRejectedValueOnce(new Error('finance.db is locked'));
     await expect(initDatabase()).rejects.toThrow('finance.db is locked');
-    expect(takeUpdateHold()).toBe(false);
+    expect(sessionStorage.getItem(PRE_UPDATE_HOLD_KEY)).toBe('1');
   });
 
-  it('maybeTakePreUpdateCopy alone: holdUpdate on an updating boot throws UpdateHeldError before any copy', async () => {
+  it('CR-U-26: a pre-gate failure (integrity) is followed by a boot that shows the hold; the one after it migrates', async () => {
     await atSchema53();
-    await expect(maybeTakePreUpdateCopy(db, all, { holdUpdate: true })).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    setUpdateHold();
+    const real = db;
+    load.mockImplementationOnce(async () => ({
+      execute: real.execute.bind(real),
+      executeBatch: real.executeBatch.bind(real),
+      close: real.close.bind(real),
+      select: async (sql: string, params?: unknown[]) =>
+        sql === 'PRAGMA quick_check' ? [{ quick_check: 'transient check failure' }] : real.select(sql, params),
+    }));
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'DatabaseCorruptError' });
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'UpdateHeldError' }); // the hold screen
+    expect(await readUserVersion(db)).toBe(53);
+    await initDatabase();                                                           // one boot only
+    expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
+  });
+
+  it('maybeTakePreUpdateCopy alone: a pending hold on an updating boot is consumed there and throws UpdateHeldError before any copy', async () => {
+    await atSchema53();
+    setUpdateHold();
+    await expect(maybeTakePreUpdateCopy(db, all)).rejects.toMatchObject({ name: 'UpdateHeldError' });
     expect(takePreUpdateCopy).not.toHaveBeenCalled();
+    expect(takeUpdateHold()).toBe(false);
   });
 });
 

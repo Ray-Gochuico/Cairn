@@ -13,10 +13,11 @@
  *    migrations; PostUpdateNote peeks it on mount and clears it on Dismiss.
  *  - PRE_UPDATE_SKIP_ONCE_KEY: "Continue without a copy" — consumed by the
  *    next boot's decision point (init.ts maybeTakePreUpdateCopy).
- *  - PRE_UPDATE_HOLD_KEY (code-review round, CR-U-14): set by a boot-screen
- *    restore of a pre-update copy once the swap succeeded; consumed at the
- *    start of the next real boot, which then holds the update for that one
- *    boot instead of re-running it.
+ *  - PRE_UPDATE_HOLD_KEY (code-review round, CR-U-14/18): set by the
+ *    failed-migration screen's restore of its true pre-update copy once the
+ *    swap succeeded; consumed by the next boot that reaches the pre-update
+ *    gate (CR-U-26), which then holds the update for that one boot instead of
+ *    re-running it. A boot that fails before the gate leaves it pending.
  */
 export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
 export const PRE_UPDATE_NOTICE_KEY = 'cairn.preUpdateCopy.notice';
