@@ -26,11 +26,15 @@ describe('DisclosureChangeNote (A-7(5))', () => {
   });
 
   it('renders nothing for an entry without a diff (roadmap and learning today)', () => {
+    let checked = 0;
     for (const doc of ALL.filter((d) => !d.diffFromPrevious)) {
       const { container, unmount } = render(<DisclosureChangeNote document={doc} />);
       expect(container.innerHTML, doc.title).toBe('');
       unmount();
+      checked += 1;
     }
+    // D7 review: the loop must not pass vacuously once every entry ships a diff.
+    expect(checked).toBe(2); // roadmap, learning
   });
 
   it("keeps the viewer's heading map: a `##` inside a note renders as an h4 (CR-D7-3)", () => {
