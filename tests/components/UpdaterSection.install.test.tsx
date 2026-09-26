@@ -153,6 +153,29 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     expect(update.install).toHaveBeenCalledTimes(1);
   });
 
+  it('a remount while the download runs, then the download fails: the card rests — no status line, no end line, Check back, nothing closed', async () => {
+    let fail: (e: unknown) => void = () => {};
+    const pending = new Promise<void>((_, reject) => {
+      fail = reject;
+    });
+    const update = fakeUpdate([], { download: () => pending });
+    const { user, install, view } = await reachAvailable(update);
+    await user.click(install);
+    view.unmount(); // Settings unmounts its sections on every route change
+    render(<UpdaterSection reload={vi.fn()} />);
+    await screen.findByText('1.7.0'); // let the version read settle
+    expect(screen.getByRole('status').textContent).toBe('Downloading and installing…');
+    fail('Download request failed with status: 404 Not Found');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /check for updates/i })).toBeEnabled(),
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(INSTALLED)).toBeNull();
+    expect(mockClose).not.toHaveBeenCalled();
+    expect(update.install).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(INSTALLED_KEY)).toBeNull();
+  });
+
   it('the note clears itself once the installed version is the one running (the reopen happened)', async () => {
     sessionStorage.setItem(INSTALLED_KEY, '1.7.0'); // getVersion() reads 1.7.0 in this file
     render(<UpdaterSection reload={vi.fn()} />);
