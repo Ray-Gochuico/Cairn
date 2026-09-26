@@ -403,6 +403,25 @@ describe('W5 basis registrations — shape pins (A-5a; a sweep cannot be downgra
       'PathToFiCard.tsx',
       'StressTestCard.tsx',
     ]);
+    // P5 review round: the registrations BY NAME, so a tenth one inside an
+    // existing card fails here until its shape is pinned below. Every use of
+    // the registry type must be one of these declarations — a registration in
+    // another spelling (`satisfies`, a non-exported const) cannot slip past.
+    const sources = registering.map((f) => readFileSync(path.join(dir, f), 'utf8'));
+    const names = sources.flatMap((src) => [...src.matchAll(/export const (\w+): Registered(?:Figure|Chart)\[\] = \[/g)].map((m) => m[1]));
+    expect(names.sort()).toEqual([
+      'COMPOUND_BASIS_CHARTS',
+      'COMPOUND_BASIS_FIGURES',
+      'COMPOUND_HISTORY_BASIS_CHARTS',
+      'PATH_TO_FI_BASIS_CHARTS',
+      'PATH_TO_FI_BASIS_FIGURES',
+      'PATH_TO_FI_HISTORY_BASIS_CHARTS',
+      'RETIREMENT_AGE_BASIS_FIGURES',
+      'STRESS_TEST_BASIS_CHARTS',
+      'STRESS_TEST_BASIS_FIGURES',
+    ]);
+    const typeUses = sources.reduce((n, src) => n + [...src.matchAll(/Registered(?:Figure|Chart)\[\]/g)].length, 0);
+    expect(typeUses, 'every Registered(Figure|Chart)[] in the four cards is a named, pinned export').toBe(names.length);
   });
 
   it('CompoundInterestCard: figures + the Assumed and History chart registrations, whole', () => {
