@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cashflowWindow } from '@/lib/cashflow';
 import type { Transaction, Category } from '@/types/schema';
 
@@ -72,5 +72,37 @@ describe('cashflowWindow', () => {
     ];
     const cf = cashflowWindow(txns, 0, 30, baselineCats, asOf);
     expect(cf.outflow).toBe(200); // 100 + 100 net
+  });
+});
+
+describe('v1.8.0 A-2′: cashflowWindow\'s asOf default is the LOCAL day (the 30-day cutoff)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  // LA_EVENING: Dec 31, 2025 19:00 PST — UTC day Jan 1. AKL_MORNING: Jan 1, 2026 09:00 NZDT — UTC day Dec 31.
+  const laEvening = () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+  };
+  const aklMorning = () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+  };
+  const txns = [txn(1, '2025-12-01', 50, 33), txn(2, '2025-12-20', 10, 33)];
+
+  it('LA evening: cutoff Dec 31 − 30 = 2025-12-01 — the Dec 1 charge counts ($60 out)', () => {
+    laEvening();
+    expect(cashflowWindow(txns, 0, 30, baselineCats).outflow).toBe(60);
+  });
+
+  it('Auckland morning: cutoff Jan 1 − 30 = 2025-12-02 — the Dec 1 charge is outside ($10 out)', () => {
+    aklMorning();
+    expect(cashflowWindow(txns, 0, 30, baselineCats).outflow).toBe(10);
   });
 });

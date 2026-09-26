@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import type { YahooClient } from './yahoo-client';
+import { localTodayISO } from '@/lib/dates';
 
 export interface PriceCacheAPI {
   /**
@@ -17,8 +18,14 @@ export interface PriceCacheAPI {
   currentPrice(ticker: string): Promise<number>;
 }
 
+/** The row key of a current price: the LOCAL calendar day (v1.8.0 A-2′) — the
+ *  day daily-snapshot.ts stamps its derived snapshot with and the sample
+ *  profile keys its seeded rows on. The key names the day AND partitions the
+ *  6-hour hit: currentPrice looks up today's key only, so a new local day
+ *  always refetches (the forced-refetch boundary is local midnight). Within
+ *  a day, freshness is fetched_at's 6-hour window, an instant. */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localTodayISO();
 }
 
 export class PriceCache implements PriceCacheAPI {
@@ -60,6 +67,15 @@ export class PriceCache implements PriceCacheAPI {
     if (hit.length > 0) return hit[0].price;
 
     const quote = await this.yahoo.quote(ticker);
+    // v1.8.0 A-2′ (D-A2-4): drop this ticker's rows keyed AFTER today's local
+    // key before writing today's. A fetch keyed by the old UTC day (after UTC
+    // midnight west of UTC, before the upgrade) or made before a zone change
+    // can leave one; Positions reads the highest key as the last price, so it
+    // would sort above this newer fetch.
+    await this.db.execute(
+      'DELETE FROM price_cache WHERE ticker = ? AND date > ?',
+      [ticker, today]
+    );
     // ON CONFLICT … DO UPDATE (not INSERT OR REPLACE): a same-day re-fetch
     // after the 6h TTL updates the existing (ticker, date) row in place
     // rather than delete-then-insert (which cycles the implicit rowid).

@@ -423,3 +423,40 @@ describe('YahooClient', () => {
     });
   });
 });
+
+describe('v1.8.0 A-2′: YahooClient stamps asOf on the LOCAL calendar day (the freshness gate\'s calendar)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  // The three stamps: holdings present (:190), no topHoldings block (:179), sectors (:214).
+  async function threeAsOfs(): Promise<string[]> {
+    const client = new YahooClient();
+    mockInvoke.mockResolvedValueOnce(JSON.stringify(topHoldingsFixture));
+    const withHoldings = await client.fundTopHoldings('VTI');
+    mockInvoke.mockResolvedValueOnce(JSON.stringify({ quoteSummary: { result: [{}], error: null } }));
+    const noBlock = await client.fundTopHoldings('VTI');
+    mockInvoke.mockResolvedValueOnce(JSON.stringify(topHoldingsFixture));
+    const sectors = await client.fundSectorWeightings('VTI');
+    return [withHoldings.asOf, noBlock.asOf, sectors.asOf];
+  }
+
+  it('Los Angeles, Dec 31 19:00 PST (UTC day Jan 1): 2025-12-31 ×3', async () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    expect(await threeAsOfs()).toEqual(['2025-12-31', '2025-12-31', '2025-12-31']);
+  });
+
+  it('Pacific/Auckland, Jan 1 09:00 NZDT (UTC day Dec 31): 2026-01-01 ×3', async () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+    expect(await threeAsOfs()).toEqual(['2026-01-01', '2026-01-01', '2026-01-01']);
+  });
+});

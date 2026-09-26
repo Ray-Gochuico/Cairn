@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   propertyCostBasis,
   rollingExpense,
@@ -199,5 +199,44 @@ describe('averageMonthlySpending', () => {
       }),
     ];
     expect(averageMonthlySpending(txns, new Date('2026-03-31T00:00:00Z'))).toBe(100);
+  });
+});
+
+describe('v1.8.0 A-2′: the three asOf defaults are the LOCAL day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  // LA_EVENING: Dec 31, 2025 19:00 PST — UTC day Jan 1. AKL_MORNING: Jan 1, 2026 09:00 NZDT — UTC day Dec 31.
+  const laEvening = () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+  };
+  const aklMorning = () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+  };
+  const edge = txn({ id: 1, date: '2024-12-31', amount: 70 });
+  const inside = txn({ id: 2, date: '2025-06-01', amount: 30 });
+  // averageMonthlySpending: earliest 2025-11 through asOf's month, inclusive; $120 total.
+  const avgTxns = [txn({ id: 3, date: '2025-11-10', amount: 60 }), txn({ id: 4, date: '2025-12-05', amount: 60 })];
+
+  it('LA evening (Dec 31 locally): the 12-month window opens 2024-12-31 (edge in); Nov–Dec is 2 months ($60/mo)', () => {
+    laEvening();
+    expect(linkedSpendingTransactions([edge, inside], { propertyId: 7 }, 12, cats).map((t) => t.id)).toEqual([2, 1]);
+    expect(rollingExpense([edge, inside], { propertyId: 7 }, 12, cats)).toBe(100);
+    expect(averageMonthlySpending(avgTxns)).toBe(60);
+  });
+
+  it('Auckland morning (Jan 1 locally): the window opens 2025-01-01 (edge out); Nov–Jan is 3 months ($40/mo)', () => {
+    aklMorning();
+    expect(linkedSpendingTransactions([edge, inside], { propertyId: 7 }, 12, cats).map((t) => t.id)).toEqual([2]);
+    expect(rollingExpense([edge, inside], { propertyId: 7 }, 12, cats)).toBe(30);
+    expect(averageMonthlySpending(avgTxns)).toBe(40);
   });
 });

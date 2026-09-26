@@ -4,12 +4,14 @@ import type { Account, AccountSnapshot, Contribution, Dependent } from '@/types/
 import { formatCurrency } from '@/lib/format';
 import type { RegisteredFigure } from '@/lib/calculators/basis-view';
 import { FUTURE_SUFFIX } from '@/lib/calculators/basis-vocabulary';
+import { dateFromLocalISO } from '@/lib/dates';
 
 /**
  * 529 Plans card body — extracted 1:1 from the Investments page cardRegistry
  * (wave-7 W4). The page keeps the plans/dependent/snapshot memos (shared
  * upstream sets) and threads them in; `today` arrives as a prop (the page's
- * useMemo'd new Date()) so this component stays clock-free at module scope.
+ * local-midnight Date of useLocalToday's day) so this component stays
+ * clock-free at module scope.
  */
 
 /**
@@ -25,7 +27,11 @@ function projectedAtAge18(
   growthRate: number,
   now: Date,
 ): number {
-  const dob = new Date(dobIso);
+  // v1.8.0 A-2′: the DOB is a calendar DAY read below with LOCAL getters, so
+  // it is parsed at LOCAL midnight. `new Date('YYYY-MM-DD')` is UTC midnight —
+  // the previous local day west of UTC, where a DOB on the 1st read the prior
+  // month (a Jan-1 DOB the prior year) and the month count ran one low.
+  const dob = dateFromLocalISO(dobIso);
   const eighteen = new Date(dob);
   eighteen.setFullYear(eighteen.getFullYear() + 18);
   const monthsUntil = Math.max(

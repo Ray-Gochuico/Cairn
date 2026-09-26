@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { localTodayISO } from '@/lib/dates';
 import type { Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 import { loanBalanceHistory } from '@/lib/loan-history';
@@ -22,7 +23,9 @@ const mortgage: Loan = {
 
 describe('loanBalanceHistory', () => {
   it('returns the current balance for a single-bucket query at "today"', () => {
-    const today = new Date().toISOString().slice(0, 10);
+    // v1.8.0 A-2′: the default anchor is the LOCAL day, so "today" is too (the UTC day
+    // is the next local day on a US evening — a future bucket, not the anchor).
+    const today = localTodayISO();
     const out = loanBalanceHistory(mortgage, today, today, 'DAY');
     expect(out).toHaveLength(1);
     expect(out[0].balance).toBeCloseTo(350000, 0);
@@ -135,5 +138,43 @@ describe('loanBalanceHistory', () => {
     // 6 month-boundary crossings ≈ +$3.5k back-walked — well under originalAmount.
     // The old per-week stepping took 26 steps and zeroed the whole window.
     expect(out[0].balance).toBeGreaterThan(0);
+  });
+});
+
+describe('v1.8.0 A-2′: loanBalanceHistory\'s todayISO default is the LOCAL day (the anchor bucket)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  // LA_EVENING: Dec 31, 2025 19:00 PST — UTC day Jan 1. AKL_MORNING: Jan 1, 2026 09:00 NZDT — UTC day Dec 31.
+  const laEvening = () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+  };
+  const aklMorning = () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+  };
+  // DAY buckets across the New-Year boundary. The anchor (the last bucket on or before
+  // today) carries currentBalance; a bucket before it across a month boundary is one
+  // amortization step back: 350,000 + (1,909.66 − 350,000 × 0.04 / 12) = 350,742.993….
+  it('LA evening (Dec 31 locally): Dec 31 is the anchor and Jan 1 is held flat', () => {
+    laEvening();
+    const out = loanBalanceHistory(mortgage, '2025-12-31', '2026-01-01', 'DAY');
+    expect(out.map((b) => b.bucketEnd)).toEqual(['2025-12-31', '2026-01-01']);
+    expect(out[0].balance).toBeCloseTo(350000, 6);
+    expect(out[1].balance).toBeCloseTo(350000, 6);
+  });
+
+  it('Auckland morning (Jan 1 locally): Jan 1 is the anchor and Dec 31 walks back one month', () => {
+    aklMorning();
+    const out = loanBalanceHistory(mortgage, '2025-12-31', '2026-01-01', 'DAY');
+    expect(out[0].balance).toBeCloseTo(350742.99, 2);
+    expect(out[1].balance).toBeCloseTo(350000, 6);
   });
 });

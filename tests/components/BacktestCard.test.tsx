@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BacktestCard } from '@/pages/calculators/BacktestCard';
@@ -39,7 +39,12 @@ describe('BacktestCard', () => {
 });
 
 describe('BacktestCard verdict waymark (Wave 18 C9 / D3)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
   beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
 
   const record = {
     v: 1,
@@ -59,6 +64,9 @@ describe('BacktestCard verdict waymark (Wave 18 C9 / D3)', () => {
   });
 
   it('a stored last run → the "N% of M" verdict + "last run {date}" meaning', () => {
+    // v1.8.0 A-2′: the card shows the LOCAL day of the instant, so the zone is pinned
+    // (15:00Z = 11:00 EDT Jul 18); no one instant is Jul 18 from UTC−12 to UTC+14.
+    process.env.TZ = 'America/New_York';
     localStorage.setItem('backtest:last-run:v1', JSON.stringify(record));
     render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
     // 108 / 124 = 87.09…% → rounds to 87.
@@ -144,5 +152,41 @@ describe('BacktestCard — scope tag (Wave B CB23 / D-B14)', () => {
     writeLastBacktestRun({ ...record, scopeLabel: 'Household' });
     render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
     expect(screen.getByTestId('backtest-meaning')).not.toHaveTextContent('· Household run');
+  });
+});
+
+describe('v1.8.0 A-2′: "last run" names the LOCAL calendar day of the run instant', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    localStorage.clear();
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null } as never);
+  });
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const storeRunAt = (runAt: string) =>
+    localStorage.setItem(
+      'backtest:last-run:v1',
+      JSON.stringify({ v: 1, runAt, goalMetCount: 108, startYearsCount: 124, survivedCount: 120, config: {} }),
+    );
+
+  it('Los Angeles: a run at 2026-01-01T03:00Z (Dec 31, 19:00 PST) reads "last run Dec 31, 2025" — not the UTC day', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    storeRunAt('2026-01-01T03:00:00.000Z');
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning').textContent).toBe(
+      'start years since 1871 sustained this plan · last run Dec 31, 2025',
+    );
+  });
+
+  it('Pacific/Auckland: a run at 2025-12-31T20:00Z (Jan 1, 09:00 NZDT) reads "last run Jan 1, 2026"', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    storeRunAt('2025-12-31T20:00:00.000Z');
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning').textContent).toBe(
+      'start years since 1871 sustained this plan · last run Jan 1, 2026',
+    );
   });
 });

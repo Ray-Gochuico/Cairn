@@ -170,3 +170,50 @@ describe('ExportCsvButton', () => {
     });
   });
 });
+
+describe('v1.8.0 A-2′: the CSV filename carries the LOCAL calendar day', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  let downloadName = '';
+  let restores: Array<() => void> = [];
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    downloadName = '';
+    const a = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:mock');
+    const b = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const c = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        downloadName = this.download;
+      });
+    restores = [() => a.mockRestore(), () => b.mockRestore(), () => c.mockRestore()];
+  });
+  afterEach(() => {
+    restores.forEach((r) => r());
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  async function exportedName(): Promise<string> {
+    render(
+      <MemoryRouter>
+        <ExportCsvButton baseName="things" columns={columns} rows={[{ name: 'A' }]} />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await vi.waitFor(() => expect(downloadName).not.toBe(''));
+    return downloadName;
+  }
+
+  it('Los Angeles, Dec 31 19:00 PST (UTC day Jan 1): things-2025-12-31.csv', async () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+    expect(await exportedName()).toBe('things-2025-12-31.csv');
+  });
+
+  it('Pacific/Auckland, Jan 1 09:00 NZDT (UTC day Dec 31): things-2026-01-01.csv', async () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+    expect(await exportedName()).toBe('things-2026-01-01.csv');
+  });
+});

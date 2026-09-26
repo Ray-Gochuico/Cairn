@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { computeGoalProgress } from '@/lib/goal-progress';
+import { dateFromLocalISO, utcNoonOf } from '@/lib/dates';
 
 describe('computeGoalProgress', () => {
   const today = new Date('2026-01-01');
@@ -182,5 +183,33 @@ describe('monthlyNeededWithGrowth (wave-9 M23)', () => {
       today,
     });
     expect(p.monthlyNeededWithGrowth).toBe(0);
+  });
+});
+
+describe('v1.8.0 A-2′ (CR-A2-3): the UTC-noon bridge — standing receipts, unchanged by this lane', () => {
+  // goal-progress.ts is byte-untouched: the kernel (home-purchase.ts, vehicle-replacement.ts)
+  // and, since A-2′, the Goals page and the Dashboard hand it utcNoonOf(local day).
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  const monthsFrom = (today: Date) =>
+    computeGoalProgress({
+      targetAmount: 1_000, targetDate: '2026-06-01', currentSaved: 0,
+      recentMonthlyContribution: 0, annualGrowthRate: 0, today,
+    }).monthsUntilTarget;
+
+  it.each(['Pacific/Auckland', 'America/Los_Angeles', 'UTC'])(
+    '%s: utcNoonOf(local 2026-03-01) → 3 months to 2026-06-01',
+    (tz) => {
+      process.env.TZ = tz;
+      expect(monthsFrom(utcNoonOf('2026-03-01'))).toBe(3);
+    },
+  );
+
+  it('the hazard the pages used to hand it: a local-midnight Auckland Date on the 1st is the previous UTC month (4)', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    expect(monthsFrom(dateFromLocalISO('2026-03-01'))).toBe(4);
   });
 });

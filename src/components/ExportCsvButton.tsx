@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toCsv, downloadCsv, type CsvColumn } from '@/lib/csv';
+import { localTodayISO } from '@/lib/dates';
 
 const HOUSEHOLD_SCOPE_NOTE =
   "Exports all household rows — the person view doesn't change what's exported.";
@@ -42,7 +43,9 @@ export function ExportCsvButton<T>({
   const noteId = useId();
 
   const handleClick = async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    // v1.8.0 A-2′: the LOCAL calendar day — the UTC day is already tomorrow
+    // on a US evening and still yesterday on an Auckland morning.
+    const today = localTodayISO();
     setError(null);
     try {
       await downloadCsv(`${baseName}-${today}.csv`, toCsv(rows, columns));

@@ -1,5 +1,6 @@
 import type { Transaction, Category } from '@/types/schema';
 import { isRealSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
+import { localTodayISO, utcNoonOf } from '@/lib/dates';
 
 export interface CashflowWindow {
   inflow: number;
@@ -16,14 +17,15 @@ export interface CashflowWindow {
  * date falls within the trailing `windowDays`, using `isRealSpending`
  * (positive amounts only; excludes pending reimbursables and INCOME/TRANSFER
  * rows — account type is deliberately NOT consulted) and
- * `effectiveSpendingAmount` (nets settled reimbursements).
+ * `effectiveSpendingAmount` (nets settled reimbursements). `asOf` defaults to
+ * the LOCAL calendar day at UTC noon (v1.8.0 A-2′): the cutoff is its UTC day.
  */
 export function cashflowWindow(
   transactions: Transaction[],
   inflow: number,
   windowDays: number,
   categories: Category[],
-  asOf: Date = new Date(),
+  asOf: Date = utcNoonOf(localTodayISO()),
 ): CashflowWindow {
   const categoriesById = new Map<number, Category>();
   for (const c of categories) if (c.id != null) categoriesById.set(c.id, c);

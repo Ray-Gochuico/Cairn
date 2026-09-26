@@ -1,5 +1,6 @@
 import type { Loan } from '@/types/schema';
 import type { Granularity } from '@/lib/snapshot-bucketing';
+import { localTodayISO } from '@/lib/dates';
 
 /**
  * Walk a loan's balance backward from `loan.currentBalance` using the standard
@@ -30,8 +31,8 @@ import type { Granularity } from '@/lib/snapshot-bucketing';
  * step — matching the rate of coarser granularities. Future buckets (after the
  * anchor) are held flat at `currentBalance` — no forward projection.
  *
- * `todayISO` defaults to the real wall-clock date (UTC) and can be injected for
- * testing or deterministic rendering.
+ * `todayISO` defaults to the LOCAL calendar day (v1.8.0 A-2′; it read the UTC
+ * day before) and can be injected for testing or deterministic rendering.
  *
  * "Walked past origination": when the back-walked balance exceeds
  * `loan.originalAmount + $1` (rounding tolerance), the loan didn't exist that
@@ -44,7 +45,7 @@ export function loanBalanceHistory(
   fromISO: string,
   toISO: string,
   granularity: Granularity,
-  todayISO: string = new Date().toISOString().slice(0, 10),
+  todayISO: string = localTodayISO(),
 ): Array<{ bucketEnd: string; balance: number }> {
   const buckets = enumerateBucketEnds(fromISO, toISO, granularity);
   if (buckets.length === 0) return [];

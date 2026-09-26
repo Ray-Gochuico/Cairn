@@ -26,7 +26,9 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   // Dashboard.test.tsx was pruned from this allowlist 2026-07-09 (W13): its
   // briefing tests pin the clock via vi.useFakeTimers({ toFake: ['Date'] }),
   // which the detector counts as fake-timer usage.
-  'tests/components/Goals.test.tsx',
+  // Goals.test.tsx pruned 2026-09 (v1.8.0 A-2′): its local-day describe pins the
+  // clock via vi.useFakeTimers({ toFake: ['Date'] }). Its monthlyContribs helper
+  // still reads the real clock (the Dashboard W13 precedent; chip).
   'tests/components/Investments.test.tsx',
   'tests/components/MonthlyMiniWindow.test.tsx',
   'tests/components/Spending.test.tsx',
@@ -41,8 +43,11 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   // uses vi.useFakeTimers + setSystemTime, which the detector counts as
   // fake-timer usage.
   'tests/domain/fund-holdings.test.ts',
-  'tests/lib/loan-history.test.ts',
-  'tests/market/price-cache.test.ts',
+  // loan-history.test.ts pruned 2026-09 (v1.8.0 A-2′): its default-anchor describe
+  // uses fake timers; five legacy tests still read the real clock (plus the pin-4
+  // test via localTodayISO()) (chip).
+  // price-cache.test.ts pruned 2026-09 (v1.8.0 A-2′): its local-key describe uses
+  // fake timers; its TTL tests still use the real clock with SQLite's own 'now'.
   'tests/pdf/layout.test.ts',
   'tests/stores/properties-store.test.ts',
   'tests/stores/vehicles-store.test.ts',
