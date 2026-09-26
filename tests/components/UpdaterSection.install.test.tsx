@@ -244,6 +244,15 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     expect(src).toContain('  reload = () => window.location.reload(),\n');
   });
 
+  it('the available panel says the data stays where it is, in the README’s words', async () => {
+    await reachAvailable(fakeUpdate([]));
+    expect(
+      screen.getByText(
+        'Your data stays where it is. If this version changes how data is stored, Cairn first keeps a copy, listed under Settings → Data as "Before update".',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('a failed CHECK keeps its own line (never the install line)', async () => {
     mockCheck.mockRejectedValue(new Error('network unreachable'));
     const user = userEvent.setup();

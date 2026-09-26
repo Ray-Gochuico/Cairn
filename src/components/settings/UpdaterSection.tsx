@@ -47,7 +47,7 @@ import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
  *   idle         → "Check for updates" button enabled, prior result hidden
  *   checking     → spinner, button disabled
  *   up-to-date   → "You're up to date" + last-checked timestamp
- *   available    → "Version X available" + "Install update"
+ *   available    → "Version X available" + the data line + "Install update"
  *   installing   → download, close, install; buttons disabled; a remount
  *                  while it runs still shows it (module scope)
  *   installed    → "Update installed. Quit and reopen Cairn to finish." —
@@ -386,6 +386,10 @@ export function UpdaterSection({
                   {state.update.body}
                 </pre>
               )}
+              <p className="text-xs text-muted-foreground">
+                Your data stays where it is. If this version changes how data is stored, Cairn
+                first keeps a copy, listed under Settings → Data as &quot;Before update&quot;.
+              </p>
               <Button
                 type="button"
                 size="sm"
