@@ -161,6 +161,17 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
     }
   });
 
+  // Code review CR-U3-9: the shallow-checkout failure (CX-U3-10) that
+  // fetch-depth: 0 exists to prevent, at the CLI level.
+  it('exits 1 with CX-U3-10 when no release tag lies below the one given (a depth-1 checkout has none)', () => {
+    recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n");
+    expect(guard('v0.1.0')).toMatchObject({
+      status: 1,
+      stdout: '',
+      stderr: 'no release tag below v0.1.0 (fetch the tags: the checkout needs fetch-depth: 0).\n',
+    });
+  });
+
   it('exits 2 for a missing or malformed tag argument', () => {
     expect(guard('').status).toBe(2);
     expect(guard('0.3.0').status).toBe(2);
