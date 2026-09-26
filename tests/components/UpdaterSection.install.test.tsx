@@ -23,6 +23,10 @@ import { UpdaterSection } from '@/components/settings/UpdaterSection';
 const mockCheck = check as unknown as ReturnType<typeof vi.fn>;
 const mockClose = closeLiveDatabase as unknown as ReturnType<typeof vi.fn>;
 
+// tests/setup.ts installs a no-op scrollIntoView for Radix before this file
+// loads; the tests that stub it put this exact descriptor back.
+const HOUSE_SCROLL = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+
 const INSTALLED = 'Update installed. Quit and reopen Cairn to finish.';
 const FAILURE_KEY = 'updater.installFailure';
 const INSTALLED_KEY = 'updater.installed';
@@ -64,7 +68,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  if (HOUSE_SCROLL) Object.defineProperty(Element.prototype, 'scrollIntoView', HOUSE_SCROLL);
+  else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
 });
 
 describe('UpdaterSection — install (v1.7.1 U4)', () => {
@@ -348,5 +353,11 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     await user.click(await screen.findByRole('button', { name: /check for updates/i }));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toBe("Couldn't check for updates: network unreachable");
+  });
+
+  // Runs last: every test above has been through the afterEach.
+  it('leaves the house scrollIntoView shim (tests/setup.ts) in place: the stubs above are restored, never deleted', () => {
+    expect(HOUSE_SCROLL).toBeDefined();
+    expect(Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')).toEqual(HOUSE_SCROLL);
   });
 });
