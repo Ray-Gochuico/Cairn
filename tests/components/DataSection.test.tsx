@@ -57,7 +57,11 @@ const mOpen = openDialog as unknown as ReturnType<typeof vi.fn>;
 const BACKUPS_DIR = '/Users/me/Library/Application Support/com.x.cairn/backups';
 
 function entry(name: string, takenAt: Date): BackupEntry {
-  return { name, path: `${BACKUPS_DIR}/${name}`, takenAt };
+  return { name, path: `${BACKUPS_DIR}/${name}`, takenAt, kind: 'manual' };
+}
+
+function preUpdateEntry(name: string, takenAt: Date, schemaFrom: number, schemaTo: number): BackupEntry {
+  return { name, path: `${BACKUPS_DIR}/${name}`, takenAt, kind: 'pre-update', schemaFrom, schemaTo };
 }
 
 function renderSection() {
@@ -286,6 +290,22 @@ describe('DataSection — desktop (Tauri) path', () => {
     expect(await screen.findByText(/restore failed/i)).toHaveTextContent(/copy failed/);
   });
 
+  it('U1-m16: a reason that ends with a period renders one period, not two', async () => {
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: the selected backup IS the live database.');
+    renderSection();
+    const line = await screen.findByText(/restore did not complete/i);
+    expect(line).toHaveTextContent('Restore did not complete: db_restore: the selected backup IS the live database. Your data was not changed.');
+    expect(line.textContent).not.toContain('..');
+  });
+
+  it('CR-U-15: after a put-back failure the Settings notice drops its "not changed" claim', async () => {
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderSection();
+    const line = await screen.findByText(/restore did not complete/i);
+    expect(line).toHaveTextContent('Restore did not complete: db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied).');
+    expect(line).not.toHaveTextContent(/data was not changed/i);
+  });
+
   it('surfaces a post-reload restore-failure notice from sessionStorage (M-4)', async () => {
     // Simulate the prior session's forced reload having stashed a reason.
     window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'disk full during restore');
@@ -295,6 +315,39 @@ describe('DataSection — desktop (Tauri) path', () => {
     );
     // Read-once: the notice is cleared so a later remount won't re-show it.
     expect(window.sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBeNull();
+  });
+
+  it('U1: a pre-update copy row carries the "Before update" caption and a distinct Restore name; manual rows do not', async () => {
+    mList.mockResolvedValue([
+      preUpdateEntry('cairn-pre-update-53-to-55-20260925-101500.db', new Date(2026, 8, 25, 10, 15, 0), 53, 55),
+      entry('cairn-20260924-090000.db', new Date(2026, 8, 24, 9, 0, 0)),
+    ]);
+    renderSection();
+    const rows = await screen.findAllByTestId('backup-row');
+    expect(within(rows[0]).getByText('Before update')).toBeInTheDocument();
+    expect(within(rows[1]).queryByText('Before update')).toBeNull();
+    // U1-m22: a real space separates the time and the caption for screen readers.
+    expect(rows[0].querySelector('span')!.textContent!.endsWith(' Before update')).toBe(true);
+    expect(within(rows[0]).getByRole('button', { name: /^restore the copy from before the update, /i })).toBeInTheDocument();
+    expect(within(rows[1]).getByRole('button', { name: /^restore backup from/i })).toBeInTheDocument();
+  });
+
+  it('U1: restoring a pre-update copy names it as such in the confirm, then restores', async () => {
+    const user = userEvent.setup();
+    mList.mockResolvedValue([
+      preUpdateEntry('cairn-pre-update-53-to-55-20260925-101500.db', new Date(2026, 8, 25, 10, 15, 0), 53, 55),
+    ]);
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: /^restore the copy from before the update, /i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/the backup from before the update \(/);
+    await user.click(within(dialog).getByRole('button', { name: 'Replace and restore' }));
+    await waitFor(() => expect(mRestore).toHaveBeenCalledWith(`${BACKUPS_DIR}/cairn-pre-update-53-to-55-20260925-101500.db`));
+  });
+
+  it('U1: About backups names the before-update copies', () => {
+    renderSection();
+    expect(screen.getByText(/Cairn also keeps a copy from before each update that changes how its database is stored, listed here as "Before update"\./)).toBeInTheDocument();
   });
 });
 

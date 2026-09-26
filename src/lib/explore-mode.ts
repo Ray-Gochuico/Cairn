@@ -133,3 +133,20 @@ export function clearExploreSessionStorage(): void {
     // Best-effort by design (private mode / denied storage).
   }
 }
+
+/**
+ * v1.7.1 U2 (critic b): a FAILED sample boot rethrown with a name the boot-
+ * error screen can match, so it never offers the REAL profile's backups on a
+ * sample failure (the flag is already cleared by then — main.tsx cannot tell
+ * the two apart otherwise). The message is the cause's, verbatim; `cause` is
+ * the original error.
+ */
+export class ExploreBootError extends Error {
+  readonly cause: unknown;
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'ExploreBootError';
+    this.cause = cause;
+    Object.setPrototypeOf(this, ExploreBootError.prototype);
+  }
+}

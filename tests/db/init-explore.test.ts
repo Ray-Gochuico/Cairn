@@ -6,7 +6,8 @@ vi.mock('@/db/tauri-adapter', () => ({
 }));
 const runMigrations = vi.fn();
 const loadAllMigrations = vi.fn().mockResolvedValue([]);
-vi.mock('@/db/migrations', () => ({
+vi.mock('@/db/migrations', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/db/migrations')>()),
   runMigrations: (...a: unknown[]) => runMigrations(...a),
   loadAllMigrations: (...a: unknown[]) => loadAllMigrations(...a),
 }));
@@ -22,6 +23,10 @@ const seedSampleProfile = vi.fn();
 vi.mock('@/domain/sample-profile/sample-profile', () => ({
   seedSampleProfile: (...a: unknown[]) => seedSampleProfile(...a),
 }));
+const takePreUpdateCopy = vi.fn();
+vi.mock('@/lib/pre-update-copy', () => ({ takePreUpdateCopy: (...a: unknown[]) => takePreUpdateCopy(...a) }));
+const isTauri = vi.fn(() => true);
+vi.mock('@/lib/tauri-runtime', () => ({ isTauriRuntime: () => isTauri() }));
 // SettingsRepo.get is the first act of maybeRunLaunchRefresh — its silence
 // proves the launch refresh never ran (the function lives in the module under
 // test and can't be self-mocked).
@@ -37,7 +42,7 @@ vi.mock('@/market/run-market-data-refresh', () => ({
 }));
 
 import { initDatabase } from '@/db/init';
-import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+import { EXPLORE_FLAG_KEY, ExploreBootError } from '@/lib/explore-mode';
 import { INTERVIEW_BAR_KEY } from '@/lib/interview/bar-store';
 
 /** The flag's VALUE is opaque to isExploreMode() — only presence matters —
@@ -132,5 +137,38 @@ describe('initDatabase — explore branch', () => {
     expect(resetSampleDb).not.toHaveBeenCalled();
     expect(seedSampleProfile).not.toHaveBeenCalled();
     expect(settingsGet).toHaveBeenCalled(); // maybeRunLaunchRefresh ran
+  });
+
+  it('the explore branch never takes a pre-update copy (CR-U-5): the seam is not on that path at all', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    // A fake adapter that WOULD look like "53 applied, 2 pending" if anyone asked.
+    load.mockResolvedValue({
+      select: vi.fn(async (sql: string) =>
+        /sqlite_master/.test(sql) ? [{ n: 1 }] : /schema_migrations/.test(sql) ? [{ version: '0001_initial' }] : [{ n: 1 }]),
+      execute: vi.fn(),
+      close: vi.fn(),
+    });
+    loadAllMigrations.mockResolvedValueOnce([{ version: '0001_initial', sql: '' }, { version: '0002_x', sql: '' }]);
+    await initDatabase();
+    expect(takePreUpdateCopy).not.toHaveBeenCalled();
+  });
+
+  it('a failing explore boot rejects with a TAGGED ExploreBootError whose message is the cause’s (critic b)', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const cause = new Error('sample-explore.db is locked');
+    load.mockRejectedValueOnce(cause);
+    const p = initDatabase();
+    await expect(p).rejects.toBeInstanceOf(ExploreBootError);
+    await expect(p).rejects.toMatchObject({ name: 'ExploreBootError', cause, message: 'sample-explore.db is locked' });
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull(); // the flag is still cleared first
+    warn.mockRestore();
+  });
+
+  it('a REAL-profile failure is never tagged as explore', async () => {
+    load.mockRejectedValueOnce(new Error('finance.db is locked'));
+    const p = initDatabase();
+    await expect(p).rejects.toThrow('finance.db is locked');
+    await expect(p).rejects.not.toBeInstanceOf(ExploreBootError);
   });
 });

@@ -15,6 +15,8 @@ import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
+import { stashRestoreFailureNotice } from './boot-notices';
+import { parsePreUpdateCopyName } from './pre-update-names';
 
 /** The plugin connection URL the app loads (and the key both Rust commands
  * resolve their pool/path from). Single source of truth here. */
@@ -117,14 +119,22 @@ export async function runBackup(now: Date = new Date()): Promise<string> {
   return dest;
 }
 
-/** One rotating backup file, surfaced to the in-app Restore list. */
+/** One backup file, surfaced to the in-app Restore lists. */
 export interface BackupEntry {
-  /** The on-disk filename, e.g. `cairn-20260602-235000.db`. */
+  /** The on-disk filename, e.g. `cairn-20260602-235000.db` or
+   * `cairn-pre-update-53-to-55-20260925-101500.db`. */
   name: string;
   /** Absolute path, ready to hand to `validateBackupFile`/`restoreFromBackup`. */
   path: string;
   /** When the backup was taken, parsed from the filename in LOCAL time. */
   takenAt: Date;
+  /** `manual` — "Back up now"; `pre-update` — the copy init.ts takes before
+   * migrations (v1.7.1 U1). The two families rotate independently. */
+  kind: 'manual' | 'pre-update';
+  /** Pre-update copies only: the schema the file holds and the one the
+   * update was moving to. */
+  schemaFrom?: number;
+  schemaTo?: number;
 }
 
 /** Filename matcher shared with rotation: `cairn-YYYYMMDD-HHMMSS.db`, capturing
@@ -132,8 +142,8 @@ export interface BackupEntry {
 const BACKUP_NAME_RE = /^cairn-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
 
 /**
- * List the rotating `cairn-*.db` backups for the in-app Restore picker, newest
- * first. The hidden `backups/` folder (under the app config dir) is not
+ * List the manual `cairn-*.db` backups AND the `cairn-pre-update-*` copies for
+ * the in-app Restore lists, newest first. The hidden `backups/` folder (under the app config dir) is not
  * browsable in Finder, so the UI lists its contents directly instead of relying
  * on a file dialog.
  *
@@ -158,11 +168,16 @@ export async function listBackups(): Promise<BackupEntry[]> {
   const parsed = entries.flatMap((e): Array<Omit<BackupEntry, 'path'>> => {
     if (!e.isFile) return [];
     const m = BACKUP_NAME_RE.exec(e.name);
-    if (!m) return [];
-    const [, y, mo, d, h, mi, s] = m.map(Number);
-    // Local time — must mirror backupFilename's getFullYear()/getHours()/…
-    const takenAt = new Date(y, mo - 1, d, h, mi, s);
-    return [{ name: e.name, takenAt }];
+    if (m) {
+      const [, y, mo, d, h, mi, s] = m.map(Number);
+      // Local time — must mirror backupFilename's getFullYear()/getHours()/…
+      return [{ name: e.name, takenAt: new Date(y, mo - 1, d, h, mi, s), kind: 'manual' }];
+    }
+    const pre = parsePreUpdateCopyName(e.name);
+    if (pre) {
+      return [{ name: e.name, takenAt: pre.takenAt, kind: 'pre-update', schemaFrom: pre.schemaFrom, schemaTo: pre.schemaTo }];
+    }
+    return [];
   });
   // Pass 2 — attach the absolute, platform-correct path to each survivor.
   const rows = await Promise.all(
@@ -176,18 +191,28 @@ export async function validateBackupFile(path: string): Promise<BackupValidation
   return invoke<BackupValidation>('db_validate_backup', { path });
 }
 
-/**
- * sessionStorage key carrying a failed-restore reason across the forced reload,
- * so the freshly-booted app can surface what went wrong. Read-once (the reader
- * removes it). See `takeRestoreFailureNotice`.
- */
-export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
+// The restore-failure notice helpers moved to the Tauri-free
+// src/lib/boot-notices.ts (v1.7.1 U1) so the boot-error screen can read the
+// reason at render time without a Tauri import. Re-exported here so existing
+// importers (DataSection, tests) keep their path.
+export { RESTORE_FAILURE_NOTICE_KEY, takeRestoreFailureNotice } from './boot-notices';
+
+/** The plugin's rejection when `db` was never loaded (tauri-plugin-sql 2.4.0
+ * error.rs:15 `database {0} not loaded`, serialized as a PLAIN STRING). Exact
+ * equality on purpose: any other close failure means the pool may be alive. */
+const NOT_LOADED_REJECTION = `database ${DB_URL} not loaded`;
+
+function isNotLoadedRejection(e: unknown): boolean {
+  const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+  return message === NOT_LOADED_REJECTION;
+}
 
 /**
  * Restore the live database from `source`, corruption-safely:
  *   1. close the live pool so no connection holds the file/WAL open;
- *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file +
- *      clears the stale `-wal`/`-shm` sidecars — see src-tauri/src/db_backup.rs);
+ *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file,
+ *      setting the old `-wal`/`-shm` sidecars aside and putting them back if
+ *      the swap fails — see src-tauri/src/db_backup.rs replace_database_file);
  *   3. ALWAYS reload the webview so boot re-inits a fresh pool.
  *
  * STEP 1 invokes the plugin's `close` command directly rather than
@@ -204,59 +229,77 @@ export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
  * session is running on a CLOSED pool; every subsequent query would fail, so
  * leaving the app running (e.g. because `db_restore` threw) would brick it until
  * a manual restart. We therefore reload whether step 2 succeeds OR throws. This
- * is only safe because of H-1: a failed `db_restore` leaves the ORIGINAL
- * `finance.db` byte-for-byte intact, so the post-reload boot re-inits cleanly on
- * valid data. On failure we stash the reason in sessionStorage first so the app
- * can surface it after reload (best-effort; never blocks the reload).
+ * rests on H-1: a failed `db_restore` leaves the ORIGINAL `finance.db` intact
+ * and puts its set-aside sidecars back — with ONE exception (CR-U-15): when
+ * the `-wal` cannot be put back, its error says so ("could not be put back",
+ * put_back_or_report) and names where the set-aside file is, and the reload
+ * then opens finance.db WITHOUT that -wal. (A stuck `-shm` alone — the
+ * rebuildable index — keeps "your data is unchanged", CR-U-23c.) That reason is stashed like every
+ * other (boot-notices.ts) and is shown in the app chrome on the next
+ * successful boot (RestoreProblemNote), so nothing may treat the boot after a
+ * failed restore as a clean one (best-effort; never blocks the reload).
  *
  * If the CLOSE itself fails (step 1, before the point of no return), the pool
  * may still be alive — we do NOT reload and propagate the error so the caller
  * surfaces it against the still-live DB.
  *
  * `reload` is injectable for tests; it defaults to `window.location.reload`.
+ * `tolerateNotLoaded` (boot screens only) accepts the plugin's exact
+ * not-loaded rejection as 'no pool to drain'. `onRestored` runs once, only
+ * after `db_restore` succeeded and before the reload (best-effort; the boot
+ * screens set the one-boot update hold with it, CR-U-14).
  */
 export async function restoreFromBackup(
   source: string,
-  opts: { reload?: () => void } = {},
+  opts: { reload?: () => void; tolerateNotLoaded?: boolean; onRestored?: () => void } = {},
 ): Promise<void> {
   const reload = opts.reload ?? (() => window.location.reload());
 
   // Deterministically close the EXISTING live pool (drains + closes every
   // connection, checkpoints WAL). Do NOT use Database.load here — see above.
   // A failure here is BEFORE the point of no return: propagate without reload.
-  await invoke('plugin:sql|close', { db: DB_URL });
+  //
+  // BOOT PATH (v1.7.1 U2, `tolerateNotLoaded`): on the generic boot-failure
+  // screen Database.load itself may have thrown, so no pool was ever
+  // registered and the plugin rejects with the exact not-loaded message —
+  // there is no pool of THIS session to drain. That does NOT make the old
+  // WAL checkpointed: no close ran, so a leftover -wal may hold committed
+  // frames. db_restore therefore sets the old -wal/-shm aside and puts them
+  // back if the swap fails (CR-U-15, src-tauri/src/db_backup.rs), and its
+  // error says so truthfully when one cannot go back. On success they go with
+  // the data the user chose to replace. Only that exact message is
+  // tolerated; the default (Settings) path is unchanged.
+  // U4: closeLiveDatabase() will wrap this invoke — keep the tolerated branch
+  // on its rejection.
+  try {
+    await invoke('plugin:sql|close', { db: DB_URL });
+  } catch (e) {
+    if (!(opts.tolerateNotLoaded && isNotLoadedRejection(e))) throw e;
+  }
 
   // Point of no return: the pool is closed. From here we MUST reload no matter
   // what, or the session is stuck on a dead pool (M-4).
+  let restored = false;
   try {
     await invoke('db_restore', { db: DB_URL, source });
+    restored = true;
   } catch (e) {
-    // H-1 guarantees the original finance.db is intact on a failed restore, so
-    // the reload below re-inits on valid data. Stash the reason for the app to
-    // show post-reload; swallow any sessionStorage error (never block reload).
-    try {
-      const reason = e instanceof Error ? e.message : String(e);
-      window.sessionStorage?.setItem(RESTORE_FAILURE_NOTICE_KEY, reason);
-    } catch {
-      // sessionStorage unavailable — the reload still happens; reason is lost.
-    }
+    // H-1: the original finance.db is intact on a failed restore and its
+    // set-aside sidecars were put back — unless the reason says a sidecar
+    // "could not be put back" (CR-U-15), in which case the reload opens it
+    // without that -wal. Either way, stash the reason for the app to show
+    // post-reload (the chrome shows a put-back failure, CR-U-20b);
+    // boot-notices swallows any storage error (never blocks the reload).
+    stashRestoreFailureNotice(e instanceof Error ? e.message : String(e));
   } finally {
+    if (restored) {
+      try {
+        opts.onRestored?.();
+      } catch {
+        // Best-effort: the swap already happened; never block the reload.
+      }
+    }
     reload();
-  }
-}
-
-/**
- * Read-and-clear the failed-restore reason left by `restoreFromBackup` before a
- * forced reload. Returns the reason once (subsequent calls return null).
- * Safe to call on every boot; returns null when there's nothing pending.
- */
-export function takeRestoreFailureNotice(): string | null {
-  try {
-    const reason = window.sessionStorage?.getItem(RESTORE_FAILURE_NOTICE_KEY) ?? null;
-    if (reason !== null) window.sessionStorage.removeItem(RESTORE_FAILURE_NOTICE_KEY);
-    return reason;
-  } catch {
-    return null;
   }
 }
 

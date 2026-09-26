@@ -19,6 +19,7 @@ import {
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { isWindows } from '@/lib/platform';
 import { isExploreMode } from '@/lib/explore-mode';
+import { restoreLeftDataUnchanged, withoutTrailingPeriod } from '@/lib/boot-notices';
 
 /** Human-readable "when this backup was taken", e.g. "Jun 2, 2026, 11:50 PM". */
 function formatTakenAt(takenAt: Date): string {
@@ -48,6 +49,9 @@ function formatTakenAt(takenAt: Date): string {
  * short "available in the desktop app" note is shown instead. The list simply
  * never loads in browser mode (the smoke runs there); only the live desktop
  * build exercises the real backup/restore.
+ *
+ * Pre-update copies (v1.7.1 U1) list beside manual backups with a 'Before
+ * update' caption; restore is the same funnel.
  */
 export function DataSection() {
   const tauri = isTauriRuntime();
@@ -107,7 +111,16 @@ export function DataSection() {
   // original data is intact (H-1), and they can retry.
   useEffect(() => {
     const reason = takeRestoreFailureNotice();
-    if (reason) setError(`Restore did not complete: ${reason}. Your data was not changed.`);
+    // CR-U-15: the "not changed" claim only when db_restore put everything
+    // back. U1-m16: one period after the reason, never two.
+    if (reason) {
+      const clause = withoutTrailingPeriod(reason);
+      setError(
+        restoreLeftDataUnchanged(reason)
+          ? `Restore did not complete: ${clause}. Your data was not changed.`
+          : `Restore did not complete: ${clause}.`,
+      );
+    }
   }, []);
 
   async function handleBackupNow() {
@@ -197,7 +210,12 @@ export function DataSection() {
 
   /** Per-row Restore: hand the backup's path + formatted date to doRestore. */
   function handleRestoreEntry(b: BackupEntry) {
-    void doRestore(b.path, formatTakenAt(b.takenAt));
+    void doRestore(
+      b.path,
+      b.kind === 'pre-update'
+        ? `before the update (${formatTakenAt(b.takenAt)})`
+        : formatTakenAt(b.takenAt),
+    );
   }
 
   /** "Restore from a file…": pick a `.db` (defaulting INTO the hidden backups
@@ -238,6 +256,10 @@ export function DataSection() {
               recover everything — every account, transaction, and setting — if this
               computer is lost or the database is damaged. Backups are full, exact
               copies of your database.
+            </p>
+            <p className="text-muted-foreground">
+              Cairn also keeps a copy from before each update that changes how its
+              database is stored, listed here as &quot;Before update&quot;.
             </p>
           </div>
         </details>
@@ -296,11 +318,22 @@ export function DataSection() {
                     data-testid="backup-row"
                     className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    <span className="text-sm">{formatTakenAt(b.takenAt)}</span>
+                    <span className="text-sm">
+                      {formatTakenAt(b.takenAt)}
+                      {/* U1-m22: a real space, so the time and the caption never read as one run. */}
+                      {b.kind === 'pre-update' && ' '}
+                      {b.kind === 'pre-update' && (
+                        <span className="ml-2 text-xs text-muted-foreground">Before update</span>
+                      )}
+                    </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Restore backup from ${formatTakenAt(b.takenAt)}`}
+                      aria-label={
+                        b.kind === 'pre-update'
+                          ? `Restore the copy from before the update, ${formatTakenAt(b.takenAt)}`
+                          : `Restore backup from ${formatTakenAt(b.takenAt)}`
+                      }
                       onClick={() => handleRestoreEntry(b)}
                       disabled={!tauri || exploring || busy !== null}
                     >

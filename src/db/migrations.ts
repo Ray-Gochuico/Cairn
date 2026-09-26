@@ -49,6 +49,46 @@ export class SchemaTooNewError extends Error {
 }
 
 /**
+ * Thrown by `src/db/init.ts` when `runMigrations` rejects on the real profile
+ * (v1.7.1 U1). Name-matched by the boot-error screen; carries the cause and
+ * the path of the pre-update copy taken this boot (null when none was —
+ * "Continue without a copy", or a copy that was not needed). A
+ * SchemaTooNewError is never wrapped: it is thrown before any migration runs.
+ * `copyIsFromBeforeUpdate` is false when the named copy was taken of a file an
+ * earlier attempt had already changed partway (no origin copy existed), so
+ * the screen never calls it the data from before the update (U1-m9).
+ * `chainOrigin` / `chainTarget` are the schema the file held before ANY
+ * attempt of this update and the schema it is moving to (null when unknown),
+ * so the screen labels THIS chain's partway copies honestly (CR-U-23a/24).
+ */
+export class MigrationFailedError extends Error {
+  readonly cause: unknown;
+  readonly preUpdateCopyPath: string | null;
+  readonly copyIsFromBeforeUpdate: boolean;
+  readonly chainOrigin: number | null;
+  readonly chainTarget: number | null;
+  constructor(
+    cause: unknown,
+    preUpdateCopyPath: string | null,
+    copyIsFromBeforeUpdate = true,
+    chainOrigin: number | null = null,
+    chainTarget: number | null = null,
+  ) {
+    super(
+      'Cairn could not finish updating your data: ' +
+        (cause instanceof Error ? cause.message : String(cause)),
+    );
+    this.name = 'MigrationFailedError';
+    this.cause = cause;
+    this.preUpdateCopyPath = preUpdateCopyPath;
+    this.copyIsFromBeforeUpdate = copyIsFromBeforeUpdate;
+    this.chainOrigin = chainOrigin;
+    this.chainTarget = chainTarget;
+    Object.setPrototypeOf(this, MigrationFailedError.prototype);
+  }
+}
+
+/**
  * Read the SQLite `user_version` (a header-stored integer, default 0). Returns
  * 0 for a brand-new database (no migrations run yet). Tolerates the handful of
  * column-name shapes adapters return for `PRAGMA user_version`.
@@ -60,6 +100,39 @@ export async function readUserVersion(db: Database): Promise<number> {
   const raw = row.user_version ?? Object.values(row)[0];
   const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
+}
+
+export interface PendingMigrations {
+  /** Registry migrations already recorded in schema_migrations (0 when the table is absent). */
+  applied: number;
+  /** Registry migrations not yet recorded, in apply order. */
+  pending: Migration[];
+}
+
+/**
+ * READ-ONLY mirror of the runner's own "already applied" set (see
+ * runMigrations: sqlite_master check → schema_migrations names). Used by
+ * init.ts to decide whether to take the pre-update copy BEFORE runMigrations
+ * runs (v1.7.1 U1, CR-U-5). Never creates the table, never stamps anything.
+ * Keyed on names, not user_version, because the runner stamps the constant
+ * MAX_SCHEMA_VERSION even for a subset (see the trailing PRAGMA below) —
+ * `applied` is the count of REGISTRY versions present, so a foreign row
+ * never inflates it and `applied + pending.length === migrations.length`.
+ */
+export async function pendingMigrations(
+  db: Database,
+  migrations: Migration[],
+): Promise<PendingMigrations> {
+  const tables = await db.select<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+  );
+  const appliedSet = new Set<string>();
+  if ((tables[0]?.n ?? 0) > 0) {
+    const rows = await db.select<{ version: string }>('SELECT version FROM schema_migrations');
+    for (const r of rows) appliedSet.add(r.version);
+  }
+  const pending = migrations.filter((m) => !appliedSet.has(m.version));
+  return { applied: migrations.length - pending.length, pending };
 }
 
 // Detects whether a migration self-manages its transaction state via its

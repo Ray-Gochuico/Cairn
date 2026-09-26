@@ -11,6 +11,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+import { stashPostUpdateNotice, stashRestoreFailureNotice } from '@/lib/boot-notices';
 
 // W4 review (MINOR 13): P-W4-7's TourOverlay gate had no pin — the overlay
 // renders nothing until the tour store is started, so mounting it in explore
@@ -63,6 +64,7 @@ describe('PageShell route title + focus', () => {
 
   afterEach(async () => {
     localStorage.removeItem(EXPLORE_FLAG_KEY);
+    sessionStorage.clear();
     await db.close();
   });
 
@@ -126,5 +128,50 @@ describe('PageShell route title + focus', () => {
   it('W4 (P-W4-7): TourOverlay mounts normally without the flag', () => {
     renderAt('/');
     expect(screen.getByTestId('tour-overlay')).toBeInTheDocument();
+  });
+
+  it('U1: renders the update note in the chrome slot on the real profile when one is pending', () => {
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-53-to-55-20260925-101500.db');
+    renderAt('/');
+    expect(screen.getByRole('note', { name: 'Update notice' })).toBeInTheDocument();
+    expect(screen.queryByRole('note', { name: 'Sample data notice' })).toBeNull();
+  });
+
+  it('U1: never renders the update note while exploring, even with a stale key (D-S7)', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-53-to-55-20260925-101500.db');
+    renderAt('/');
+    expect(screen.queryByRole('note', { name: 'Update notice' })).toBeNull();
+    expect(screen.getByRole('note', { name: 'Sample data notice' })).toBeInTheDocument();
+  });
+
+  it('U1: no note without a pending key (production first-run is untouched)', () => {
+    renderAt('/');
+    expect(screen.queryByRole('note', { name: 'Update notice' })).toBeNull();
+  });
+
+  it('CR-U-20b: a put-back failure from the last restore shows in the chrome on the first successful boot', () => {
+    stashRestoreFailureNotice('db_restore: failed to finalize the restore: denied. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderAt('/');
+    expect(screen.getByRole('note', { name: 'Restore notice' })).toBeInTheDocument();
+  });
+
+  it('CR-U-20b: never while exploring', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    stashRestoreFailureNotice('db_restore: x. Part of your current data could not be put back: y');
+    renderAt('/');
+    expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
+  });
+
+  it('CR-U-23e: with both notes showing, each Dismiss is named for its note and dismisses only that one', () => {
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-53-to-55-20260925-101500.db');
+    stashRestoreFailureNotice('db_restore: x. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderAt('/');
+    const restoreDismiss = screen.getByRole('button', { name: 'Dismiss the restore notice' });
+    expect(screen.getByRole('button', { name: 'Dismiss the update notice' })).toBeInTheDocument();
+    act(() => restoreDismiss.click());
+    expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
+    expect(screen.getByRole('note', { name: 'Update notice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss the update notice' })).toHaveTextContent('Dismiss'); // the visible label is unchanged
   });
 });

@@ -362,3 +362,143 @@ describe('save-a-copy + reveal helpers (smoke)', () => {
     expect(mockReveal).toHaveBeenCalledWith(expect.stringContaining('backups'));
   });
 });
+
+describe('listBackups — both families (v1.7.1 U1)', () => {
+  it('lists manual AND pre-update copies with kind/schema fields, newest first across both', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260924-090000.db', isFile: true, isDirectory: false },
+      { name: 'cairn-pre-update-53-to-55-20260925-101500.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260925-120000.db', isFile: true, isDirectory: false },
+      { name: 'cairn-pre-update-53-to-55-20260925-101500.db.bak', isFile: true, isDirectory: false },
+      { name: 'cairn-pre-update-52-to-53-20260801-000000.db', isFile: false, isDirectory: true },
+    ]);
+    const entries = await listBackups();
+    expect(entries.map((e) => [e.name, e.kind])).toEqual([
+      ['cairn-20260925-120000.db', 'manual'],
+      ['cairn-pre-update-53-to-55-20260925-101500.db', 'pre-update'],
+      ['cairn-20260924-090000.db', 'manual'],
+    ]);
+    const pre = entries[1];
+    expect(pre.schemaFrom).toBe(53);
+    expect(pre.schemaTo).toBe(55);
+    expect(pre.takenAt.getTime()).toBe(new Date(2026, 8, 25, 10, 15, 0).getTime());
+    expect(pre.path).toBe(
+      '/Users/me/Library/Application Support/com.x.cairn/backups/cairn-pre-update-53-to-55-20260925-101500.db',
+    );
+    expect(entries[0].schemaFrom).toBeUndefined();
+  });
+
+  it('rotateBackups still ignores the family (receipt: the :90 regex is untouched)', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-pre-update-53-to-55-20260925-101500.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260101-000000.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260102-000000.db', isFile: true, isDirectory: false },
+    ]);
+    await rotateBackups('/base/backups', 1);
+    expect(mockRemove).toHaveBeenCalledTimes(1);
+    expect(mockRemove.mock.calls[0][0]).toBe('/base/backups/cairn-20260101-000000.db');
+  });
+});
+
+describe('restoreFromBackup — tolerateNotLoaded (the boot path, v1.7.1 U2)', () => {
+  const NOT_LOADED = 'database sqlite:finance.db not loaded'; // tauri-plugin-sql 2.4.0 error.rs:15, serialized as a plain string
+
+  it('with the option: the exact not-loaded STRING rejection is treated as "nothing to drain" — db_restore runs, reload fires', async () => {
+    const order: string[] = [];
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      order.push(cmd);
+      if (cmd === 'plugin:sql|close') throw NOT_LOADED;
+      return undefined;
+    });
+    const reload = vi.fn(() => { order.push('reload'); });
+    await restoreFromBackup('/some/backup.db', { reload, tolerateNotLoaded: true });
+    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
+  });
+
+  it('with the option: the same message as an Error is tolerated too', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'plugin:sql|close') throw new Error(NOT_LOADED);
+      return undefined;
+    });
+    const reload = vi.fn();
+    await restoreFromBackup('/some/backup.db', { reload, tolerateNotLoaded: true });
+    expect(mockInvoke).toHaveBeenCalledWith('db_restore', { db: 'sqlite:finance.db', source: '/some/backup.db' });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('with the option: ANY OTHER close rejection still propagates before db_restore, no reload', async () => {
+    for (const other of ['close failed', 'database sqlite:finance.db not loaded (pool busy)', 'sqlite:finance.db not loaded']) {
+      vi.resetAllMocks();
+      mockAppConfigDir.mockResolvedValue('/x');
+      mockJoin.mockImplementation(fakeJoin('/'));
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        if (cmd === 'plugin:sql|close') throw other;
+        return undefined;
+      });
+      const reload = vi.fn();
+      await expect(restoreFromBackup('/some/backup.db', { reload, tolerateNotLoaded: true })).rejects.toBeTruthy();
+      expect(reload).not.toHaveBeenCalled();
+      expect(mockInvoke).not.toHaveBeenCalledWith('db_restore', expect.anything());
+    }
+  });
+
+  it('WITHOUT the option (the Settings path): the exact not-loaded rejection still propagates — the default is byte-unchanged', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'plugin:sql|close') throw NOT_LOADED;
+      return undefined;
+    });
+    const reload = vi.fn();
+    await expect(restoreFromBackup('/some/backup.db', { reload })).rejects.toBe(NOT_LOADED);
+    expect(reload).not.toHaveBeenCalled();
+  });
+});
+
+describe('restoreFromBackup — onRestored (CR-U-14: the boot screens set the one-boot update hold)', () => {
+  it('runs once, after a SUCCESSFUL db_restore and before the reload', async () => {
+    const order: string[] = [];
+    mInvokeOrder(order);
+    const onRestored = vi.fn(() => { order.push('onRestored'); });
+    const reload = vi.fn(() => { order.push('reload'); });
+    await restoreFromBackup('/some/backup.db', { reload, onRestored });
+    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'onRestored', 'reload']);
+    expect(onRestored).toHaveBeenCalledTimes(1);
+  });
+
+  it('never runs when db_restore rejects (the reload still happens, the reason is stashed)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'db_restore') throw new Error('disk full during restore');
+      return undefined;
+    });
+    const onRestored = vi.fn();
+    const reload = vi.fn();
+    await restoreFromBackup('/some/backup.db', { reload, onRestored });
+    expect(onRestored).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(takeRestoreFailureNotice()).toBe('disk full during restore');
+  });
+
+  it('never runs when the close rejects (before the point of no return)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'plugin:sql|close') throw new Error('close failed');
+      return undefined;
+    });
+    const onRestored = vi.fn();
+    await expect(restoreFromBackup('/some/backup.db', { reload: vi.fn(), onRestored })).rejects.toBeTruthy();
+    expect(onRestored).not.toHaveBeenCalled();
+  });
+
+  it('a throwing onRestored never blocks the reload and is never reported as a failed restore', async () => {
+    const reload = vi.fn();
+    await restoreFromBackup('/some/backup.db', { reload, onRestored: () => { throw new Error('storage denied'); } });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(takeRestoreFailureNotice()).toBeNull();
+  });
+});
+
+function mInvokeOrder(order: string[]) {
+  mockInvoke.mockImplementation(async (cmd: string) => {
+    order.push(cmd);
+    return undefined;
+  });
+}
+
