@@ -142,6 +142,10 @@ describe('toDisplayMilestones — the ONE 30-year recipe (ex-fmtNetWorth30y; D-W
     const unstamped = new Map<number, Milestones>([[1, { netWorth30y: 900_000 }]]);
     expect(toDisplayMilestones(unstamped, 'today', 0.03).get(1)!.netWorth30y).toBeUndefined();
     expect(toDisplayMilestones(unstamped, 'future', 0.03).get(1)!.netWorth30y).toBe(900_000);
+    // Code review NIT: a stamp of 0 (a one-state projection, whose horizon IS month 0)
+    // is a stated month, never a missing one — 900,000 ÷ 1.03^(0/12) = 900,000 ÷ 1.
+    const month0 = new Map<number, Milestones>([[1, { netWorth30y: 900_000, netWorth30yElapsedMonths: 0 }]]);
+    expect(toDisplayMilestones(month0, 'today', 0.03).get(1)!.netWorth30y).toBe(900_000);
   });
 
   it('future is identity + the brand; undefined stays undefined (never a fake $0)', () => {

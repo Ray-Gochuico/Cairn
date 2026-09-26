@@ -386,6 +386,16 @@ describe('FiCards', () => {
   //   real = (1.07 / 1.03) - 1 ≈ 0.038835
   //   coast = 2,000,000 / 1.038835^25 ≈ $771,554  (pre-fix: ~$368,498)
   describe('Coast FI uses real rate, not nominal (W7-Finance)', () => {
+    // Code review (v1.8.0 A-3a fix round): the years-to-retirement leg reads the
+    // clock (currentAge), so the anchor below held only while the calendar said
+    // 2026 — from 2027-01-01 the DOB turns 37, 24 years remain and the coast reads
+    // $801,517. One pinned mid-year instant keeps the 25-year anchor.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 4, 27, 12, 0, 0));
+    });
+    afterEach(() => vi.useRealTimers());
+
     it('uses Fisher real rate so a real-$ target gets a real-rate discount', () => {
       // monthlyExpense $10k → annual $120k → fiTarget = $120k / 0.06 = $2,000,000
       // (use a 6% SWR to dodge a 4%-rule label clash and land on a clean $2M).

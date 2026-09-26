@@ -3,7 +3,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
-import { emptyLeverPayload, projectScenario } from '@/lib/scenarios';
+import { detectMilestones, emptyLeverPayload, projectScenario } from '@/lib/scenarios';
 import { defaultScenarioColor, BASELINE_COLOR } from '@/lib/whatif/scenario-colors';
 
 const resetStore = () => {
@@ -463,6 +463,21 @@ describe('useScenariosStore.projectedScenarios — RealState fingerprint (NEW-W7
     const at = (returnRate: number) =>
       projectScenario({ ...real, defaults: { ...real.defaults, returnRate } } as RealState, emptyLeverPayload(), horizon);
     expect(at(0.12)).toEqual(at(0.02));
+  });
+
+  // v1.8.0 A-3a (code review MINOR, MXstart): the m4 law's production premise.
+  // The chart's toReal deflates from real.startISO (WhatIf.tsx) while the
+  // milestone stamp counts from states[0] (milestones.ts), so the two agree
+  // only because the store projects FROM real.startISO. The m4 pins set both
+  // by hand; this pins the store itself.
+  it("A-3a premise (m4 law): the store's projection starts AT real.startISO — its 30-year mark is startISO + 359 months", () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const real = sampleRealState();
+    const states = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    expect(states[0].monthISO).toBe(real.startISO);
+    expect(states).toHaveLength(360);
+    expect(states[359].monthISO).toBe('2056-04'); // 2026-05 + 359 months = 29 years 11 months
+    expect(detectMilestones(states, { withdrawalRate: 0.04 }).netWorth30yElapsedMonths).toBe(359);
   });
 
   it('still returns cached references when RealState is unchanged', () => {

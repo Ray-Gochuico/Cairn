@@ -1,9 +1,10 @@
-import { describe, it, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { act, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../../helpers/basis-discipline';
 import { ManageScenariosModal, MANAGE_SCENARIOS_BASIS_FIGURES } from '@/components/whatif/ManageScenariosModal';
 import { useWhatIfBasisView } from '@/lib/calculators/basis-view';
-import { WHATIF_PAGE_ID, __resetDollarBasisForTests } from '@/lib/calculators/dollar-basis';
+import { WHATIF_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import { emptyLeverPayload, type Milestones, type MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 
@@ -72,5 +73,16 @@ describe('W5.1 basis-audit sweep — Manage scenarios scoreboard (portaled; both
       { figures: MANAGE_SCENARIOS_BASIS_FIGURES, charts: [] },
       { pageId: WHATIF_PAGE_ID, root: document.body },
     );
+
+    // Code review NIT: the sweep proves direction and marks, not the rate — so the
+    // title's figures are pinned here. The sweep leaves the modal mounted in Today's $.
+    //   today:  1.025^(359/12) = 2.093255814832335 (the 30-year mark's own elapsed years)
+    //           2,345,000 / 2.093255814832335 = 1,120,264.41 → $1,120,264
+    //           2,550,000 / 2.093255814832335 = 1,218,197.98 → $1,218,198
+    //   future: the engine's nominal figures
+    const cells = () => screen.getAllByTestId('manage-nw30y').map((c) => c.textContent);
+    expect(cells()).toEqual(["$1,120,264 (today's $)", "$1,218,198 (today's $)"]);
+    act(() => useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'future'));
+    expect(cells()).toEqual(['$2,345,000 (future $)', '$2,550,000 (future $)']);
   });
 });
