@@ -2,6 +2,8 @@
 
 **Status (2026-05-27):** 55 test files still use `runMigrations(db, [...subset...])`. Sprint-3 testing reviewer flagged this as a 1-day sweep (see `docs/reviews/2026-05-27-testing-wave3.md` § N6).
 
+**Since v1.7.1 (U3's per-migration stamps; recorded by v1.8.0 T12).** A hand-picked subset no longer ends at `MAX_SCHEMA_VERSION`. The runner stamps each pending migration's REGISTRY ordinal inside its own batch (never lower than the stamp so far), and the run ends at the ordinal of the last registry migration in the list: `[0001, 0017]` now leaves `user_version` at 17, where the pre-U3 runner left 55; a list of synthetic test migrations stamps nothing. That is harmless for the sweep's targets, because only one of them reads `user_version`, and on purpose: `tests/db/schema-version-guard.test.ts` pins exactly this behaviour with its two subsets. The sweep leaves that file's subsets alone. At `e6afb755` the acceptance-criterion-1 grep lists 57 test files plus this file (the 55 above is the 2026-05-27 count); after the sweep it lists `tests/db/schema-version-guard.test.ts` and this file (acceptance criteria 1 and 6 below say so).
+
 This file documents the exact transform so the next teammate can execute it mechanically.
 
 ## Why this matters
@@ -140,12 +142,12 @@ for (const file of targets) {
 
 ## Acceptance criteria for the sweep
 
-1. `grep -rl "runMigrations(db, \[" tests/ | wc -l` reports `0`.
+1. `grep -rl "runMigrations(db, \[" tests/` lists exactly `tests/db/schema-version-guard.test.ts` and this file, so `| wc -l` reports `2` (amended by v1.8.0 T12: that file's two subsets pin U3's registry-ordinal stamp on purpose; the 2026-05-27 target was `0`).
 2. `npm test` passes (no regressions; each previously-hand-curated test now runs against the full schema).
 3. Any test that breaks because it depended on a column being null at a migration-cutoff version is fixed (root-cause: the test was *already wrong* — it implicitly asserted a schema that doesn't match production).
 4. `npx eslint --fix tests/` strips unused `readFileSync`/`resolve`/`mig` symbols.
 5. New file: `scripts/codemods/sweep-hand-curated-migrations.mjs` (committed for reproducibility).
-6. New ESLint rule (or simple grep-based pre-commit check) forbidding `runMigrations(db, [` in `tests/**/*.test.{ts,tsx}` going forward. Recommended: a small custom rule via `eslint-plugin-local-rules` named `no-hand-curated-migrations`. The grep approach is faster to ship:
+6. New ESLint rule (or simple grep-based pre-commit check) forbidding `runMigrations(db, [` in `tests/**/*.test.{ts,tsx}` going forward, except in `tests/db/schema-version-guard.test.ts` (its two subsets pin U3's registry-ordinal stamp; the check below must skip that path, for example with `grep -v '^tests/db/schema-version-guard.test.ts$'` before `xargs` — amended by v1.8.0 T12). Recommended: a small custom rule via `eslint-plugin-local-rules` named `no-hand-curated-migrations`. The grep approach is faster to ship:
 
    ```sh
    # scripts/hooks/pre-commit, near the end
