@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -66,10 +66,27 @@ import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
   const location = useLocation();
-  // Wave C (C11): the just-sent scenario, highlighted calmly on arrival —
-  // navigation state only, so a reload clears it (no persistence, no motion).
-  const createdScenarioId =
-    (location.state as { createdScenarioId?: number } | null)?.createdScenarioId ?? null;
+  const navigate = useNavigate();
+  // Wave C (C11): the just-sent scenario, highlighted calmly on arrival.
+  // A-11(3) (v1.7.1): the id rides history.state, and history.state SURVIVES
+  // a hard reload in the WebView (C1 smoke — the earlier "a reload clears
+  // it" premise was wrong: the ring and the centered scroll re-fired). So the
+  // page consumes the arrival ONCE: the id is latched into page state on the
+  // first render, then the history entry's state is replaced with null (same
+  // URL, replace — Back never lands on a state-carrying entry, and the
+  // pathname-keyed route focus in PageShell does not move). A reload reads
+  // nothing. The latch keeps the ring, the compare-pair seed and the FI-pills
+  // remount below exactly as before for the rest of this visit.
+  const [createdScenarioId] = useState<number | null>(
+    () => (location.state as { createdScenarioId?: number } | null)?.createdScenarioId ?? null,
+  );
+  useEffect(() => {
+    if ((location.state as { createdScenarioId?: number } | null)?.createdScenarioId == null) return;
+    navigate(
+      { pathname: location.pathname, search: location.search, hash: location.hash },
+      { replace: true, state: null },
+    );
+  }, [location, navigate]);
   // Review MINOR 2: the arrival is consumed ONCE per visit, here — the page
   // owns the navigation state the id arrived on. ScenariosPanel's scroll was
   // keyed on its own mount, and the pills-position toggle below swaps the

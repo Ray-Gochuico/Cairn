@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -215,5 +215,66 @@ describe('WhatIf — the Send arrival scrolls once per ARRIVAL, not once per mou
     expect(after!.querySelector('li[data-row-id="5"]')!.className).toContain('ring-1');
     act(() => { vi.advanceTimersByTime(2000); });
     expect(scrollSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // A-11(3) (v1.7.1): history.state SURVIVES a hard reload in the WebView (C1
+  // smoke), so an arrival read straight off location.state re-fired the ring
+  // and the centered scroll on every reload of the entry. The page now latches
+  // the id and clears the entry (replace, same URL): the visit keeps its ring,
+  // and a reload of that entry carries nothing.
+  function ArrivalProbe() {
+    const l = useLocation();
+    const action = useNavigationType();
+    return (
+      <output data-testid="arrival-probe">
+        {JSON.stringify({ path: `${l.pathname}${l.search}${l.hash}`, state: l.state ?? null, action })}
+      </output>
+    );
+  }
+  const readProbe = () => JSON.parse(screen.getByTestId('arrival-probe').textContent!);
+  const ringOn5 = (root: HTMLElement) =>
+    root.querySelector('[data-testid="scenarios-panel"] li[data-row-id="5"]')!.className.includes('ring-1');
+
+  it("A-11(3): the arrival is consumed — the entry's state is replaced with null, the URL is kept, the ring stays for the visit", () => {
+    let container!: HTMLElement;
+    act(() => {
+      container = render(
+        <MemoryRouter initialEntries={[{ pathname: '/what-if', search: '?view=household', hash: '#compare', state: { createdScenarioId: 5 } }]}>
+          <WhatIf />
+          <ArrivalProbe />
+        </MemoryRouter>,
+      ).container;
+    });
+    expect(readProbe()).toEqual({ path: '/what-if?view=household#compare', state: null, action: 'REPLACE' });
+    expect(ringOn5(container)).toBe(true); // the latch: cleared entry, ring kept
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(scrollSpy).toHaveBeenCalledTimes(1); // the settle scroll still fires once
+  });
+
+  it('A-11(3): a hard reload of the consumed entry carries no arrival — no ring, no scroll', () => {
+    let first!: ReturnType<typeof render>;
+    act(() => {
+      first = render(
+        <MemoryRouter initialEntries={[{ pathname: '/what-if', state: { createdScenarioId: 5 } }]}>
+          <WhatIf />
+          <ArrivalProbe />
+        </MemoryRouter>,
+      );
+    });
+    const entry = readProbe(); // what the WebView reloads from
+    act(() => { vi.advanceTimersByTime(150); });
+    first.unmount();
+    scrollSpy.mockClear();
+    let container!: HTMLElement;
+    act(() => {
+      container = render(
+        <MemoryRouter initialEntries={[{ pathname: '/what-if', state: entry.state }]}>
+          <WhatIf />
+        </MemoryRouter>,
+      ).container;
+    });
+    expect(ringOn5(container)).toBe(false);
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(scrollSpy).not.toHaveBeenCalled();
   });
 });
