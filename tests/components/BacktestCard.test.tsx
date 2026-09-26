@@ -157,7 +157,10 @@ describe('BacktestCard — scope tag (Wave B CB23 / D-B14)', () => {
 
 describe('v1.8.0 A-2′: "last run" names the LOCAL calendar day of the run instant', () => {
   const ORIGINAL_TZ = process.env.TZ;
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null } as never);
+  });
   afterEach(() => {
     if (ORIGINAL_TZ === undefined) delete process.env.TZ;
     else process.env.TZ = ORIGINAL_TZ;
