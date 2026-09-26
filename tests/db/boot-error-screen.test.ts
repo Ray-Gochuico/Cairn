@@ -917,7 +917,7 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     const reload = vi.fn();
     renderBootError(root, new MigrationFailedError(new Error('duplicate column name: vehicle_repair_category_ids'), PRE.path), { reload });
     expect(root.querySelector('h1')?.textContent).toBe("Cairn couldn't finish updating your data");
-    expect(root.textContent).toContain(`The update stopped partway. A copy of your data from before the update was saved: ${PRE.name}. Restoring it puts your data back the way it was; Cairn does not run the update again until you choose Try the update again. To use that data without the update, the previous version of Cairn is on the releases page.`); // CR-U-19 ⚑
+    expect(root.textContent).toContain(`The update stopped partway. A copy of your data from before the update was saved: ${PRE.name}. Restoring it puts your data back the way it was, and the next screen lets you choose whether to run the update again. To use that data without the update, the previous version of Cairn is on the releases page.`); // CR-U-21 ⚑
     expect(root.querySelector('pre')?.textContent).toMatch(/duplicate column name/);
     await settled(root, 1);
     expect(buttons(root)).toEqual(['Try again', 'Restore', 'Reveal backups in Finder', 'Open the releases page']);

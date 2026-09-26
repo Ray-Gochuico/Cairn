@@ -335,6 +335,16 @@ describe('CR-U-14 — the one-boot update hold after a boot-screen restore of a 
     expect((await pendingMigrations(db, all)).pending).toHaveLength(0);
   });
 
+  it('CR-U-21: the hold is ONE boot — a relaunch after the hold screen, with no button pressed, migrates', async () => {
+    await atSchema53();
+    setUpdateHold();
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'UpdateHeldError' });
+    sessionStorage.clear();                                   // the app was quit and reopened: a new window
+    await initDatabase();                                     // no 'Try the update again' press
+    expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
+    expect((await pendingMigrations(db, all)).pending).toHaveLength(0);
+  });
+
   it('hold with nothing pending: the boot is ordinary and the flag is consumed', async () => {
     await runMigrations(db, all);
     setUpdateHold();
