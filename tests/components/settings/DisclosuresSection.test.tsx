@@ -10,7 +10,7 @@ import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
  *
  * The app points users at "Settings → Disclosures" (WhatIf footnote, the
  * backtest disclosure body). This section is the read-only landing for those
- * four documents, plus the Yahoo non-affiliation line (M2) and a pointer to
+ * five documents, plus the Yahoo non-affiliation line (M2) and a pointer to
  * the bundled third-party license attributions (H1).
  *
  * It renders the SAME consented BODIES as DisclosureModal via react-markdown,
