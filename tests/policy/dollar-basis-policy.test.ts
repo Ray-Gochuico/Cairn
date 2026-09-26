@@ -86,25 +86,39 @@ const DEFINING_SPECIFIER_RE = /(?:^|\/)(?:real-rate|real-mode|compound-interest|
 
 /**
  * v1.7.1 A-5a (1): the export shapes that pass a converter on under a name
- * CONVERTER_RE cannot see. Comments stripped. Five arms:
+ * CONVERTER_RE cannot see. Comments stripped. Six arms:
  *  (a) a value re-export FROM a defining module — `export { … } from '…/real-rate'`
- *      or `export * [as ns] from '…'` (type-only `export type { … }` carries no value);
+ *      or `export * [as ns] from '…'` (type-only `export type { … }`, or a list
+ *      whose every entry is an inline `type X`, carries no value);
  *  (b) a rename in any export list — `export { realRateOf as rateLeg }`;
  *  (c) a value alias — `export const rateLeg = realRateOf` (`;` optional);
  *  (d) a default export of a converter — `export default realRateOf` (`;` optional);
  *  (e) an IMPORT-side alias passed on — `import { realRateOf as rateLeg }` or
  *      `import * as rr from '…/real-rate'`, then `rateLeg` / `rr` in an export
- *      list, as (c)'s right-hand side, or as (d)'s default.
+ *      list, as (c)'s right-hand side, or as (d)'s default;
+ *  (f) a LOCAL alias passed on the same way — `const y = realRateOf;` (or an
+ *      alias of an alias), then `y` in an export list, (c) or (d).
+ * In (c), (d) and (f) the annotation may be any type, a function type's `=>`
+ * included, and the right-hand side may be parenthesized or `as` /
+ * `satisfies`-cast (P5 review round). A call (`= realRateOf(…)`) is a computed
+ * value, not an alias.
  * Not claimed: a converter handed on inside an object or through a member
  * read (`export const rates = { realRateOf }`, `export const leg = rr.realRateOf`).
  * A WRAPPER (`export function rateLeg(…) { return realRateOf(…); }`) is API
  * design, not an alias — the honest limit above covers it.
  */
+/** An optional type annotation — `=>` allowed, so a function type does not end at its arrow. */
+const ALIAS_ANNOTATION = String.raw`(?::(?:[^=;]|=>)+)?`;
+/** An alias's right-hand side: a bare name, optionally parenthesized, optionally `as`/`satisfies`-cast, then `;` or the line's end. */
+const ALIAS_RHS = String.raw`\(?\s*(\w+)\s*\)?(?:\s+(?:as|satisfies)\s+[^;\n]*)?[ \t]*(?:;|$)`;
+
 function aliasedConverterExports(source: string): string[] {
   const s = stripComments(source);
   const hits: string[] = [];
   // (a)
   for (const m of s.matchAll(/export\s*(\{[^}]*\}|\*(?:\s*as\s+\w+)?)\s*from\s*(['"])([^'"]*)\2/g)) {
+    const list = m[1].startsWith('{') ? m[1].slice(1, -1).split(',').map((x) => x.trim()).filter(Boolean) : [];
+    if (list.length > 0 && list.every((x) => /^type\s/.test(x))) continue; // inline type-only: no value
     if (DEFINING_SPECIFIER_RE.test(m[3])) hits.push(m[0].replace(/\s+/g, ' '));
   }
   // (b)
@@ -125,19 +139,28 @@ function aliasedConverterExports(source: string): string[] {
   for (const m of s.matchAll(/import\s*\*\s*as\s+(\w+)\s*from\s*(['"])([^'"]*)\2/g)) {
     if (DEFINING_SPECIFIER_RE.test(m[3])) importAliases.add(m[1]);
   }
-  const passedOn = (name: string) => CONVERTER_NAMES.has(name) || importAliases.has(name);
+  // (f) the local aliases — ONE pass in source order: an alias of an alias is
+  //     declared after the alias it reads, so the chain is already in the set
+  const localAliases = new Set<string>();
+  const passedOn = (name: string) =>
+    CONVERTER_NAMES.has(name) || importAliases.has(name) || localAliases.has(name);
+  const localAliasRe = new RegExp(String.raw`\b(?:const|let|var)\s+(\w+)\s*` + ALIAS_ANNOTATION + String.raw`=\s*` + ALIAS_RHS, 'gm');
+  for (const m of s.matchAll(localAliasRe)) {
+    if (passedOn(m[2]) && m[1] !== m[2]) localAliases.add(m[1]);
+  }
   for (const m of s.matchAll(/export\s*\{([^}]*)\}/g)) {
     for (const spec of m[1].split(',')) {
       const local = spec.trim().match(/^(\w+)(?:\s+as\s+\w+)?$/);
       if (local && importAliases.has(local[1])) hits.push(`${local[1]} (an import alias) exported`);
+      else if (local && localAliases.has(local[1])) hits.push(`${local[1]} (a local alias) exported`);
     }
   }
-  // (c) — `[ \t]*(?:;|$)`: a call (`= realRateOf(…)`) is a computed value, not an alias
-  for (const m of s.matchAll(/export\s+(?:const|let|var)\s+(\w+)\s*(?::[^=;]+)?=\s*(\w+)[ \t]*(?:;|$)/gm)) {
+  // (c)
+  for (const m of s.matchAll(new RegExp(String.raw`export\s+(?:const|let|var)\s+(\w+)\s*` + ALIAS_ANNOTATION + String.raw`=\s*` + ALIAS_RHS, 'gm'))) {
     if (passedOn(m[2]) && m[1] !== m[2]) hits.push(`${m[1]} = ${m[2]}`);
   }
   // (d)
-  for (const m of s.matchAll(/export\s+default\s+(\w+)[ \t]*(?:;|$)/gm)) {
+  for (const m of s.matchAll(new RegExp(String.raw`export\s+default\s+` + ALIAS_RHS, 'gm'))) {
     if (passedOn(m[1])) hits.push(`default ${m[1]}`);
   }
   return hits;
@@ -375,6 +398,18 @@ describe('dollar-basis policy — detector self-tests', () => {
       'export default toRealSeries\n',
       "export * from './real-mode.js';",
       "export { toRealValue } from '@/lib/calculators/real-rate.js';",
+      // P5 review round: a function-type annotation, a local alias exported by
+      // list, and an `as`-cast / parenthesized alias
+      'export const rateLeg: (a: number, b: number) => number = realRateOf;',
+      'const y = realRateOf;\nexport { y };',
+      'const a = realRateOf;\nconst b = a;\nexport { b };', // an alias of an alias
+      'const y: typeof realRateOf = realRateOf;\nexport { y as rateLeg };',
+      "import { realRateOf as rr } from './real-rate';\nconst y = rr;\nexport default y;",
+      'export const rateLeg = realRateOf as typeof realRateOf;',
+      'export const rateLeg = realRateOf satisfies (a: number, b: number) => number;',
+      'export const rateLeg = (realRateOf);',
+      'export const rateLeg = (realRateOf as typeof realRateOf);',
+      'export default (toRealSeries);',
     ]) {
       expect(aliasedConverterExports(planted), planted).not.toEqual([]);
     }
@@ -391,6 +426,11 @@ describe('dollar-basis policy — detector self-tests', () => {
       "import { realRateOf as rr } from './real-rate';\nexport const v = rr(0.07, 0.03);",
       "import { realRateOf as rr } from './real-rate';\nexport function f() { return rr(1, 2); }", // a wrapper
       "import * as vocab from './basis-vocabulary';\nexport { vocab };", // not a defining module
+      // P5 review round: an INLINE type-only re-export carries no value either
+      "export { type ChartDisplayMode } from './real-mode';",
+      "export { type ChartDisplayMode, type DollarBasis } from '@/lib/calculators/real-mode';",
+      'const v = realRateOf(1, 2);\nexport { v };', // a computed value, not the converter
+      'const f = (a: number, b: number) => realRateOf(a, b);\nexport { f };', // a wrapper
     ]) {
       expect(aliasedConverterExports(clean), clean).toEqual([]);
     }
