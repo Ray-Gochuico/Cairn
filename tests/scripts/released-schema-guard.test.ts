@@ -10,6 +10,7 @@ import {
   parseReleasedSchemas,
   parseRustPin,
   previousReleaseTag,
+  sortReleaseTags,
 } from '../../scripts/released-schema-guard.mjs';
 
 const SCRIPT = path.resolve(__dirname, '..', '..', 'scripts', 'released-schema-guard.mjs');
@@ -22,6 +23,14 @@ describe('released-schema guard — the rules (v1.7.1 U3)', () => {
     expect(previousReleaseTag(tags, 'v1.10.0')).toBe('v1.9.0');      // never the tag itself
     expect(previousReleaseTag(tags, 'v1.7.0')).toBeNull();
     expect(() => previousReleaseTag(tags, '1.7.1')).toThrow(/not a release tag/);
+  });
+
+  // Code review CR-U3-9: a non-final tag (an rc, a hotfix suffix) is never the
+  // previous release, and never a release to check.
+  it('skips non-final v* tags: never the previous release, never in the release order', () => {
+    const tags = ['v1.7.0', 'v1.7.1-rc1', 'v1.8.0-rc1', 'v1.7.1-hotfix'];
+    expect(previousReleaseTag(tags, 'v1.8.0')).toBe('v1.7.0');
+    expect(sortReleaseTags(tags)).toEqual(['v1.7.0']);
   });
 
   it('reads each pin from its declaration line only (a doc comment that names the constant is not the pin)', () => {
@@ -170,6 +179,30 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
       stdout: '',
       stderr: 'no release tag below v0.1.0 (fetch the tags: the checkout needs fetch-depth: 0).\n',
     });
+  });
+
+  it('an rc tag in the repository is skipped: the previous release is the last FINAL tag, and --all asks no row for the rc', () => {
+    const rc = mkdtempSync(path.join(tmpdir(), 'cairn-guard-rc-'));
+    try {
+      buildFixtureRepo(rc);
+      writeFileSync(path.join(rc, 'src/db/migrations.ts'), 'export const MAX_SCHEMA_VERSION = 9;\n');
+      writeFileSync(path.join(rc, 'src-tauri/src/db_backup.rs'), 'pub const MAX_SCHEMA_VERSION: i64 = 9;\n');
+      gitIn(rc, 'add', '-A');
+      gitIn(rc, 'commit', '-q', '--no-verify', '-m', 'rc');
+      gitIn(rc, 'tag', 'v0.2.1-rc1');                    // schema 9, no row: it must never be read
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.3.0': 9,\n", rc);
+      expect(guard('v0.3.0', rc)).toMatchObject({
+        status: 0,
+        stdout:
+          'previous release of v0.3.0: v0.2.0\n' +
+          'v0.2.0: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n' +
+          'v0.3.0: src/db/migrations.ts 9, src-tauri/src/db_backup.rs 9, tests/db/released-schemas.ts 9.\n',
+      });
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n", rc);
+      expect(guard('--all', rc)).toMatchObject({ status: 0, stderr: '' });
+    } finally {
+      rmSync(rc, { recursive: true, force: true });
+    }
   });
 
   it('exits 2 for a missing or malformed tag argument', () => {
