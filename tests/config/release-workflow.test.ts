@@ -127,3 +127,101 @@ describe('release.yml — the test gate (v1.7.1 U3)', () => {
     expect(survivors, 'plants the pin let through').toEqual([]);
   });
 });
+
+// v1.8.0 T12 (post-release review L36): the test gate — and the released-schema
+// guard inside it — blocks a build only through each build job's `needs:` edge,
+// which was unpinned. Every job other than test-gate lists test-gate DIRECTLY
+// (build-windows is also gated through build-macos-arm64, but its own comment
+// keeps the edge explicit so it survives a refactor). Text slices, as above.
+
+/** Every top-level job under `jobs:`, in file order: its key and its text (key line to the next key, or the end). */
+function jobBlocks(yml: string): Array<{ name: string; text: string }> {
+  const start = yml.search(/^jobs:$/m);
+  if (start < 0) return [];
+  const body = yml.slice(start);
+  const keys = [...body.matchAll(/^ {2}([\w-]+):$/gm)];
+  return keys.map((m, i) => ({ name: m[1], text: body.slice(m.index, i + 1 < keys.length ? keys[i + 1].index : undefined) }));
+}
+
+/** The jobs a job's LIVE `needs:` names — `needs: a`, `needs: [a, b]` or a `- a` block list; quotes and comments dropped ([] = none). */
+function needsOf(job: string): string[] {
+  const clean = (s: string) => s.replace(/#.*$/, '').trim().replace(/^(['"])(.*)\1$/, '$2');
+  const lines = job.split('\n');
+  const at = lines.findIndex((l) => /^ {4}needs:/.test(l));
+  if (at < 0) return [];
+  const value = clean(lines[at].replace(/^ {4}needs:/, ''));
+  if (value.startsWith('[')) return value.slice(1, value.lastIndexOf(']')).split(',').map(clean).filter(Boolean);
+  if (value !== '') return [value];
+  const out: string[] = [];
+  for (let i = at + 1; i < lines.length && /^ {6}(?:- |#)/.test(lines[i]); i += 1) {
+    if (/^ {6}- /.test(lines[i])) out.push(clean(lines[i].replace(/^ {6}- /, '')));
+  }
+  return out;
+}
+
+/** Why some job could build, sign or publish while the test gate fails ([] = every other job needs test-gate directly). */
+function gateEdgeProblems(yml: string): string[] {
+  const jobs = jobBlocks(yml);
+  if (!jobs.some((j) => j.name === 'test-gate')) return ['the test-gate: job was not found — renamed? re-point this pin'];
+  const others = jobs.filter((j) => j.name !== 'test-gate');
+  if (others.length === 0) return ['no job besides test-gate was found — the job slicer is broken'];
+  return others
+    .filter((j) => !needsOf(j.text).includes('test-gate'))
+    .map((j) => `${j.name}: its needs: does not list test-gate, so it can build while the gate fails`);
+}
+
+describe('release.yml — every build job needs the test gate directly (v1.8.0 T12, post-release review L36)', () => {
+  it('build-macos-arm64 and build-windows each list test-gate in needs: (the scalar and the list form, read from the real file)', () => {
+    expect(gateEdgeProblems(YML)).toEqual([]);
+    const jobs = jobBlocks(YML);
+    const needs = (name: string) => needsOf(jobs.find((j) => j.name === name)?.text ?? '');
+    expect(needs('build-macos-arm64')).toEqual(['test-gate']);
+    expect(needs('build-windows')).toEqual(['test-gate', 'build-macos-arm64']);
+    expect(needs('test-gate')).toEqual([]);
+  });
+
+  it('needsOf reads the scalar, flow-list and block-list forms, quoted or trailed by a comment', () => {
+    expect(needsOf('  a:\n    needs: test-gate  # why\n    runs-on: x\n')).toEqual(['test-gate']);
+    expect(needsOf("  a:\n    needs: 'test-gate'\n")).toEqual(['test-gate']);
+    expect(needsOf('  a:\n    needs: [test-gate, build-macos-arm64]\n')).toEqual(['test-gate', 'build-macos-arm64']);
+    expect(needsOf('  a:\n    needs:\n      - test-gate  # why\n      - "build-macos-arm64"\n    runs-on: x\n')).toEqual([
+      'test-gate',
+      'build-macos-arm64',
+    ]);
+    expect(needsOf('  a:\n    runs-on: x\n    steps:\n      - name: needs\n')).toEqual([]);
+    expect(needsOf('  a:\n    # needs: test-gate\n    runs-on: x\n')).toEqual([]);
+  });
+
+  // L36's fix: plant "needs removed" (and every other way to lose the edge) in
+  // the switch-off list; the list and block forms that keep it must pass.
+  it('the pin refuses a build job whose needs: lost test-gate, and accepts the forms that keep it (planted)', () => {
+    const MAC_NEEDS = '    needs: test-gate  # do not build/sign/publish unless the gate is green\n';
+    const WIN_NEEDS = '    needs: [test-gate, build-macos-arm64]\n';
+    expect(YML.split(MAC_NEEDS).length - 1, 'the landed build-macos-arm64 needs: line was not found').toBe(1);
+    expect(YML.split(WIN_NEEDS).length - 1, 'the landed build-windows needs: line was not found').toBe(1);
+    const refused: Record<string, string> = {
+      'build-macos-arm64 needs removed': YML.replace(MAC_NEEDS, ''),
+      'build-macos-arm64 needs commented out': YML.replace(MAC_NEEDS, `    # ${MAC_NEEDS.trimStart()}`),
+      'build-macos-arm64 needs another job': YML.replace(MAC_NEEDS, '    needs: lint\n'),
+      'build-macos-arm64 needs a look-alike (test-gate-old)': YML.replace(MAC_NEEDS, '    needs: test-gate-old\n'),
+      'build-windows needs removed': YML.replace(WIN_NEEDS, ''),
+      'build-windows list drops test-gate (gated only transitively)': YML.replace(WIN_NEEDS, '    needs: [build-macos-arm64]\n'),
+      'build-windows block list without test-gate': YML.replace(WIN_NEEDS, '    needs:\n      - build-macos-arm64\n'),
+      'a new job with no needs': `${YML}\n  publish-notes:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
+      'the test-gate job renamed': YML.replace(/^ {2}test-gate:$/m, '  tests:'),
+    };
+    for (const [label, text] of Object.entries(refused)) expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+    const survivors = Object.entries(refused)
+      .filter(([, text]) => gateEdgeProblems(text).length === 0)
+      .map(([label]) => label);
+    expect(survivors, 'plants the pin let through').toEqual([]);
+    const accepted: Record<string, string> = {
+      'build-macos-arm64 as a flow list': YML.replace(MAC_NEEDS, '    needs: [test-gate]\n'),
+      'build-windows as a block list': YML.replace(WIN_NEEDS, '    needs:\n      - test-gate\n      - build-macos-arm64\n'),
+    };
+    for (const [label, text] of Object.entries(accepted)) {
+      expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+      expect(gateEdgeProblems(text), label).toEqual([]);
+    }
+  });
+});
