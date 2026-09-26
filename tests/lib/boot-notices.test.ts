@@ -120,8 +120,8 @@ describe('U1F-m10 — the post-update note knows whether its copy is from before
 
 describe('CR-U-20a/h — the Rust refusals the notices quote (cross-language)', () => {
   const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
-  const ONE = 'from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)';
-  const MANY = 'from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)';
+  const ONE = 'from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)';
+  const MANY = 'from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)';
   const STAGING = "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)";
 
   it('the step-0 refusals (one leftover, both leftovers) and the staging-file refusal are the exact Rust formats', () => {

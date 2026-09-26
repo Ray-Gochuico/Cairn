@@ -244,7 +244,8 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///      (`<live>.restore-tmp`), or when a set-aside sidecar from an earlier
 ///      restore is still present (`<sidecar>.restore-old`): it may be the only
 ///      copy of that session's WAL, and step 2 must never overwrite it. The
-///      refusal names every leftover and says to move it out of the folder.
+///      refusal names every leftover and says to move it out of the folder,
+///      then restore again (never 'try again': that button re-runs the boot).
 ///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`),
 ///      make it owner-writable (a read-only backup stages a read-only copy)
 ///      and flush it to stable storage (`sync_all`). A failure here leaves
@@ -343,12 +344,12 @@ fn replace_database_file_io(
         [] => {}
         [one] => {
             return Err(format!(
-                "db_restore: {one} from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)"
+                "db_restore: {one} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)"
             ))
         }
         many => {
             return Err(format!(
-                "db_restore: {} from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)",
+                "db_restore: {} from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)",
                 many.join(" and ")
             ))
         }
@@ -1191,7 +1192,7 @@ mod tests {
         assert_eq!(
             msg,
             format!(
-                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)",
+                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
                 aside(&wal).display()
             )
         );
@@ -1200,7 +1201,7 @@ mod tests {
         assert_eq!(
             msg,
             format!(
-                "db_restore: {} and {} from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)",
+                "db_restore: {} and {} from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)",
                 aside(&wal).display(),
                 aside(&shm).display()
             )
