@@ -3,6 +3,7 @@ import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { readLastBacktestRun } from '@/lib/backtest/last-run';
 import { formatDate } from '@/lib/format';
+import { localTodayISO } from '@/lib/dates';
 import { usePersonsStore } from '@/stores/persons-store';
 import { withViewSearch } from '@/lib/view-scope';
 
@@ -43,7 +44,9 @@ export function BacktestCard({ cardId }: BacktestCardProps = {}) {
       }
       meaning={
         lastRun ? (
-          `start years since 1871 sustained this plan · last run ${formatDate(lastRun.runAt.slice(0, 10))}${
+          // v1.8.0 A-2′: runAt is an INSTANT; the day shown is its LOCAL calendar
+          // day (an evening run west of UTC is already the next UTC day).
+          `start years since 1871 sustained this plan · last run ${formatDate(localTodayISO(new Date(lastRun.runAt)))}${
             persons.length === 2 ? ` · ${lastRun.scopeLabel ?? 'Household'} run` : ''
           }`
         ) : (
