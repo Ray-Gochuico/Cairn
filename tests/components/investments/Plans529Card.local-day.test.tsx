@@ -59,9 +59,12 @@ describe('v1.8.0 A-2′: Plans529Card parses the DOB on the LOCAL calendar', () 
     expect(at18('2010-01-01')).toBe('$11,900 at 18 (future $)');
   });
 
-  it('Pacific/Auckland: the same DOB → $11,900 (east of UTC the UTC parse already agreed)', () => {
+  it('Pacific/Auckland: a Dec-31 DOB is 18 months from its 18th birthday → $11,800 (a UTC-noon parse reads Jan 1, 2010 there: 19 → $11,900)', () => {
+    // Dec 31, 2009 → 18th Dec 2027 → (2027 − 2026) × 12 + (11 − 5) = 18. 2009-12-31T12:00Z is
+    // Jan 1, 2010 01:00 NZDT → 18th Jan 2028 → 24 + (0 − 5) = 19. East of UTC the UTC-midnight
+    // parse (Dec 31 13:00 NZDT) already agreed.
     process.env.TZ = 'Pacific/Auckland';
-    expect(at18('2010-01-01')).toBe('$11,900 at 18 (future $)');
+    expect(at18('2009-12-31')).toBe('$11,800 at 18 (future $)');
   });
 
   it('zone invariance: Los Angeles and Auckland read what UTC reads — 1st-of-month, month-end, mid-month and leap-day DOBs', () => {
