@@ -38,8 +38,9 @@ describe('pendingMigrations (the pre-update copy trigger, D-U1-1)', () => {
     expect(r.applied + r.pending.length).toBe(all.length);
   });
 
-  it('is keyed on NAMES, not user_version: the runner stamps the constant even for a subset', async () => {
+  it('is keyed on NAMES, not user_version: a schema-53 file stamped 55 (what a pre-U3 runner wrote after a subset) still has two pending', async () => {
     await runMigrations(db, all.slice(0, 53));
+    await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION}`); // pre-U3 runners stamped the constant; U3 stamps 53 here
     expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION); // 55 — user_version would say "nothing pending"
     expect((await pendingMigrations(db, all)).pending).toHaveLength(2);
   });

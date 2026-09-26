@@ -76,11 +76,14 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
 /// The highest schema version this build understands. Derived from the
-/// migration list: it is the COUNT of registered migrations,
-/// which the JS migration runner stamps into `PRAGMA user_version` after
-/// migrations apply (see `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two
-/// MUST stay in lock-step). `db_restore` refuses any backup whose stamped
-/// `user_version` exceeds this, so older code never opens a newer-schema file.
+/// migration list: it is the COUNT of registered migrations (see
+/// `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two MUST stay in
+/// lock-step). The JS migration runner stamps `PRAGMA user_version` inside each
+/// migration's own batch (that migration's registry ordinal, v1.7.1 U3), so a
+/// full run ends at this value and a file an interrupted update left partway
+/// reads as the last migration that committed. `db_restore` refuses any backup
+/// whose stamped `user_version` exceeds this, so older code never opens a
+/// newer-schema file.
 ///
 /// Kept here (not read from JS) because the guard runs entirely in Rust before
 /// the webview is even told to reload. If a future migration is added, bump
@@ -738,6 +741,108 @@ mod tests {
 
         let result = backup_to(&pool, &dest).await;
         assert!(result.is_err(), "VACUUM INTO must refuse an existing dest");
+        pool.close().await;
+    }
+
+    // ---- v1.7.1 U3 (CR-U3-5: tests only) — what a pre-update copy rests on. ----
+
+    /// Tables named `name` in the database at `path`, opened read-write in its
+    /// own folder: a copy of a WAL-mode main file carries the WAL flag in its
+    /// header, and nothing else is beside it.
+    async fn count_tables_named(path: &Path, name: &str) -> i64 {
+        let url = format!("sqlite://{}?mode=rwc", path.to_string_lossy());
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("open copy");
+        let row = sqlx::query("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .bind(name)
+            .fetch_one(&pool)
+            .await
+            .expect("count tables");
+        let n: i64 = row.get("n");
+        pool.close().await;
+        n
+    }
+
+    /// The live database runs in WAL mode (src/db/tauri-adapter.ts), so the
+    /// newest committed transactions can sit in `finance.db-wal`, not yet
+    /// checkpointed into the main file. A pre-update copy (VACUUM INTO) must
+    /// still contain them — a copy of the main file alone would drop them.
+    #[tokio::test]
+    async fn backup_to_includes_committed_but_uncheckpointed_wal_frames() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("live.db");
+        let url = format!("sqlite://{}?mode=rwc", src.to_string_lossy());
+        // ONE connection: the two PRAGMAs are per connection, and this same
+        // connection writes the rows and takes the backup.
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("connect pool");
+        for sql in [
+            "PRAGMA journal_mode = WAL",
+            "PRAGMA wal_autocheckpoint = 0",
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)",
+            "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT)",
+            "INSERT INTO accounts (name) VALUES ('Checking'), ('Brokerage'), ('Roth IRA')",
+        ] {
+            sqlx::query(sql).execute(&pool).await.unwrap();
+        }
+
+        // Precondition: the committed rows are in the WAL only.
+        let wal = dir.path().join("live.db-wal");
+        assert!(
+            std::fs::metadata(&wal).map(|m| m.len() > 0).unwrap_or(false),
+            "the -wal holds the committed frames"
+        );
+        let main_only_dir = tempfile::tempdir().unwrap();
+        let main_only = main_only_dir.path().join("main-only.db");
+        std::fs::copy(&src, &main_only).unwrap();
+        assert_eq!(
+            count_tables_named(&main_only, "accounts").await,
+            0,
+            "the main file alone does not have the table yet"
+        );
+
+        let dest = dir.path().join("backup.db");
+        backup_to(&pool, &dest).await.expect("backup");
+
+        assert!(!dir.path().join("backup.db-wal").exists(), "the copy is one self-contained file");
+        assert_eq!(count_rows(&dest, "accounts").await, 3, "the copy holds the uncheckpointed rows");
+        pool.close().await;
+    }
+
+    /// A backup into a folder Cairn cannot write fails with the VACUUM INTO
+    /// error and creates nothing there: the pre-update copy's fail-closed
+    /// screen (CR-U-1) and its partial-file cleanup rest on both halves.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn backup_to_leaves_no_file_when_dest_dir_is_unwritable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let pool = seeded_pool(&dir.path().join("live.db")).await;
+        let locked = dir.path().join("backups");
+        std::fs::create_dir(&locked).unwrap();
+        let mut perms = std::fs::metadata(&locked).unwrap().permissions();
+        perms.set_mode(0o500); // r-x------ : can traverse + list, cannot create
+        std::fs::set_permissions(&locked, perms).unwrap();
+        let dest = locked.join("cairn-pre-update-53-to-55-20260925-101500.db");
+
+        let result = backup_to(&pool, &dest).await;
+
+        // Restore the mode first, so the asserts can list the folder and the
+        // TempDir can clean up.
+        let mut perms = std::fs::metadata(&locked).unwrap().permissions();
+        perms.set_mode(0o700);
+        std::fs::set_permissions(&locked, perms).unwrap();
+        let err = result.expect_err("VACUUM INTO into a folder Cairn cannot write must fail");
+        assert!(err.starts_with("db_backup: VACUUM INTO failed:"), "the failure names its step: {err}");
+        assert!(!dest.exists(), "no partial copy is left behind");
+        assert_eq!(std::fs::read_dir(&locked).unwrap().count(), 0, "nothing at all is created in the folder");
         pool.close().await;
     }
 
