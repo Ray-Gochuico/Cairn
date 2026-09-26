@@ -121,6 +121,29 @@ describe('useTransactionsStore', () => {
       spy.mockRestore();
     });
 
+    it('v1.7.1 R10: update() — omitted reimbursement fields survive; explicit nulls clear them, in memory at once and on disk (both ways)', async () => {
+      const id = await useTransactionsStore.getState().create(row({
+        merchant: 'SKYLINE BISTRO', amount: 132.4,
+        reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 132.4,
+      }));
+      const inMemory = () => useTransactionsStore.getState().transactions.find((r) => r.id === id);
+      const onDisk = async () => (await db.select<{
+        reimbursable: number; reimbursed_at: string | null; reimbursed_amount: number | null;
+      }>('SELECT reimbursable, reimbursed_at, reimbursed_amount FROM transactions WHERE id = ?', [id]))[0];
+
+      await useTransactionsStore.getState().update(id, { merchant: 'SKYLINE' });
+      expect(inMemory()).toMatchObject({ reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 132.4 });
+      expect(await onDisk()).toEqual({ reimbursable: 1, reimbursed_at: '2026-06-25', reimbursed_amount: 132.4 });
+
+      const p = useTransactionsStore.getState().update(id, {
+        reimbursable: false, reimbursedAt: null, reimbursedAmount: null,
+      });
+      // Optimistic: the in-memory row is already cleared before the write settles.
+      expect(inMemory()).toMatchObject({ reimbursable: false, reimbursedAt: null, reimbursedAmount: null });
+      await p;
+      expect(await onDisk()).toEqual({ reimbursable: 0, reimbursed_at: null, reimbursed_amount: null });
+    });
+
     it('update() on a row not in memory falls back to repo update + full reload', async () => {
       const id = await useTransactionsStore.getState().create(row({ merchant: 'ORPHAN' }));
       // Simulate a stale in-memory cache: the row exists in the DB only.

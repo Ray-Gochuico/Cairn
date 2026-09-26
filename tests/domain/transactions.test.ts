@@ -59,4 +59,20 @@ describe('TransactionsRepo', () => {
     await repo.update(id, { personId: null });
     expect((await repo.findById(id))?.personId).toBe(null);
   });
+
+  it('v1.7.1 R10: update() keeps reimbursed_at / reimbursed_amount when the patch omits them, and writes NULL when it carries explicit nulls (both ways)', async () => {
+    const id = await repo.create(row({
+      merchant: 'SKYLINE BISTRO', amount: 132.4,
+      reimbursable: true, reimbursedAt: '2026-06-25', reimbursedAmount: 132.4,
+    }));
+    const stored = async () => (await db.select<{
+      reimbursable: number; reimbursed_at: string | null; reimbursed_amount: number | null;
+    }>('SELECT reimbursable, reimbursed_at, reimbursed_amount FROM transactions WHERE id = ?', [id]))[0];
+
+    await repo.update(id, { merchant: 'SKYLINE' });
+    expect(await stored()).toEqual({ reimbursable: 1, reimbursed_at: '2026-06-25', reimbursed_amount: 132.4 });
+
+    await repo.update(id, { reimbursable: false, reimbursedAt: null, reimbursedAmount: null });
+    expect(await stored()).toEqual({ reimbursable: 0, reimbursed_at: null, reimbursed_amount: null });
+  });
 });
