@@ -226,6 +226,10 @@ function unfrozenReleasedRows(
     .map((m) => ({ key: m.version, hash: sha256(normalizeShippedSql(m.sql)) }));
 }
 
+/** The live check's reading: the real frozen table against the newest released schema (tests/db/released-schemas.ts). */
+const unfrozenNow = (migrations: ReadonlyArray<{ version: string; sql: string }>) =>
+  unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS, LAST_RELEASED_SCHEMA);
+
 /** The failure text for unfrozenReleasedRows: the count mismatch, then per migration the instruction and its row. */
 function freezeMessage(unfrozen: ReadonlyArray<{ key: string; hash: string }>, frozenCount: number, lastReleased: number): string {
   return [
@@ -276,7 +280,7 @@ describe('released-migration immutability (v1.7.1 U3)', () => {
   // adds its released-schemas row, and the length pin above then fails with a
   // bare count. This check fails in the same run and prints the row to paste.
   it('every migration tests/db/released-schemas.ts records as released has its frozen row; a missing one prints the row to paste', async () => {
-    const unfrozen = unfrozenReleasedRows(await loadAllMigrations(), SHIPPED_MIGRATIONS, LAST_RELEASED_SCHEMA);
+    const unfrozen = unfrozenNow(await loadAllMigrations());
     if (unfrozen.length > 0) throw new Error(freezeMessage(unfrozen, SHIPPED_MIGRATIONS.length, LAST_RELEASED_SCHEMA));
     expect(unfrozen).toEqual([]);
   });
@@ -291,9 +295,19 @@ describe('released-migration immutability (v1.7.1 U3)', () => {
     expect(message).toContain(`${lastKey}: freeze this newly released migration.`);
     expect(message).toContain(`  ['${lastKey}', '${lastHash}'],`);
     expect(message).toContain('docs/RELEASING.md');
-    expect(message).not.toContain('Put the change in a NEW migration');
+    expect(message).toContain(
+      `records schema ${SHIPPED_MIGRATIONS.length} as released, and SHIPPED_MIGRATIONS holds ${frozen.length} rows.`,
+    );
     expect(unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS, SHIPPED_MIGRATIONS.length)).toEqual([]);
     expect(unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS, SHIPPED_MIGRATIONS.length - 1)).toEqual([]);
+    // T12 code review: the upper bound is real. With the released schema BELOW
+    // the registry length, only the migrations up to it are asked for a row.
+    expect(unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS.slice(0, 53), 54)).toEqual([
+      { key: SHIPPED_MIGRATIONS[53][0], hash: SHIPPED_MIGRATIONS[53][1] },
+    ]);
+    // …and the live check reads LAST_RELEASED_SCHEMA: a migration the registry
+    // gains before its release (main ahead of the last tag) changes nothing.
+    expect(unfrozenNow([...migrations, { version: '9999_unreleased_plant', sql: 'SELECT 1;' }])).toEqual(unfrozenNow(migrations));
   });
 
   it('every registry key\'s 4-digit prefix is its 1-based registry position (the ordinal the runner stamps)', async () => {
