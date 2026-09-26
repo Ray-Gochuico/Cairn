@@ -323,9 +323,12 @@ export interface BasedMilestones extends Milestones {
 /**
  * THE 30-year net-worth recipe — ex-ManageScenariosModal.fmtNetWorth30y and
  * plan-review.ts's inline mirror (D-W3-P7), now in ONE place (D-W51-2).
- * Deliberately keeps the FIXED 30-year exponent even when netWorth30y is the
- * horizon-end fallback on horizons < 360 months — parity with every shipped
- * scoreboard figure outranks local correction; chipped for a horizon-aware fix.
+ * v1.8.0 A-3a (CR-A3-2): Today's divides by (1+i) raised to the ELAPSED YEARS
+ * of the horizon state actually read (Milestones.netWorth30yElapsedMonths / 12)
+ * — the exponent toReal applies to that same state — so the scoreboard equals
+ * the chart tooltip's Net worth at that month to the dollar in both bases (the
+ * m4 law). A milestone without that stamp states no Today's figure: the recipe
+ * never guesses an exponent.
  */
 export function toDisplayMilestones(
   milestones: Map<number, Milestones>,
@@ -334,14 +337,19 @@ export function toDisplayMilestones(
 ): Map<number, BasedMilestones> {
   const out = new Map<number, BasedMilestones>();
   for (const [id, m] of milestones) {
-    const nw = m.netWorth30y;
-    out.set(id, {
-      ...m,
-      basis,
-      netWorth30y: nw == null ? undefined : basis === 'today' ? nw / Math.pow(1 + inflation, 30) : nw,
-    });
+    out.set(id, { ...m, basis, netWorth30y: displayNetWorth30y(m, basis, inflation) });
   }
   return out;
+}
+
+function displayNetWorth30y(m: Milestones, basis: DollarBasis, inflation: number): number | undefined {
+  const nw = m.netWorth30y;
+  if (nw == null || basis === 'future') return nw;
+  const months = m.netWorth30yElapsedMonths;
+  if (months == null) return undefined;
+  // toReal's own expression (real.ts:8-9, :25), so the two agree bit for bit.
+  const factor = 1 / Math.pow(1 + inflation, months / 12);
+  return nw * factor;
 }
 
 /** WI-3 (D-W51-4): NO rate on the Future register — the engine's inflation

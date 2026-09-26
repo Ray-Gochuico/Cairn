@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import type { ProjectionChartProps } from '@/components/whatif/ProjectionChart';
+import { DecomposedTooltipContent } from '@/components/whatif/ProjectionTooltip';
 import {
   toDisplayMilestones,
   whatIfChartCaption,
@@ -273,9 +274,13 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
     const cells = () => screen.getAllByTestId('manage-nw30y').map((c) => c.textContent);
 
     // Today's $: the ONE 30-year recipe over the page's milestones (the
-    // horizon-end states: 1,025,000 and 512,500) at the page's 2.5%.
+    // horizon-end states: 1,025,000 and 512,500, 12 months out — A-3a stamps
+    // netWorth30yElapsedMonths 12) at the page's 2.5%.
     const recipe = toDisplayMilestones(
-      new Map([[1, { netWorth30y: 1_025_000 }], [2, { netWorth30y: 512_500 }]]),
+      new Map([
+        [1, { netWorth30y: 1_025_000, netWorth30yElapsedMonths: 12 }],
+        [2, { netWorth30y: 512_500, netWorth30yElapsedMonths: 12 }],
+      ]),
       'today',
       0.025,
     );
@@ -283,12 +288,47 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
       `${formatCurrency(recipe.get(1)!.netWorth30y!)} (today's $)`,
       `${formatCurrency(recipe.get(2)!.netWorth30y!)} (today's $)`,
     ]);
-    expect(cells()).toEqual(["$488,661 (today's $)", "$244,331 (today's $)"]); // ÷ 1.025^30 = 2.097567579
+    expect(cells()).toEqual(["$1,000,000 (today's $)", "$500,000 (today's $)"]); // ÷ 1.025^(12/12) — the chart's own month-12 deflation
     for (const c of cells()) expect(c).not.toMatch(/\$1,025,000|\$512,500/); // no nominal figure under a today's mark
+    for (const c of cells()) expect(c).not.toMatch(/\$488,661|\$244,331/); // the retired fixed-30 recipe (÷ 1.025^30)
 
     // Future $ (the modal stays open; the page re-hands the bundle).
     flip('future');
     expect(cells()).toEqual(['$1,025,000 (future $)', '$512,500 (future $)']);
     for (const c of cells()) expect(c).not.toContain("(today's $)");
+  });
+
+  // v1.8.0 A-3a — the m4 manual law at the PAGE seam: the real tooltip, fed the
+  // chart's own bundle, reads the scoreboard cell's figure at the terminal
+  // month (the horizon state here), in both bases.
+  it("m4 law (A-3a): the tooltip's terminal Net worth equals the scoreboard cell to the dollar, in BOTH bases", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Manage…' }));
+    expect(await screen.findByRole('heading', { name: 'Manage scenarios' })).toBeInTheDocument();
+    const cell = (i: number) => screen.getAllByTestId('manage-nw30y')[i].textContent;
+    const tooltipNetWorth = (id: number): string => {
+      const chart = lastChart();
+      const states = chart.displayProjections.get(id)!;
+      const { unmount } = render(
+        <DecomposedTooltipContent
+          label={states[states.length - 1].monthISO}
+          active
+          scenarios={chart.scenarios}
+          displayProjections={chart.displayProjections}
+        />,
+      );
+      const text = screen.getByTestId(`whatif-projection-tooltip-scenario-${id}`).textContent ?? '';
+      unmount();
+      return /Net worth: ([−-]?\$[\d,]+)/.exec(text)![1];
+    };
+
+    expect(tooltipNetWorth(1)).toBe('$1,000,000');
+    expect(cell(0)).toBe(`${tooltipNetWorth(1)} (today's $)`);
+    expect(cell(1)).toBe(`${tooltipNetWorth(2)} (today's $)`);
+    flip('future');
+    expect(tooltipNetWorth(1)).toBe('$1,025,000');
+    expect(cell(0)).toBe(`${tooltipNetWorth(1)} (future $)`);
+    expect(cell(1)).toBe(`${tooltipNetWorth(2)} (future $)`);
   });
 });

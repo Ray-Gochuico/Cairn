@@ -205,6 +205,12 @@ const state = (netWorth: number) => ({
  *  G11 rows render exactly as in the default state. */
 const zeroSeed = (netWorth: number) => ({ ...state(netWorth), investmentsByAccount: {}, cash: 0 });
 
+/** A-3a: month 0 plus the 30-year mark (2026-05 → 2056-04, 359 months). The
+ *  Compare card's 30-year figure is that later state, so Today's $ deflates it
+ *  (÷ 1.025^(359/12)) and the convertible bottom line differs across bases —
+ *  a one-state projection's horizon IS month 0, identical in both bases. */
+const run30 = (seed: ReturnType<typeof state>) => [seed, { ...seed, monthISO: '2056-04' }];
+
 function setSettings(over: Record<string, unknown> = {}) {
   useSettingsStore.setState({
     settings: {
@@ -231,7 +237,7 @@ describe('W5.1 basis-audit sweep — the /what-if page (FI cards + Compare + pro
     h.roadmapResults = new Map();
     h.evaluateCalls = [];
     h.scenarios = [scenario(1, 'Baseline'), scenario(2, 'Aggressive payoff')];
-    h.projections = new Map<number, unknown[]>([[1, [state(900_000)]], [2, [state(400_000)]]]);
+    h.projections = new Map<number, unknown[]>([[1, run30(state(900_000))], [2, run30(state(400_000))]]);
   });
 
   it('every registered figure obeys its class across the flip; no unregistered $ anywhere on the page', () => {
@@ -270,7 +276,7 @@ describe('W5.1 basis-audit sweep — the /what-if page (FI cards + Compare + pro
   });
 
   it('A-13 (v1.7.1): a ZERO engine seed renders G2 ("the portfolio starts at $0 in these projections") — its $0 is registered invariant; every other figure keeps its class; no loose $', () => {
-    h.projections = new Map<number, unknown[]>([[1, [zeroSeed(900_000)]], [2, [zeroSeed(400_000)]]]);
+    h.projections = new Map<number, unknown[]>([[1, run30(zeroSeed(900_000))], [2, run30(zeroSeed(400_000))]]);
     expectBasisDiscipline(
       <MemoryRouter><WhatIf /></MemoryRouter>,
       {

@@ -216,8 +216,8 @@ describe('CompareScenariosCard', () => {
       basis: 'today',
       displayMilestones: toDisplayMilestones(
         new Map<number, Milestones>([
-          [1, { financialIndependenceISO: '2040-06', debtFreeISO: '2028-03', netWorth30y: 900_000 } as Milestones],
-          [2, { financialIndependenceISO: '2043-06', debtFreeISO: '2030-03', netWorth30y: 400_000 } as Milestones],
+          [1, { financialIndependenceISO: '2040-06', debtFreeISO: '2028-03', netWorth30y: 900_000, netWorth30yElapsedMonths: 359 } as Milestones],
+          [2, { financialIndependenceISO: '2043-06', debtFreeISO: '2030-03', netWorth30y: 400_000, netWorth30yElapsedMonths: 359 } as Milestones],
         ]),
         'today',
         0.03,
