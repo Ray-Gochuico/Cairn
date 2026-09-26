@@ -30,7 +30,7 @@ import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
+import { dateFromLocalISO, utcNoonOf } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType, SnapshotSource } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
@@ -522,6 +522,13 @@ export default function Dashboard() {
 
   const todayISO = useLocalToday();
   const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
+  // v1.8.0 A-2′ — TWO todays. `today` (local midnight) feeds the LOCAL-getter
+  // helpers (lastMonthYyyymm, isMonthlyInputPending, endOfLastMonthIso, the
+  // date label). `todayUtcNoon` feeds the UTC-accessor helpers (the '1m'
+  // baseline, monthlyContributionAvg, computeGoalProgress): local midnight is
+  // the previous UTC day east of UTC, and UTC noon is the NEXT local day at
+  // UTC+12 and beyond, so neither Date can serve both families.
+  const todayUtcNoon = useMemo(() => utcNoonOf(todayISO), [todayISO]);
   const currentMonth = todayISO.slice(0, 7);
 
   // W13 briefing: roll the last-visit stamps once per local day. The roll is
@@ -611,8 +618,8 @@ export default function Dashboard() {
   // estimates/balances, so paydown never moved this delta.
   const todayIso = todayISO;
   const oneMonthAgoIso = useMemo(
-    () => GROWTH_HORIZONS.find((h) => h.key === '1m')!.baselineDate(today),
-    [today],
+    () => GROWTH_HORIZONS.find((h) => h.key === '1m')!.baselineDate(todayUtcNoon),
+    [todayUtcNoon],
   );
   const netWorthValueAsOf = useMemo(
     () =>
@@ -674,7 +681,7 @@ export default function Dashboard() {
       const recentMonthlyContribution = monthlyContributionAvg(
         contributions,
         g.linkedAccountIds,
-        today,
+        todayUtcNoon,
         6,
       );
       const result = computeGoalProgress({
@@ -683,11 +690,11 @@ export default function Dashboard() {
         currentSaved,
         recentMonthlyContribution,
         annualGrowthRate,
-        today,
+        today: todayUtcNoon,
       });
       return { goal: g, ...result };
     });
-  }, [visibleGoals, snapshots, contributions, today, annualGrowthRate]);
+  }, [visibleGoals, snapshots, contributions, todayUtcNoon, annualGrowthRate]);
 
   /**
    * Pending-input detection lives in `src/lib/input-pending.ts` as a pure

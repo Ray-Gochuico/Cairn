@@ -1068,3 +1068,86 @@ describe('Dashboard Details disclosure under explore mode (W4 pref ratchet)', ()
     expect(screen.getByTestId('dashboard-details-toggle')).toHaveAttribute('aria-expanded', 'false');
   });
 });
+
+describe('v1.8.0 A-2′ (CR-A2-2): UTC-accessor helpers get the local day at UTC noon; local-getter helpers keep local midnight', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  const netWorthCard = () =>
+    screen.getAllByTestId('metric-card').find((c) => within(c).queryByText('Net Worth'))!;
+  const goalCard = (name: string) =>
+    within(screen.getByTestId('widget-goals')).getByText(name).closest('[class*="rounded"]') as HTMLElement;
+  // A $150 goal on Apr 1 fed by $600 contributions (one on Aug 30, one on Feb 15), moderate 6%
+  // (r = 0.005), nothing saved: n months at $a/mo projects a × ((1.005^n − 1) / 0.005).
+  const primeBoundary = (lastSnapshotDate: string) =>
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }, { id: 2, name: 'Savings' }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-01-15', totalValue: 10_000 },
+        { accountId: 1, snapshotDate: '2026-01-30', totalValue: 20_000 },
+        { accountId: 1, snapshotDate: lastSnapshotDate, totalValue: 30_000 },
+      ],
+      goals: [{ name: 'Car Fund', targetAmount: 150, targetDate: '2026-04-01', linkedAccountIds: [2] }],
+      contributions: [
+        { accountId: 2, date: '2025-08-30', amount: 600 },
+        { accountId: 2, date: '2026-02-15', amount: 600 },
+      ],
+    });
+
+  it('Pacific/Auckland, Sun Mar 1 11:00 NZDT (UTC day Feb 28): the MoM baseline, goal months and contribution window read Mar 1; the date label and the day-1 close row stay local', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-02-28T22:00:00Z'));
+    primeBoundary('2026-03-01');
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    // '1m' baseline Feb 1 → the Jan 30 row ($20,000): +$10,000 (+50.0%). Local midnight read
+    // Feb 28 (UTC) → Jan 28 → $10,000: +$20,000 (+200.0%).
+    expect(within(netWorthCard()).getByText('+$10,000 (+50.0%)')).toBeInTheDocument();
+    // n = 1, cutoff Sep 1 → $600 / 6 = $100/mo → $100 < $150: Off track. Local midnight read
+    // n = 2 and the Aug 28 cutoff ($200/mo) → $401: On track.
+    expect(within(goalCard('Car Fund')).getByText(/off track/i)).toBeInTheDocument();
+    // Local-getter helpers keep local midnight: UTC noon of Mar 1 is Mar 2 01:00 in Auckland.
+    expect(screen.getByText('Sunday, March 1, 2026')).toBeInTheDocument();
+    expect(within(screen.getByTestId('briefing-card')).getByText(/^Close February — /)).toBeInTheDocument();
+  });
+
+  it('Los Angeles, Sat Feb 28 19:00 PST (UTC day Mar 1): the local day, never the instant\'s UTC day', () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-03-01T03:00:00Z'));
+    primeBoundary('2026-02-28');
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    // '1m' baseline Jan 28 → the Jan 15 row ($10,000): +$20,000 (+200.0%). The instant's UTC
+    // day (Mar 1) would read Feb 1 → $20,000: +$10,000 (+50.0%).
+    expect(within(netWorthCard()).getByText('+$20,000 (+200.0%)')).toBeInTheDocument();
+    // n = 2, cutoff Aug 28 → $1,200 / 6 = $200/mo → $401 ≥ $150: On track. The instant's UTC
+    // day reads n = 1 and the Sep 1 cutoff → $100: Off track.
+    expect(within(goalCard('Car Fund')).getByText(/on track/i)).toBeInTheDocument();
+    expect(screen.getByText('Saturday, February 28, 2026')).toBeInTheDocument();
+  });
+
+  it('Pacific/Auckland, Tue Mar 31 11:00 NZDT: the briefing baseline is end of February (protected endOfLastMonthIso on local midnight) — UTC noon of Mar 31 is Apr 1 there', () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2026-03-30T22:00:00Z'));
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-02-27', totalValue: 100_000 },
+        { accountId: 1, snapshotDate: '2026-03-30', totalValue: 110_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const briefing = screen.getByTestId('briefing-card');
+    expect(within(briefing).getByText('Since February')).toBeInTheDocument();
+    // Baseline Feb 28 → the Feb 27 row: +$10,000 on $100,000. A UTC-noon Date reads Mar 31 → $110,000 → no row.
+    expect(within(briefing).getByTestId('briefing-row-net-worth').textContent).toContain(
+      'Net worth is up +$10,000 (+10.0%).',
+    );
+  });
+});
