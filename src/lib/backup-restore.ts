@@ -230,10 +230,11 @@ function isNotLoadedRejection(e: unknown): boolean {
  * leaving the app running (e.g. because `db_restore` threw) would brick it until
  * a manual restart. We therefore reload whether step 2 succeeds OR throws. This
  * rests on H-1: a failed `db_restore` leaves the ORIGINAL `finance.db` intact
- * and puts its set-aside sidecars back — with ONE exception (CR-U-15): when a
- * sidecar cannot be put back, its error says so ("could not be put back",
+ * and puts its set-aside sidecars back — with ONE exception (CR-U-15): when
+ * the `-wal` cannot be put back, its error says so ("could not be put back",
  * put_back_or_report) and names where the set-aside file is, and the reload
- * then opens finance.db WITHOUT that -wal. That reason is stashed like every
+ * then opens finance.db WITHOUT that -wal. (A stuck `-shm` alone — the
+ * rebuildable index — keeps "your data is unchanged", CR-U-23c.) That reason is stashed like every
  * other (boot-notices.ts) and is shown in the app chrome on the next
  * successful boot (RestoreProblemNote), so nothing may treat the boot after a
  * failed restore as a clean one (best-effort; never blocks the reload).

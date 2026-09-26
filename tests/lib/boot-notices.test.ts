@@ -124,14 +124,14 @@ describe('CR-U-20a/h — the Rust refusals the notices quote (cross-language)', 
   const MANY = 'from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)';
   const STAGING = "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)";
 
-  it('the step-0 refusals (one leftover, both leftovers) and the staging-file refusal are the exact Rust formats', () => {
-    expect(rust).toContain(`"db_restore: {one} ${ONE}"`);
-    expect(rust).toContain(`"db_restore: {} ${MANY}"`);
+  it('the step-0 refusal (only a -wal leftover refuses, CR-U-25) and the staging-file refusal are the exact Rust formats', () => {
+    expect(rust).toContain(`"db_restore: {} ${ONE}"`);
+    expect(rust).not.toContain(MANY); // CR-U-25: a -shm leftover never refuses, so there is no plural form
     expect(rust).toContain(`"${STAGING}"`);
   });
 
   it('each keeps the notice\'s "Your data was not changed." (nothing was moved)', () => {
-    for (const reason of [`db_restore: /x/finance.db-wal.restore-old ${ONE}`, `db_restore: /x/a and /x/b ${MANY}`, STAGING]) {
+    for (const reason of [`db_restore: /x/finance.db-wal.restore-old ${ONE}`, STAGING]) {
       expect(restoreLeftDataUnchanged(reason)).toBe(true);
     }
   });

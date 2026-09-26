@@ -241,11 +241,13 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 /// put_back_or_report); a crash between steps 2 and 3 is not reconciled yet —
 /// a chip):
 ///   0. Refuse before touching anything when `backup` IS the staging file
-///      (`<live>.restore-tmp`), or when a set-aside sidecar from an earlier
-///      restore is still present (`<sidecar>.restore-old`): it may be the only
-///      copy of that session's WAL, and step 2 must never overwrite it. The
-///      refusal names every leftover and says to move it out of the folder,
-///      then restore again (never 'try again': that button re-runs the boot).
+///      (`<live>.restore-tmp`), or when a set-aside `-wal` from an earlier
+///      restore is still present (`<live>-wal.restore-old`): it may be the
+///      only copy of that session's committed frames, and step 2 must never
+///      overwrite it. The refusal names it and says to move it out of the
+///      folder, then restore again (never 'try again': that button re-runs the
+///      boot). A leftover `-shm` set-aside is the rebuildable index — no data
+///      — so it never refuses: it is removed best-effort (CR-U-25).
 ///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`),
 ///      make it owner-writable (a read-only backup stages a read-only copy)
 ///      and flush it to stable storage (`sync_all`). A failure here leaves
@@ -261,9 +263,11 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///   4. Only now delete the set-aside sidecars (they belonged to the replaced
 ///      file; best-effort).
 ///
-/// On a failure in steps 2–3 every moved sidecar is renamed back. The error
-/// says "(your data is unchanged)" ONLY when all of them went back; otherwise
-/// it says which could not be put back and where it is (the file is kept).
+/// On a failure in steps 2–3 every moved sidecar is renamed back. Every
+/// sidecar that cannot go back is named with where it is (the file is kept).
+/// "(your data is unchanged)" is dropped, and "could not be put back" used,
+/// ONLY when the `-wal` is stuck; a stuck `-shm` alone is reported calmly
+/// (see put_back_or_report, CR-U-23c).
 pub fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
     replace_database_file_with(backup, live, &mut |from: &Path, to: &Path| std::fs::rename(from, to))
 }
@@ -333,26 +337,21 @@ fn replace_database_file_io(
         }
     }
 
-    // 0b. Never overwrite what an earlier restore set aside. The refusal
-    //     names every leftover and the calm next step (CR-U-20a, U1F-m1/m19).
-    let leftovers: Vec<String> = asides
-        .iter()
-        .filter(|a| std::fs::symlink_metadata(a).is_ok())
-        .map(|a| a.display().to_string())
-        .collect();
-    match leftovers.as_slice() {
-        [] => {}
-        [one] => {
-            return Err(format!(
-                "db_restore: {one} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)"
-            ))
-        }
-        many => {
-            return Err(format!(
-                "db_restore: {} from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)",
-                many.join(" and ")
-            ))
-        }
+    // 0b. Never overwrite a set-aside -wal an earlier restore left: it may
+    //     hold that session's committed frames. The refusal names it and the
+    //     calm next step (CR-U-20a, U1F-m1/m19). A leftover -shm set-aside is
+    //     SQLite's rebuildable index and holds no data, so it never refuses
+    //     (CR-U-25): it is removed here best-effort, and step 2's rename
+    //     replaces it anyway if that removal failed.
+    let [wal_aside, shm_aside] = &asides;
+    if std::fs::symlink_metadata(wal_aside).is_ok() {
+        return Err(format!(
+            "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
+            wal_aside.display()
+        ));
+    }
+    if std::fs::symlink_metadata(shm_aside).is_ok() {
+        let _ = std::fs::remove_file(shm_aside);
     }
 
     // 1. Stage the restore in a sibling temp file. A mid-copy failure here
@@ -1196,17 +1195,52 @@ mod tests {
                 aside(&wal).display()
             )
         );
+        // CR-U-25: a leftover -shm set-aside never refuses; with both present
+        // only the -wal is named (the singular form is the only form).
         std::fs::write(aside(&shm), b"EARLIER-SHM").unwrap();
         let msg = replace_database_file(&backup, &live).unwrap_err();
         assert_eq!(
             msg,
             format!(
-                "db_restore: {} and {} from an earlier restore are next to your data. Move them out of that folder, then restore again (your data is unchanged)",
-                aside(&wal).display(),
-                aside(&shm).display()
+                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
+                aside(&wal).display()
             )
         );
         assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"EARLIER", "the -wal leftover is kept");
+    }
+
+    /// CR-U-25: with no live -shm to set aside, a stale -shm set-aside is
+    /// cleaned up rather than left behind forever.
+    #[tokio::test]
+    async fn replace_database_file_removes_a_stale_shm_set_aside() {
+        let (_dir, backup, live, _wal, shm) = live_with_sidecars().await;
+        std::fs::remove_file(&shm).unwrap();
+        std::fs::write(aside(&shm), b"STALE-INDEX").unwrap();
+        replace_database_file(&backup, &live).expect("a stale -shm set-aside never blocks");
+        assert!(!aside(&shm).exists(), "the stale -shm set-aside is removed");
+    }
+
+    /// CR-U-25: a leftover -shm set-aside (the rebuildable index) never
+    /// blocks a restore — after a stuck-shm failure the next restore succeeds.
+    #[tokio::test]
+    async fn replace_database_file_after_a_stuck_shm_failure_the_next_restore_succeeds() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, shm_c) = (live.clone(), shm.clone());
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() || to == shm_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated"));
+            }
+            std::fs::rename(from, to)
+        };
+        let first = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        assert!(first.contains("The index file"), "{first}");
+        assert!(aside(&shm).exists(), "the stuck -shm set-aside is still there");
+        replace_database_file(&backup, &live).expect("the leftover -shm set-aside does not block the next restore");
+        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert!(!wal.exists() && !shm.exists());
+        assert!(!aside(&wal).exists() && !aside(&shm).exists(), "no set-aside file is left behind");
+        assert_eq!(count_rows(&live, "accounts").await, 2);
     }
 
     /// (c) U1F-m3: the staged copy is flushed to disk BEFORE the atomic swap.
