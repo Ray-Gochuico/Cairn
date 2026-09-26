@@ -5,8 +5,12 @@ import {
   BOOT_TIMEOUT_MS,
   BOOT_TIMEOUT_SHARE,
   HIGH_LOAD_BOOT_TIMEOUT_MS,
+  HIGH_LOAD_WEB_SERVER_TIMEOUT_MS,
+  WEB_SERVER_TIMEOUT_MS,
+  WEB_SERVER_TIMEOUT_SHARE,
   bootTimeout,
   bootTimeoutFor,
+  webServerTimeoutFor,
 } from '../../e2e/boot-timeout';
 
 const base = { cores: 10, ci: false, env: {} as Record<string, string> };
@@ -48,5 +52,43 @@ describe('bootTimeoutFor (v1.7.1 A-6) — one boot wait, half the test budget, f
 
   it("bootTimeout() is a FUNCTION because test.info() exists only while a test runs — outside one it throws Playwright's own message (the real import; the receipt P9 cites)", () => {
     expect(() => bootTimeout()).toThrow(/test\.info\(\) can only be called while test is running/);
+  });
+});
+
+// v1.8.0 T12 (chip v171-12, Lane I leftover b; CR-T12-5): the dev servers' cold
+// start (vite + sql.js wasm + the migrations + the seed) follows the SAME frozen
+// policy, through the same budget reader as bootTimeoutFor.
+describe('webServerTimeoutFor (v1.8.0 T12, I-(b)) — the cold-start budget follows the frozen policy', () => {
+  it('normal parallelism → 120 s, the literal playwright.config.ts carried before (CR-T12-5: nothing moves at the defaults)', () => {
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 2.1 }))).toBe(120_000);
+    expect(WEB_SERVER_TIMEOUT_MS).toBe(120_000);
+  });
+
+  it('above the soft line (workers 1, test timeout 120 s) → 240 s', () => {
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 9.3 }))).toBe(240_000);
+    expect(HIGH_LOAD_WEB_SERVER_TIMEOUT_MS).toBe(240_000);
+  });
+
+  it('the gate receipt arm: E2E_LOAD_SOFT=0.1 on a lightly loaded machine serializes → 240 s', () => {
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 0.5, env: { E2E_LOAD_SOFT: '0.1' } }))).toBe(240_000);
+  });
+
+  it('is total: guard disabled, no policy, or a malformed one → 120 s (a server never waits on undefined)', () => {
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 41, env: { E2E_LOAD_GUARD: '0' } }))).toBe(120_000);
+    expect(webServerTimeoutFor(null)).toBe(120_000);
+    expect(webServerTimeoutFor(undefined)).toBe(120_000);
+    expect(webServerTimeoutFor({ timeoutMs: 0 } as never)).toBe(120_000);
+    expect(webServerTimeoutFor({ timeoutMs: Number.NaN } as never)).toBe(120_000);
+  });
+
+  it('is exactly twice the test timeout in both arms, and the three waits keep their order: boot < test < cold start', () => {
+    expect(WEB_SERVER_TIMEOUT_SHARE).toBe(2);
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 2 }))).toBe(BASE_TIMEOUT_MS * WEB_SERVER_TIMEOUT_SHARE);
+    expect(webServerTimeoutFor(loadPolicy({ ...base, load1: 9.3 }))).toBe(HIGH_LOAD_TIMEOUT_MS * WEB_SERVER_TIMEOUT_SHARE);
+    for (const load1 of [0, 7, 7.01, 15]) {
+      const p = loadPolicy({ ...base, load1 });
+      expect(bootTimeoutFor(p)).toBeLessThan(p.timeoutMs);
+      expect(p.timeoutMs).toBeLessThan(webServerTimeoutFor(p));
+    }
   });
 });

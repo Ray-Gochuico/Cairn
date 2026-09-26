@@ -20,12 +20,31 @@ export const BOOT_TIMEOUT_SHARE = 0.5;
 export const BOOT_TIMEOUT_MS = BASE_TIMEOUT_MS * BOOT_TIMEOUT_SHARE;
 export const HIGH_LOAD_BOOT_TIMEOUT_MS = HIGH_LOAD_TIMEOUT_MS * BOOT_TIMEOUT_SHARE;
 
+/**
+ * v1.8.0 T12 (chip v171-12, Lane I leftover b): the dev servers' cold start
+ * (playwright.config.ts `webServer[].timeout`) is twice the policy's test
+ * budget — 120 s under normal parallelism (the literal the config carried
+ * before), 240 s serialized — so a loaded machine's cold start scales with the
+ * run the banner announced, the way the boot wait does.
+ */
+export const WEB_SERVER_TIMEOUT_SHARE = 2;
+export const WEB_SERVER_TIMEOUT_MS = BASE_TIMEOUT_MS * WEB_SERVER_TIMEOUT_SHARE;
+export const HIGH_LOAD_WEB_SERVER_TIMEOUT_MS = HIGH_LOAD_TIMEOUT_MS * WEB_SERVER_TIMEOUT_SHARE;
+
+/** Pure: the policy's test budget. Total — a missing or malformed policy reads as the normal arm's. */
+function policyBudget(policy: LoadPolicy | null | undefined): number {
+  const budget = policy?.timeoutMs;
+  return typeof budget === 'number' && Number.isFinite(budget) && budget > 0 ? budget : BASE_TIMEOUT_MS;
+}
+
 /** Pure: the policy (or none) → the boot wait. Total — a missing or malformed policy reads as the normal arm. */
 export function bootTimeoutFor(policy: LoadPolicy | null | undefined): number {
-  const budget = policy?.timeoutMs;
-  return typeof budget === 'number' && Number.isFinite(budget) && budget > 0
-    ? Math.round(budget * BOOT_TIMEOUT_SHARE)
-    : BOOT_TIMEOUT_MS;
+  return Math.round(policyBudget(policy) * BOOT_TIMEOUT_SHARE);
+}
+
+/** Pure: the policy (or none) → each dev server's cold-start timeout. Same budget reader as bootTimeoutFor. */
+export function webServerTimeoutFor(policy: LoadPolicy | null | undefined): number {
+  return Math.round(policyBudget(policy) * WEB_SERVER_TIMEOUT_SHARE);
 }
 
 /** The boot wait for THIS test — the frozen policy in the run's config metadata (e2e/load-reporter.ts reads it the same way). */
