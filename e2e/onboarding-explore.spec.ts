@@ -94,6 +94,15 @@ test('enter: one click from Step 0 lands on a labeled, fully-populated sample', 
   await expect(
     page.getByRole('cell', { name: 'Green Basket Market', exact: true }).first(),
   ).toBeVisible({ timeout: bootTimeout() });
+  // v1.7.1 R10: the seed's two reimbursement anchors (both always inside the
+  // latest 10 — tests/domain/sample-profile) state their saved state under
+  // their amount; their merchant cells keep their exact names (CR-R10-3).
+  const recentRow = (merchant: string) =>
+    page.getByRole('row').filter({ has: page.getByRole('cell', { name: merchant, exact: true }) });
+  await expect(recentRow('Skyline Bistro').getByTestId('reimbursement-marker')).toHaveText('Reimbursed');
+  await expect(recentRow('Harbor Cab Co').getByTestId('reimbursement-marker')).toHaveText('Awaiting');
+  // CX-1, the one moved name, pinned in a real engine on purpose (P17).
+  await expect(recentRow('Skyline Bistro').getByRole('cell', { name: '$132.40 Reimbursed', exact: true })).toBeVisible();
   await page.goto('/goals');
   await expect(page.getByText('Emergency fund').first()).toBeVisible({ timeout: bootTimeout() });
   // One seeded dollar pin (fixed narrative value, run-date-independent) —
