@@ -143,7 +143,34 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
 
   it('a FRESH file whose first run fails is not an update failure either (applied 0: nothing existed to update)', async () => {
     await db.execute('PRAGMA query_only = 1');                // CREATE TABLE schema_migrations now fails
-    await expect(initDatabase()).rejects.not.toMatchObject({ name: 'MigrationFailedError' });
+    const p = initDatabase();
+    await expect(p).rejects.not.toMatchObject({ name: 'MigrationFailedError' });
+    // U1-m31: and it IS the runner's CREATE TABLE refused by query_only, not an earlier step.
+    await expect(p).rejects.toThrow(/readonly/i);
+  });
+
+  it('U1-m3: "Continue without a copy" and then a failed migration → MigrationFailedError with NO copy path (CR-U1-5); no copy, no note', async () => {
+    await atSchema53();
+    setSkipOnce();
+    await db.execute('ALTER TABLE app_settings ADD COLUMN vehicle_repair_category_ids TEXT'); // 0054 will collide
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', preUpdateCopyPath: null });
+    expect(takePreUpdateCopy).not.toHaveBeenCalled();
+    expect(peekPostUpdateNotice()).toBeNull();
+  });
+
+  it('U1-m4: the integrity check runs BEFORE the copy — a corrupt schema-53 file never reaches takePreUpdateCopy', async () => {
+    await atSchema53();
+    const real = db;
+    load.mockImplementationOnce(async () => ({
+      execute: real.execute.bind(real),
+      executeBatch: real.executeBatch.bind(real),
+      close: real.close.bind(real),
+      select: async (sql: string, params?: unknown[]) =>
+        sql === 'PRAGMA quick_check' ? [{ quick_check: '*** in database main ***\nPage 3: never used' }] : real.select(sql, params),
+    }));
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'DatabaseCorruptError' });
+    expect(takePreUpdateCopy).not.toHaveBeenCalled();
+    expect(await readUserVersion(db)).toBe(53);
   });
 
   it('a too-new file with registry names missing: no copy; SchemaTooNewError, never the fail-closed screen (PR-12)', async () => {
