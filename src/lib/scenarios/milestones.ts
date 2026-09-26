@@ -29,9 +29,30 @@ export interface Milestones {
    * net worth when the horizon is shorter than 30 years.
    */
   netWorth30y?: number;
+  /**
+   * v1.8.0 A-3a (CR-A3-2): the elapsed months from the projection's first
+   * month to the state `netWorth30y` was read from (359 at the 30-year mark;
+   * the final state's offset on a shorter horizon), counted from `monthISO`
+   * exactly as `toReal` counts them (real.ts). Present iff `netWorth30y` is.
+   * The display recipe (basis-view.ts toDisplayMilestones) deflates by this
+   * many months, so the scoreboard equals the chart's own state at that month.
+   */
+  netWorth30yElapsedMonths?: number;
 }
 
 const MONTHS_30Y = 360;
+
+/**
+ * Months from `fromISO` to `toISO` ('YYYY-MM'), counted as toReal counts them (real.ts:4-7).
+ * A private copy of that arithmetic (real.ts is outside this lane; one shared export is
+ * chipped). The m4 exact-double tests (whatif-basis-view.test.tsx, 'the m4 law') and
+ * mutant M1a are what keep the two bit-equal.
+ */
+function monthsBetween(fromISO: string, toISO: string): number {
+  const [fromY, fromM] = fromISO.split('-').map(Number);
+  const [toY, toM] = toISO.split('-').map(Number);
+  return (toY - fromY) * 12 + (toM - fromM);
+}
 
 /**
  * Liquid / investable assets used for the FI milestone test. Excludes home
@@ -128,6 +149,9 @@ export function detectMilestones(
   const horizonState =
     states.length >= MONTHS_30Y ? states[MONTHS_30Y - 1] : states[states.length - 1];
   const netWorth30y = horizonState ? horizonState.netWorth : undefined;
+  const netWorth30yElapsedMonths = horizonState
+    ? monthsBetween(states[0].monthISO, horizonState.monthISO)
+    : undefined;
 
-  return { debtFreeISO, financialIndependenceISO, retirementISO, netWorth30y };
+  return { debtFreeISO, financialIndependenceISO, retirementISO, netWorth30y, netWorth30yElapsedMonths };
 }

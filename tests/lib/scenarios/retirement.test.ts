@@ -60,7 +60,6 @@ function makeRealState(
     // intent is preserved under the new OFF default.
     defaults: {
       inflation: 0,
-      returnRate: 0.07,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },
@@ -132,7 +131,6 @@ describe('projectScenario — retirement age transition', () => {
       },
       defaults: {
         inflation: 0,
-        returnRate: 0,
         defaultCashApy: null,
         autoInvestSalarySurplus: true,
       },

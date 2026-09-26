@@ -50,7 +50,7 @@ function buildReal(opts: { brokerage: number; trad: number; roth: number }): Rea
     initialCash: 0,
     initialInvestmentsByAccount: { 1: opts.brokerage, 2: opts.trad, 3: opts.roth },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: { inflation: 0, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal: [{ min: 0, max: null, rate: 0 }],
@@ -151,7 +151,7 @@ describe('Roth 401k drains tax-free in sequential drawdown', () => {
       initialCash: 0,
       initialInvestmentsByAccount: { 3: 100_000 },
       cashAccountsWithBalances: [],
-      defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+      defaults: { inflation: 0, defaultCashApy: null },
       startISO: '2026-01',
       taxBrackets: {
         federal: [{ min: 0, max: null, rate: 0 }],

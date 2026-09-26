@@ -45,7 +45,7 @@ function realStateWithSettingsInflation(settingsInflation: number): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 1_000_000 }, // big bag to absorb the negative-savings drag
     cashAccountsWithBalances: [],
-    defaults: { inflation: settingsInflation, returnRate: 0, defaultCashApy: null },
+    defaults: { inflation: settingsInflation, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal,

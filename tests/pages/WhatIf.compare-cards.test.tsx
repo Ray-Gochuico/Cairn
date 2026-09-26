@@ -227,6 +227,11 @@ function setSettings(over: Record<string, unknown> = {}) {
   } as never);
 }
 
+/** A-3a: month 0 and the 30-year mark (2026-05 → 2056-04, 359 months) — the
+ *  horizon state the scoreboard reads is 359 months out, so Today's $ deflates
+ *  it by 1.025^(359/12), exactly as the chart deflates that month. */
+const run30 = (netWorth: number) => [state(netWorth), { ...state(netWorth), monthISO: '2056-04' }];
+
 const renderWhatIf = () => render(<MemoryRouter><WhatIf /></MemoryRouter>);
 /** Whole narrative lines are <p> with emphasis spans — read textContent. */
 const lineOf = (text: string) =>
@@ -254,8 +259,8 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
     h.interviewCtx = null; h.interviewAsk = false; h.censusCalls = [];
     h.scenarios = [scenario(1, 'Baseline'), scenario(2, 'Aggressive payoff')];
     h.projections = new Map<number, unknown[]>([
-      [1, [state(900_000)]],
-      [2, [state(400_000)]],
+      [1, run30(900_000)],
+      [2, run30(400_000)],
     ]);
   });
 
@@ -288,12 +293,13 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
   it('W3 scoreboard parity: the BL-3 delta equals the ONE 30-year recipe over both sides', () => {
     useDollarBasisStore.getState().setBasis(WHATIF_PAGE_ID, 'today');
     renderWhatIf();
-    // The ONE recipe (basis-view.ts toDisplayMilestones, W5.1): disp = n / 1.025^30
+    // The ONE recipe (basis-view.ts toDisplayMilestones; A-3a: the horizon
+    // state's own elapsed years — 359 months here): disp = n / 1.025^(359/12)
     // — displayInflation resolves to household.inflationAssumption here.
-    const dispA = 900_000 / Math.pow(1.025, 30);
-    const dispB = 400_000 / Math.pow(1.025, 30);
+    const dispA = 900_000 / Math.pow(1.025, 359 / 12);
+    const dispB = 400_000 / Math.pow(1.025, 359 / 12);
     const delta = `$${Math.round(Math.abs(dispB - dispA)).toLocaleString('en-US')}`;
-    expect(delta).toBe('$238,371'); // hand-derived: 500,000 / 2.097567579081786
+    expect(delta).toBe('$238,862'); // hand-derived: 429,952 − 191,090 (each side ÷ 2.093255814832335, rounded)
     expect(
       screen.getByText((_t, el) => el?.tagName === 'P'
         && el.textContent === `Baseline ends ${delta} higher at the 30-year mark (today's $).`),
@@ -314,7 +320,7 @@ describe('WhatIf — W3 compare + model-gaps cards', () => {
   it("W5.1 D-T3: a fresh session opens the Compare card in today's dollars (the deliberate flip)", () => {
     renderWhatIf();
     expect(screen.getByTestId('whatif-compare-card').textContent).toContain('One deflator');
-    expect(lineOf("Baseline ends $238,371 higher at the 30-year mark (today's $).")).toBeInTheDocument();
+    expect(lineOf("Baseline ends $238,862 higher at the 30-year mark (today's $).")).toBeInTheDocument();
   });
 
   it('W3: cards absent without projection data (page empty state owns the moment)', () => {

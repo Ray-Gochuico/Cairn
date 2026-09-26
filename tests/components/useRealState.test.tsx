@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useRealState } from '@/components/whatif/useRealState';
@@ -53,6 +53,28 @@ function resetStores() {
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
 
+/** v1.8.0 A-3a: the settings row the wave-9 M45 tests used, with fields varied. */
+const settingsWith = (over: Record<string, unknown>) => ({
+  settings: {
+    id: 1,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: 'EVERY_LAUNCH',
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+    defaultInflation: null,
+    defaultReturnRate: null,
+    defaultCashApy: null,
+    defaultDrawdownTaxRate: null,
+    ...over,
+  } as any,
+  isLoading: false,
+  error: null,
+  load: async () => {},
+  update: async () => {},
+} as any);
+
 describe('useRealState', () => {
   beforeEach(() => { resetStores(); });
 
@@ -70,7 +92,7 @@ describe('useRealState', () => {
     expect(real.loans[0].currentBalance).toBe(18400);
     expect(real.holdings[0].shareCount).toBe(1000);
     expect(real.defaults.inflation).toBeCloseTo(0.025, 4);
-    expect(real.defaults.returnRate).toBeCloseTo(0.07, 4);
+    expect(real.defaults).not.toHaveProperty('returnRate'); // v1.8.0 A-3a: the dead copy is gone (no engine input read it)
     expect(real.startISO).toMatch(/^\d{4}-\d{2}$/);
   });
 
@@ -142,63 +164,44 @@ describe('useRealState', () => {
     expect(result.current!.defaults.inflation).toBeCloseTo(0.025, 4);
   });
 
-  it('wave-9 M45: settings.defaultReturnRate overrides scenarios-store default when set', () => {
-    // Sibling of NEW-W7-WI1 above — pre-fix the field saved and was never read.
-    useSettingsStore.setState({
-      settings: {
-        id: 1,
-        sidebarLayout: null,
-        notificationsEnabled: true,
-        notificationDay: 1,
-        refreshCadence: 'EVERY_LAUNCH',
-        lastRefreshAt: null,
-        statementsFolderPath: null,
-        defaultInflation: null,
-        defaultReturnRate: 0.055,
-        defaultCashApy: null,
-        defaultDrawdownTaxRate: null,
-      } as any,
-      isLoading: false,
-      error: null,
-      load: async () => {},
-      update: async () => {},
-    } as any);
-    useScenariosStore.setState({
-      scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360,
-      inflation: 0.025, defaultReturnRate: 0.07,
-    });
-    const { result } = renderHook(() => useRealState(), { wrapper });
-    expect(result.current!.defaults.returnRate).toBeCloseTo(0.055, 4);
+  // v1.8.0 A-3a re-targets both wave-9 M45 pins. M45 threaded Settings → Default
+  // return rate into RealState.defaults.returnRate, but no engine input ever
+  // read that field — returns come from each scenario's Returns lever — so the
+  // copy was dead and A-3a deletes it with its plumbing. The pins now hold the
+  // true behaviour: neither source reaches the What-If RealState.
+  it('A-3a (re-targets wave-9 M45): settings.defaultReturnRate does not reach the What-If RealState — the captured state is identical and carries no return rate', () => {
+    // One pinned mid-month instant: the two captures share startISO (useLocalToday), so
+    // toEqual can only differ on what the setting feeds — never a month rollover.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 15, 12, 0, 0));
+    try {
+      useSettingsStore.setState(settingsWith({ defaultReturnRate: 0.055 }));
+      const set = renderHook(() => useRealState(), { wrapper }).result.current!;
+      useSettingsStore.setState(settingsWith({ defaultReturnRate: null }));
+      const unset = renderHook(() => useRealState(), { wrapper }).result.current!;
+      expect(set.startISO).toBe('2026-09');
+      expect(set.defaults).not.toHaveProperty('returnRate');
+      expect(set).toEqual(unset);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('wave-9 M45: falls back to the scenarios-store return rate when settings.defaultReturnRate is null', () => {
-    useSettingsStore.setState({
-      settings: {
-        id: 1,
-        sidebarLayout: null,
-        notificationsEnabled: true,
-        notificationDay: 1,
-        refreshCadence: 'EVERY_LAUNCH',
-        lastRefreshAt: null,
-        statementsFolderPath: null,
-        defaultInflation: null,
-        defaultReturnRate: null,
-        defaultCashApy: null,
-        defaultDrawdownTaxRate: null,
-      } as any,
-      isLoading: false,
-      error: null,
-      load: async () => {},
-      update: async () => {},
-    } as any);
-    useScenariosStore.setState({
-      scenarios: [], isLoading: false, error: null,
-      horizonMonths: 360,
-      inflation: 0.025, defaultReturnRate: 0.07,
-    });
-    const { result } = renderHook(() => useRealState(), { wrapper });
-    expect(result.current!.defaults.returnRate).toBeCloseTo(0.07, 4);
+  it('A-3a (re-targets the wave-9 M45 fallback): the scenarios-store return-rate default does not reach the RealState either', () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); // one pinned mid-month instant (as above)
+    vi.setSystemTime(new Date(2026, 8, 15, 12, 0, 0));
+    try {
+      useSettingsStore.setState(settingsWith({ defaultReturnRate: null }));
+      useScenariosStore.setState({ defaultReturnRate: 0.07 });
+      const at7 = renderHook(() => useRealState(), { wrapper }).result.current!;
+      useScenariosStore.setState({ defaultReturnRate: 0.02 });
+      const at2 = renderHook(() => useRealState(), { wrapper }).result.current!;
+      expect(at7.startISO).toBe('2026-09');
+      expect(at7.defaults).not.toHaveProperty('returnRate');
+      expect(at2).toEqual(at7);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('threads tax-rules-store items onto RealState.taxBrackets for the household jurisdiction', () => {

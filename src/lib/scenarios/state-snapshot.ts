@@ -6,7 +6,6 @@ import { latestCompleteMonthBaseline, rolling12mBaselineDetail } from '@/lib/exp
 
 export interface AppSettingsSlice {
   defaultInflation: number;
-  defaultReturnRate: number;
   defaultCashApy: number | null;
   /**
    * Household-default blended effective tax rate applied to gross-up Trad
@@ -138,7 +137,6 @@ export interface RealState {
   cashAccountsWithBalances: Array<{ account: Account; balance: number }>;
   defaults: {
     inflation: number;
-    returnRate: number;
     defaultCashApy: number | null;
     /**
      * Household-level fallback for the Trad-bucket gross-up rate when a
@@ -422,7 +420,6 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     cashAccountsWithBalances,
     defaults: {
       inflation: inputs.appSettings.defaultInflation,
-      returnRate: inputs.appSettings.defaultReturnRate,
       defaultCashApy: inputs.appSettings.defaultCashApy ?? null,
       defaultDrawdownTaxRate: inputs.appSettings.defaultDrawdownTaxRate ?? null,
     },

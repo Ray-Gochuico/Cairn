@@ -49,7 +49,6 @@ const realState: RealState = {
   cashAccountsWithBalances: [],
   defaults: {
     inflation: 0,
-    returnRate: 0,
     defaultCashApy: null,
     autoInvestSalarySurplus: true,
   },

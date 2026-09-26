@@ -43,7 +43,7 @@ function realStateWith(initialInvestment: number): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: initialInvestment },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0.07, defaultCashApy: null },
+    defaults: { inflation: 0, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal,
@@ -173,7 +173,7 @@ describe('engine — compounding frequency on the Returns lever', () => {
             balance: cashBalance,
           },
         ],
-        defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+        defaults: { inflation: 0, defaultCashApy: null },
         startISO: '2026-01',
         taxBrackets: {
           federal,

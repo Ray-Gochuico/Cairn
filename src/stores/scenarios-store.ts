@@ -314,7 +314,6 @@ function realFingerprint(real: RealState): string {
     td?.state ?? 0,
     td?.city ?? 0,
     defaults.inflation ?? 'null',
-    defaults.returnRate ?? 'null',
     defaults.defaultCashApy ?? 'null',
     defaults.defaultDrawdownTaxRate ?? 'null',
   ].join('|');

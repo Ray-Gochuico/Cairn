@@ -82,7 +82,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -101,7 +101,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -120,7 +120,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -139,7 +139,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -157,7 +157,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -178,7 +178,7 @@ describe('captureRealState — initial cash and investments', () => {
       holdings,
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -199,7 +199,7 @@ describe('projectScenario — initial-state regression for negative-growth chart
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -220,7 +220,7 @@ describe('projectScenario — initial-state regression for negative-growth chart
       holdings: [],
       loans, loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05',
       taxRules: baseTaxRules,
     });
@@ -259,7 +259,7 @@ describe('projectScenario — physical assets seed net worth once, flat, loans a
       accountSnapshots: [makeSnap(1, 50_000)],
       holdings: [], loans: [mortgage], loanPayments: [], transactions: [],
       household, persons,
-      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      appSettings: { defaultInflation: 0.025 },
       startISO: '2026-05', taxRules: baseTaxRules,
       properties: [home], vehicles: [], assetValueSnapshots: [],
     });

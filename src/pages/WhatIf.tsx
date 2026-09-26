@@ -498,6 +498,7 @@ export default function WhatIf() {
             projections={projections}
             household={household}
             persons={persons}
+            inflation={displayInflation}
           />
         </div>
         <Button

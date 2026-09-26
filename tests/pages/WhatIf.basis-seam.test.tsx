@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import type { ProjectionChartProps } from '@/components/whatif/ProjectionChart';
+import { DecomposedTooltipContent } from '@/components/whatif/ProjectionTooltip';
 import {
   toDisplayMilestones,
   whatIfChartCaption,
@@ -263,6 +264,41 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
     expect(p.basisCaption).toBe("All lines in today's dollars — one deflator, 4% inflation.");
     expect(p.displayProjections.get(1)![1].netWorth).toBeCloseTo(1_025_000 / 1.04, 6); // 985,576.92
     expect(p.displayProjections.get(2)![1].netWorth).toBeCloseTo(512_500 / 1.04, 6); //  same deflator for every scenario
+    // A-3a: the FI cards state the SAME page rate (1.06 / 1.04 − 1 = 0.01923… → "1.9").
+    expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈1.9% real after 4.0% inflation)');
+  });
+
+  // v1.8.0 A-3a (item 3): ONE inflation resolver per page. The active scenario
+  // is HIDDEN and carries a 4% lever; the visible Baseline carries none. The
+  // page deflates at the active scenario's 4% (caption + rows) — and the Coast
+  // explainer names that same rate. Before A-3a FiCards re-resolved from the
+  // VISIBLE reference scenario and read the household's 2.5%.
+  it('ONE inflation resolver: a HIDDEN active scenario with a 4% lever sets the caption AND the Coast explainer — never the visible Baseline\'s 2.5%', () => {
+    h.scenarios = [
+      { ...scenario(1, 'Baseline'), isActive: false },
+      { ...scenario(2, 'Plan B', 0.04), isActive: true, visible: false },
+    ];
+    h.projections = new Map<number, unknown[]>([[1, NOMINAL_1]]); // the store projects VISIBLE scenarios only
+    renderPage();
+    expect(lastChart().basisCaption).toBe("All lines in today's dollars — one deflator, 4% inflation.");
+    expect(lastChart().displayProjections.get(1)![1].netWorth).toBeCloseTo(1_025_000 / 1.04, 6);
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈1.9% real after 4.0% inflation)');
+    expect(coast).not.toHaveTextContent('after 2.5% inflation');
+  });
+
+  // v1.8.0 A-3a (plan review): with FiCards' own resolver gone, the page's
+  // precedence is the only one — household over settings
+  // (effective-inflation.ts). No lever; the household says 2.5%, Settings says
+  // 5%: the caption AND the Coast explainer both name the household's 2.5%.
+  it("ONE inflation resolver, precedence: with no lever the household's 2.5% outranks a Settings default of 5% — caption AND Coast explainer", () => {
+    useSettingsStore.setState({ settings: { ...useSettingsStore.getState().settings!, defaultInflation: 0.05 } } as never);
+    renderPage();
+    expect(lastChart().basisCaption).toBe("All lines in today's dollars — one deflator, 2.5% inflation.");
+    // 1.06 / 1.025 − 1 = 0.03414… → "3.4".
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation)');
+    expect(coast).not.toHaveTextContent('after 5.0% inflation');
   });
 
   it("scoreboard (Manage…, a portal): each 30y NW cell is the bundle's figure under its OWN mark — never a nominal figure under (today's $)", async () => {
@@ -273,9 +309,13 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
     const cells = () => screen.getAllByTestId('manage-nw30y').map((c) => c.textContent);
 
     // Today's $: the ONE 30-year recipe over the page's milestones (the
-    // horizon-end states: 1,025,000 and 512,500) at the page's 2.5%.
+    // horizon-end states: 1,025,000 and 512,500, 12 months out — A-3a stamps
+    // netWorth30yElapsedMonths 12) at the page's 2.5%.
     const recipe = toDisplayMilestones(
-      new Map([[1, { netWorth30y: 1_025_000 }], [2, { netWorth30y: 512_500 }]]),
+      new Map([
+        [1, { netWorth30y: 1_025_000, netWorth30yElapsedMonths: 12 }],
+        [2, { netWorth30y: 512_500, netWorth30yElapsedMonths: 12 }],
+      ]),
       'today',
       0.025,
     );
@@ -283,12 +323,47 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
       `${formatCurrency(recipe.get(1)!.netWorth30y!)} (today's $)`,
       `${formatCurrency(recipe.get(2)!.netWorth30y!)} (today's $)`,
     ]);
-    expect(cells()).toEqual(["$488,661 (today's $)", "$244,331 (today's $)"]); // ÷ 1.025^30 = 2.097567579
+    expect(cells()).toEqual(["$1,000,000 (today's $)", "$500,000 (today's $)"]); // ÷ 1.025^(12/12) — the chart's own month-12 deflation
     for (const c of cells()) expect(c).not.toMatch(/\$1,025,000|\$512,500/); // no nominal figure under a today's mark
+    for (const c of cells()) expect(c).not.toMatch(/\$488,661|\$244,331/); // the retired fixed-30 recipe (÷ 1.025^30)
 
     // Future $ (the modal stays open; the page re-hands the bundle).
     flip('future');
     expect(cells()).toEqual(['$1,025,000 (future $)', '$512,500 (future $)']);
     for (const c of cells()) expect(c).not.toContain("(today's $)");
+  });
+
+  // v1.8.0 A-3a — the m4 manual law at the PAGE seam: the real tooltip, fed the
+  // chart's own bundle, reads the scoreboard cell's figure at the terminal
+  // month (the horizon state here), in both bases.
+  it("m4 law (A-3a): the tooltip's terminal Net worth equals the scoreboard cell to the dollar, in BOTH bases", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: 'Manage…' }));
+    expect(await screen.findByRole('heading', { name: 'Manage scenarios' })).toBeInTheDocument();
+    const cell = (i: number) => screen.getAllByTestId('manage-nw30y')[i].textContent;
+    const tooltipNetWorth = (id: number): string => {
+      const chart = lastChart();
+      const states = chart.displayProjections.get(id)!;
+      const { unmount } = render(
+        <DecomposedTooltipContent
+          label={states[states.length - 1].monthISO}
+          active
+          scenarios={chart.scenarios}
+          displayProjections={chart.displayProjections}
+        />,
+      );
+      const text = screen.getByTestId(`whatif-projection-tooltip-scenario-${id}`).textContent ?? '';
+      unmount();
+      return /Net worth: ([−-]?\$[\d,]+)/.exec(text)![1];
+    };
+
+    expect(tooltipNetWorth(1)).toBe('$1,000,000');
+    expect(cell(0)).toBe(`${tooltipNetWorth(1)} (today's $)`);
+    expect(cell(1)).toBe(`${tooltipNetWorth(2)} (today's $)`);
+    flip('future');
+    expect(tooltipNetWorth(1)).toBe('$1,025,000');
+    expect(cell(0)).toBe(`${tooltipNetWorth(1)} (future $)`);
+    expect(cell(1)).toBe(`${tooltipNetWorth(2)} (future $)`);
   });
 });

@@ -43,7 +43,7 @@ const realState: RealState = {
   accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 20000 }, // 100 shares VTI @ $200 costBasis
-  defaults: { inflation: 0.025, returnRate: 0.07 },
+  defaults: { inflation: 0.025 },
   startISO: '2026-05',
   taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: { federal: 14600, state: 5363, city: 0 } },
 };

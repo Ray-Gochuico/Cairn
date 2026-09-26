@@ -27,7 +27,7 @@ function real(over: { basis?: RealState['expenseBasis'] | undefined; housing?: H
     accounts: [], holdings: [], loans: [], loanPayments: [], household, persons,
     accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 1_000_000, initialInvestmentsByAccount: {}, cashAccountsWithBalances: [],
-    defaults: { inflation: over.inflation ?? 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: over.inflation ?? 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-07',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [], standardDeduction: { federal: 0, state: 0, city: 0 } },
     housingPayments: over.housing ?? [], vehicleLeases: over.leases ?? [],

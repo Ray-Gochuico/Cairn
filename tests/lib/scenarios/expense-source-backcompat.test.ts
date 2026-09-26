@@ -53,7 +53,7 @@ function realStateFactory(): RealState {
     initialCash: 50_000,
     initialInvestmentsByAccount: { 1: 200_000 },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0.03, returnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0.03, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-05',
     taxBrackets: {
       federal: federal2026Single, state: [], city: null, ltcg: [],

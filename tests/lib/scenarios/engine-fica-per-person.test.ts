@@ -44,7 +44,7 @@ function afterTaxMonthly(persons: Person[]): number {
     accounts: [], accountSnapshots: [], holdings: [], loans: [], loanPayments: [],
     transactions: [], household, persons,
     appSettings: {
-      defaultInflation: 0, defaultReturnRate: 0,
+      defaultInflation: 0,
       defaultCashApy: null, defaultDrawdownTaxRate: null,
     },
     startISO: '2026-05',
@@ -81,7 +81,7 @@ describe('engine FICA — per-person Social Security wage base (historical ancho
       transactions: [], household,
       persons: [person(1, 60_000), person(2, 150_000)],
       appSettings: {
-        defaultInflation: 0, defaultReturnRate: 0,
+        defaultInflation: 0,
         defaultCashApy: null, defaultDrawdownTaxRate: null,
       },
       startISO: '2026-05',

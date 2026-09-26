@@ -60,7 +60,7 @@ function buildReal(opts: {
     initialCash: 0,
     initialInvestmentsByAccount: {},
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: { inflation: 0, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal: FED_MFJ_2026,
