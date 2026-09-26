@@ -757,6 +757,20 @@ describe('net-worth MoM pill (Wave 2 §2)', () => {
     expect(byLabel('Net Worth').textContent).toBe('Net Worth−$5,000−$6,000 (−600.0%)vs last month');
     expect(within(byLabel('Liquid Investments')).getByTestId('metric-card-value').textContent).toBe('−$5,000');
   });
+
+  it('M1 review: a flat month reads "+$0 (+0.0%)" — exact zero keeps the "+" register on the dollar AND the percent (not the negative-zero question)', () => {
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 15_000 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: 15_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(netWorthCard.textContent).toBe('Net Worth$15,000+$0 (+0.0%)vs last month');
+  });
 });
 
 describe('Dashboard load gate (W10 S3/S4, M3)', () => {
