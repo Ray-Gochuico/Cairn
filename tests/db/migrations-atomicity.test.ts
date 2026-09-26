@@ -10,7 +10,8 @@
 //
 // The wrap has to skip migrations that self-manage their tx state (0033
 // toggles PRAGMA foreign_keys outside any transaction). Detection is a
-// regex match on `BEGIN [TRANSACTION|...]` in the un-stripped SQL.
+// statement-initial BEGIN in the runner's own split, comment-stripped
+// statements (v1.7.1 U3).
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -123,5 +124,46 @@ describe('runMigrations atomicity', () => {
       "SELECT version FROM schema_migrations WHERE version = 'test_comment_begin'",
     );
     expect(recorded).toHaveLength(1);
+  });
+});
+
+describe('the self-managed detector is statement-initial (v1.7.1 U3)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(() => {
+    db = new SqliteAdapter(':memory:');
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('a CREATE TRIGGER … BEGIN … END body stays on the WRAPPED path: a later failure rolls the table and the trigger back', async () => {
+    const m = {
+      version: 'u3_trigger_body',
+      sql: `CREATE TABLE u3_t (id INTEGER PRIMARY KEY, v INTEGER);
+            CREATE TRIGGER u3_trg AFTER INSERT ON u3_t BEGIN UPDATE u3_t SET v = 1 WHERE id = NEW.id; END;
+            INSERT INTO u3_missing VALUES (1);`,
+    };
+    await expect(runMigrations(db, [m])).rejects.toThrow(/u3_missing/);
+    expect(await db.select("SELECT name FROM sqlite_master WHERE name IN ('u3_t', 'u3_trg')")).toEqual([]);
+  });
+
+  it('a bare `BEGIN;` statement IS self-managed (runs unwrapped, so its own BEGIN does not nest)', async () => {
+    const m = {
+      version: 'u3_bare_begin',
+      sql: `BEGIN;
+            CREATE TABLE u3_bare (id INTEGER PRIMARY KEY);
+            COMMIT;`,
+    };
+    await expect(runMigrations(db, [m])).resolves.toBeUndefined();
+    expect(await db.select("SELECT name FROM sqlite_master WHERE name = 'u3_bare'")).toEqual([{ name: 'u3_bare' }]);
+  });
+
+  it('every other form is self-managed too: BEGIN DEFERRED / IMMEDIATE / EXCLUSIVE [TRANSACTION], any case', async () => {
+    for (const [i, begin] of ['begin deferred', 'BEGIN IMMEDIATE TRANSACTION', 'Begin Exclusive', 'BEGIN TRANSACTION'].entries()) {
+      const m = { version: `u3_begin_${i}`, sql: `${begin};\nCREATE TABLE u3_b${i} (id INTEGER);\nCOMMIT;` };
+      await expect(runMigrations(db, [m])).resolves.toBeUndefined();
+    }
   });
 });

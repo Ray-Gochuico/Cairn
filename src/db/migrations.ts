@@ -136,27 +136,35 @@ export async function pendingMigrations(
 }
 
 // Detects whether a migration self-manages its transaction state via its
-// own `BEGIN [TRANSACTION|IMMEDIATE|DEFERRED|EXCLUSIVE]`. These migrations
-// (e.g. 0033, which toggles `PRAGMA foreign_keys` outside a tx) must run
-// with `executeBatch({ transaction: false })` — i.e. on one connection but
-// WITHOUT a runner-added BEGIN/COMMIT wrap — because:
+// own `BEGIN`. These migrations (e.g. 0033, which toggles `PRAGMA
+// foreign_keys` outside a tx) must run with `executeBatch({ transaction:
+// false })` — i.e. on one connection but WITHOUT a runner-added BEGIN/COMMIT
+// wrap — because:
 //   1. SQLite silently ignores `PRAGMA foreign_keys` inside an open
 //      transaction — wrapping 0033 in an outer BEGIN would no-op its
 //      FK-disable step and the rebuild's DROP would fail.
 //   2. SQLite forbids nested BEGINs — the inner BEGIN throws.
-// The check runs against the un-stripped SQL so comments containing the
-// word "BEGIN" don't trigger false positives (the comment stripper runs
-// after this check).
-const SELF_MANAGED_TX_RE = /\bBEGIN\s+(TRANSACTION|IMMEDIATE|DEFERRED|EXCLUSIVE)?\b/i;
+// v1.7.1 U3: the test is STATEMENT-INITIAL and runs on the runner's own
+// comment-stripped statements (splitStatements): a statement that IS a
+// `BEGIN`, `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE`, each optionally followed by
+// `TRANSACTION`. A comment that mentions BEGIN, or a `CREATE TRIGGER … BEGIN
+// … END` body (one statement that merely contains the word), stays on the
+// wrapped, atomic path.
+const SELF_MANAGED_TX_RE = /^BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?$/i;
 
-function hasSelfManagedTransaction(sql: string): boolean {
-  // Strip comments first so a "-- BEGIN TRANSACTION ..." comment doesn't
-  // false-positive into the self-managed bucket.
-  const stripped = sql
+/**
+ * The runner's statement list: line-level SQL comments (-- ...) stripped
+ * before splitting, then split on statement-terminating semicolons at end of
+ * line, empty fragments dropped.
+ */
+function splitStatements(sql: string): string[] {
+  return sql
     .split('\n')
     .map((line) => line.replace(/--.*$/, ''))
-    .join('\n');
-  return SELF_MANAGED_TX_RE.test(stripped);
+    .join('\n')
+    .split(/;\s*$/m)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 export async function runMigrations(db: Database, migrations: Migration[]): Promise<void> {
@@ -187,18 +195,7 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
   for (const m of migrations) {
     if (appliedSet.has(m.version)) continue;
 
-    // Strip line-level SQL comments (-- ...) before splitting, then split on
-    // statement-terminating semicolons and drop empty fragments.
-    const stripped = m.sql
-      .split('\n')
-      .map((line) => line.replace(/--.*$/, ''))
-      .join('\n');
-
-    const statements: BatchStatement[] = stripped
-      .split(/;\s*$/m)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-      .map((sql) => ({ sql }));
+    const statements: BatchStatement[] = splitStatements(m.sql).map((sql) => ({ sql }));
 
     // The audit row records that this migration ran. OR IGNORE so 0001-style
     // self-recording migrations don't conflict.
@@ -230,7 +227,7 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     // transaction, so wrapping them would break both. The audit row is
     // appended to the batch; 0033's COMMIT has fired by the time it runs, so
     // it lands outside any transaction, which is correct.
-    const selfManaged = hasSelfManagedTransaction(m.sql);
+    const selfManaged = statements.some((s) => SELF_MANAGED_TX_RE.test(s.sql));
 
     await db.executeBatch([...statements, auditStmt], { transaction: !selfManaged });
   }
