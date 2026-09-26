@@ -167,6 +167,21 @@ describe('the self-managed detector is statement-initial (v1.7.1 U3)', () => {
     }
   });
 
+  // Code review CR-U3-9: what the detector comment says about a MULTI-line
+  // trigger body — unsupported by the splitter, but it fails inside the wrap
+  // and leaves nothing behind (the pre-U3 word match ran it unwrapped).
+  it('a trigger body spread over several lines fails, inside the wrap: the table before it rolls back too', async () => {
+    const m = {
+      version: 'u3_multiline_trigger',
+      sql: `CREATE TABLE u3_ml (id INTEGER PRIMARY KEY, v INTEGER);
+            CREATE TRIGGER u3_ml_trg AFTER INSERT ON u3_ml BEGIN
+              UPDATE u3_ml SET v = 1 WHERE id = NEW.id;
+            END;`,
+    };
+    await expect(runMigrations(db, [m])).rejects.toThrow();
+    expect(await db.select("SELECT name FROM sqlite_master WHERE name IN ('u3_ml', 'u3_ml_trg')")).toEqual([]);
+  });
+
   // Code review CR-U3-9: SQLite also accepts a transaction NAME after TRANSACTION
   // (`BEGIN [DEFERRED|IMMEDIATE|EXCLUSIVE] TRANSACTION name`).
   it('the named form is self-managed too: BEGIN TRANSACTION name, with or without a type (planted)', async () => {

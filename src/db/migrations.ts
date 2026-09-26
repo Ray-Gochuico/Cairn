@@ -151,8 +151,11 @@ export async function pendingMigrations(
 // comment-stripped statements (splitStatements): a statement that IS a
 // `BEGIN`, `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE`, each optionally followed by
 // `TRANSACTION` and, after it, a transaction name. A comment that mentions
-// BEGIN, or a `CREATE TRIGGER … BEGIN … END` body (one statement that merely
-// contains the word), stays on the wrapped, atomic path.
+// BEGIN, or a one-line `CREATE TRIGGER … BEGIN … END;` (one statement that
+// merely contains the word), stays on the wrapped, atomic path. A trigger body
+// spread over several lines is NOT supported: the splitter cuts it at the `;`
+// that ends a body line, so the migration fails, inside the wrap, and rolls
+// back whole. Keep a trigger on one line.
 const SELF_MANAGED_TX_RE = /^BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION(?:\s+\w+)?)?$/i;
 
 /**
