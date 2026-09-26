@@ -183,7 +183,7 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     pastGuard();
     restoreBtn.click();
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
-    expect(mRestore).toHaveBeenCalledWith(PRE.path, expect.objectContaining({ tolerateNotLoaded: true, reload }));
+    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload, onRestored: undefined }); // CR-U-23g: exact
     // CR-U-18: the corrupt screen restores WITHOUT the one-boot hold.
     expect((mRestore.mock.calls[0][1] as { onRestored?: unknown }).onRestored).toBeUndefined();
   });
