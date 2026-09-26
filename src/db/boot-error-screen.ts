@@ -591,10 +591,12 @@ export function renderBootError(
     // The cause's stack points at the failing migration; fall back to ours.
     const cause = (e as { cause?: unknown }).cause;
     const stack = cause instanceof Error && cause.stack ? cause.stack : (e as Error).stack;
+    // U1-m18: the cause's own message — `message` repeats the heading.
+    const causeMessage = cause === undefined ? message : messageOf(cause);
     container.append(
       makeHeading("Cairn couldn't finish updating your data"),
       makeParagraph(body),
-      makePre(message + '\n\n' + stack),
+      makePre(causeMessage + '\n\n' + stack),
       makeReloadButton(reload), // the FIRST button on this screen
     );
     appendFailureNotice(container);

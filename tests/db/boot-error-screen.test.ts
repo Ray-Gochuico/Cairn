@@ -683,6 +683,13 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(root.textContent).not.toContain('from before the update was saved');
   });
 
+  it("U1-m18: the pane shows the CAUSE's message + stack, never a repeat of the heading", () => {
+    const cause = new Error('duplicate column name: vehicle_repair_category_ids');
+    renderBootError(root, new MigrationFailedError(cause, PRE.path));
+    expect(root.querySelector('pre')?.textContent).toBe(`duplicate column name: vehicle_repair_category_ids\n\n${cause.stack}`);
+    expect(root.querySelector('pre')?.textContent).not.toContain('Cairn could not finish updating your data');
+  });
+
   it('without a copy: says so', () => {
     renderBootError(root, new MigrationFailedError(new Error('x'), null));
     expect(root.textContent).toContain('The update stopped partway. No copy was saved before it started.');
