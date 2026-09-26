@@ -183,7 +183,9 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     pastGuard();
     restoreBtn.click();
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
-    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload, onRestored: expect.any(Function) }); // CR-U-14
+    expect(mRestore).toHaveBeenCalledWith(PRE.path, expect.objectContaining({ tolerateNotLoaded: true, reload }));
+    // CR-U-18: the corrupt screen restores WITHOUT the one-boot hold.
+    expect((mRestore.mock.calls[0][1] as { onRestored?: unknown }).onRestored).toBeUndefined();
   });
 
   it('Cancel puts the row back and never restores', async () => {
@@ -630,6 +632,62 @@ describe('CR-U-16 — the confirm mutants (U1-m13)', () => {
     await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
     expect(btn.textContent).toBe('Restore');
     expect([...rows(root)[0].querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Restore']);
+  });
+});
+
+describe('CR-U-18 — the hold is scoped to the failed-migration screen and its true pre-update copy (U1F-M1/M2/M4)', () => {
+  const OLDER_PRE = {
+    name: 'cairn-pre-update-52-to-55-20260801-090000.db',
+    path: '/x/backups/cairn-pre-update-52-to-55-20260801-090000.db',
+    takenAt: new Date(2026, 7, 1, 9, 0, 0), kind: 'pre-update' as const, schemaFrom: 52, schemaTo: 55,
+  };
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, OLDER_PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+
+  async function confirm(err: unknown, rowIndex: number) {
+    renderBootError(root, err, { now });
+    await settled(root, 3);
+    const btn = rows(root)[rowIndex].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    return mRestore.mock.calls[0][1] as { onRestored?: () => void };
+  }
+
+  for (const [label, err] of [
+    ['corrupt', new DatabaseCorruptError('x')],
+    ['too-new', new SchemaTooNewError(99, 55)],
+    ['generic database', dbInit('x')],
+  ] as const) {
+    it(`${label} screen: restoring the Before-update copy sets NO hold (the app boots normally after)`, async () => {
+      const opts = await confirm(err, 0);
+      expect(opts.onRestored).toBeUndefined();
+      expect(takeUpdateHold()).toBe(false);
+    });
+  }
+
+  it('failed-migration screen: only the copy the error NAMES holds — another pre-update copy does not', async () => {
+    const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path), 1); // OLDER_PRE
+    expect(opts.onRestored).toBeUndefined();
+  });
+
+  it('failed-migration screen: the named copy holds when it is from before the update', async () => {
+    const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path), 0);
+    expect(typeof opts.onRestored).toBe('function');
+  });
+
+  it('a PARTWAY copy (copyIsFromBeforeUpdate false) never holds, even when the error names it', async () => {
+    const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path, false), 0);
+    expect(opts.onRestored).toBeUndefined();
   });
 });
 

@@ -213,6 +213,10 @@ interface RestoreSectionOptions {
   releases: boolean;
   reload: () => void;
   now: () => number;
+  /** CR-U-18: which row's restore sets the one-boot update hold. Passed ONLY
+   * from the failed-migration screen, for the copy its error names when that
+   * copy is from before the update; every other screen and row: none. */
+  holdFor?: (entry: BackupEntry) => boolean;
 }
 
 /** Shared by every row of one restore section. */
@@ -229,6 +233,7 @@ interface RestoreContext {
   now: () => number;
   /** Disarm callbacks of the currently armed rows (at most one, CR-U-9). */
   armed: Set<() => void>;
+  holdFor: (entry: BackupEntry) => boolean;
 }
 
 /**
@@ -277,6 +282,7 @@ function appendRestoreSection(container: HTMLElement, opts: RestoreSectionOption
     reload: opts.reload,
     now: opts.now,
     armed: new Set(),
+    holdFor: opts.holdFor ?? (() => false),
   };
   void hydrateRestoreList(list, ctx);
 }
@@ -445,12 +451,13 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         // Boot path: the pool may never have been loaded (the generic screen),
         // so the exact not-loaded close rejection is tolerated. Reloads on its
         // way out once the swap has been attempted.
-        // CR-U-14: putting back a copy from before an update holds that
-        // update for the next boot (set only once the swap succeeded).
+        // CR-U-14/18: putting back THE copy a failed update names (when it is
+        // from before the update) holds that update for the next boot — set
+        // only once the swap succeeded. Nothing else holds.
         await restoreFromBackup(entry.path, {
           tolerateNotLoaded: true,
           reload: ctx.reload,
-          onRestored: preUpdate ? setUpdateHold : undefined,
+          onRestored: ctx.holdFor(entry) ? setUpdateHold : undefined,
         });
       } catch (err) {
         // The only path that re-enables the screen (CR-U-10).
@@ -605,7 +612,14 @@ export function renderBootError(
       makeReloadButton(reload), // the FIRST button on this screen
     );
     appendFailureNotice(container);
-    appendRestoreSection(container, { reveal: true, releases: true, reload, now });
+    appendRestoreSection(container, {
+      reveal: true,
+      releases: true,
+      reload,
+      now,
+      // CR-U-18: only this screen holds, and only for the named true copy.
+      holdFor: (entry) => fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
+    });
     root.replaceChildren(container);
     return;
   }
