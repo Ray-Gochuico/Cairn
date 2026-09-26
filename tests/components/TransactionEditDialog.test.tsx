@@ -387,5 +387,18 @@ describe('TransactionEditDialog', () => {
       expect(screen.queryByRole('dialog', { name: CONFIRM_TITLE })).toBeNull();
       expect(await stored(t.id!)).toEqual({ merchant: 'Legacy Hotel', reimbursable: 0, reimbursed_at: null, reimbursed_amount: null });
     });
+
+    it('a stale pre-R10 row that is CHECKED and saved starts fresh as Awaiting — the record the editor never showed does not come back (CR-R10-6)', async () => {
+      const user = userEvent.setup();
+      const t = await createRow({ merchant: 'Legacy Hotel', amount: 80, reimbursable: false, reimbursedAt: '2026-06-25', reimbursedAmount: 80 });
+      const onSaved = renderRow(t);
+      expect(screen.queryByTestId('edit-reimbursement-status')).toBeNull();
+      await user.click(screen.getByLabelText('Reimbursable'));
+      expect(screen.getByLabelText('Reimbursable')).toBeChecked();
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(screen.queryByRole('dialog', { name: CONFIRM_TITLE })).toBeNull();
+      expect(await stored(t.id!)).toEqual({ merchant: 'Legacy Hotel', reimbursable: 1, reimbursed_at: null, reimbursed_amount: null });
+    });
   });
 });

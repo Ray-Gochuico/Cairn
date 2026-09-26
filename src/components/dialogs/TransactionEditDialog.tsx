@@ -100,9 +100,12 @@ export function TransactionEditDialog({
         personId,
         reimbursable,
         // v1.7.1 R10 (D-R10-3): an unchecked row carries no reimbursement
-        // record. A checked row's patch omits both fields, so a recorded
-        // reimbursement survives every other edit.
-        ...(reimbursable ? {} : { reimbursedAt: null, reimbursedAmount: null }),
+        // record. A row saved reimbursable that stays checked omits both
+        // fields, so a recorded reimbursement survives every other edit. A
+        // FRESH check (the saved row was not reimbursable) starts from
+        // Awaiting, so a stale pre-R10 record the editor never showed does not
+        // come back as Reimbursed (CR-R10-6).
+        ...(reimbursable && transaction.reimbursable ? {} : { reimbursedAt: null, reimbursedAmount: null }),
         notes: notes.trim() === '' ? null : notes.trim(),
       });
       onSaved();
