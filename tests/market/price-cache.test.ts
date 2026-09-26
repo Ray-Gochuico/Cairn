@@ -5,11 +5,14 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { PriceCache } from '@/market/price-cache';
 import type { YahooClient } from '@/market/yahoo-client';
+import { localTodayISO } from '@/lib/dates';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// v1.8.0 A-2′ (D-A2-4): the current-price key is the LOCAL day, so the seeded "today"
+// row is keyed the same way (a UTC key is the next local day on a US evening).
+const todayISO = () => localTodayISO();
 
 describe('PriceCache', () => {
   let db: SqliteAdapter;
@@ -78,6 +81,41 @@ describe('PriceCache', () => {
       const price2 = await cache.currentPrice('VTI');
       expect(price2).toBe(200);
       expect(quoteFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('v1.8.0 A-2′ (D-A2-4): the current-price row is keyed by the LOCAL day', () => {
+    const ORIGINAL_TZ = process.env.TZ;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
+    async function keysAfterTwoReads(): Promise<string[]> {
+      quoteFn.mockResolvedValueOnce({
+        ticker: 'VTI', price: 101, changePct: 0, currency: 'USD', fetchedAt: '2026-01-01T00:00:00.000Z',
+      });
+      const cache = new PriceCache(db, mockYahoo);
+      expect(await cache.currentPrice('VTI')).toBe(101);
+      expect(await cache.currentPrice('VTI')).toBe(101); // same local day, inside the TTL → a hit
+      expect(quoteFn).toHaveBeenCalledTimes(1);
+      const rows = await db.select<{ date: string }>('SELECT date FROM price_cache WHERE ticker = ?', ['VTI']);
+      return rows.map((r) => r.date);
+    }
+
+    it('Los Angeles, Dec 31 19:00 PST (UTC day Jan 1): the row is keyed 2025-12-31', async () => {
+      process.env.TZ = 'America/Los_Angeles';
+      vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+      expect(await keysAfterTwoReads()).toEqual(['2025-12-31']);
+    });
+
+    it('Pacific/Auckland, Jan 1 09:00 NZDT (UTC day Dec 31): the row is keyed 2026-01-01', async () => {
+      process.env.TZ = 'Pacific/Auckland';
+      vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+      expect(await keysAfterTwoReads()).toEqual(['2026-01-01']);
     });
   });
 

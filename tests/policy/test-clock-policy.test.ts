@@ -45,7 +45,8 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   'tests/domain/fund-holdings.test.ts',
   // loan-history.test.ts pruned 2026-09 (v1.8.0 A-2′): its default-anchor describe
   // uses fake timers; four legacy tests still read the real clock (chip).
-  'tests/market/price-cache.test.ts',
+  // price-cache.test.ts pruned 2026-09 (v1.8.0 A-2′): its local-key describe uses
+  // fake timers; its TTL tests still use the real clock with SQLite's own 'now'.
   'tests/pdf/layout.test.ts',
   'tests/stores/properties-store.test.ts',
   'tests/stores/vehicles-store.test.ts',

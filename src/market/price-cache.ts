@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import type { YahooClient } from './yahoo-client';
+import { localTodayISO } from '@/lib/dates';
 
 export interface PriceCacheAPI {
   /**
@@ -17,8 +18,12 @@ export interface PriceCacheAPI {
   currentPrice(ticker: string): Promise<number>;
 }
 
+/** The row key of a current price: the LOCAL calendar day (v1.8.0 A-2′) — the
+ *  day daily-snapshot.ts stamps its derived snapshot with and the sample
+ *  profile keys its seeded rows on. Freshness itself is fetched_at's 6-hour
+ *  window, an instant; the key only names the day. */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localTodayISO();
 }
 
 export class PriceCache implements PriceCacheAPI {
