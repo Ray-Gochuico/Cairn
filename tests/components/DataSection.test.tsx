@@ -290,6 +290,14 @@ describe('DataSection — desktop (Tauri) path', () => {
     expect(await screen.findByText(/restore failed/i)).toHaveTextContent(/copy failed/);
   });
 
+  it('U1-m16: a reason that ends with a period renders one period, not two', async () => {
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: the selected backup IS the live database.');
+    renderSection();
+    const line = await screen.findByText(/restore did not complete/i);
+    expect(line).toHaveTextContent('Restore did not complete: db_restore: the selected backup IS the live database. Your data was not changed.');
+    expect(line.textContent).not.toContain('..');
+  });
+
   it('CR-U-15: after a put-back failure the Settings notice drops its "not changed" claim', async () => {
     window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: failed to finalize the restore: simulated. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
     renderSection();

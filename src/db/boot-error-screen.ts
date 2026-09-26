@@ -52,6 +52,7 @@ import {
   setSkipOnce,
   setUpdateHold,
   takeRestoreFailureNotice,
+  withoutTrailingPeriod,
 } from '@/lib/boot-notices';
 import { RELEASES_URL } from '@/lib/releases-url';
 import { isExploreMode } from '@/lib/explore-mode';
@@ -168,11 +169,13 @@ function makeReloadButton(reload: () => void): HTMLButtonElement {
 function appendFailureNotice(container: HTMLElement): void {
   const reason = takeRestoreFailureNotice();
   if (reason !== null) {
-    // CR-U-15: the "not changed" claim only when db_restore put everything back.
+    // CR-U-15: the "not changed" claim only when db_restore put everything
+    // back. U1-m16: one period after the reason, never two.
+    const clause = withoutTrailingPeriod(reason);
     const notice = makeParagraph(
       restoreLeftDataUnchanged(reason)
-        ? `The last restore did not finish: ${reason}. Your data was not changed.`
-        : `The last restore did not finish: ${reason}.`,
+        ? `The last restore did not finish: ${clause}. Your data was not changed.`
+        : `The last restore did not finish: ${clause}.`,
     );
     notice.style.color = TEXT_COLOR;
     container.append(notice);

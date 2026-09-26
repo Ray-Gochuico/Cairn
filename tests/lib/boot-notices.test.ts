@@ -8,6 +8,7 @@ import {
   RESTORE_FAILURE_NOTICE_KEY,
   RESTORE_PUT_BACK_FAILED_PHRASE,
   restoreLeftDataUnchanged,
+  withoutTrailingPeriod,
   clearPostUpdateNotice,
   clearUpdateHold,
   peekPostUpdateNotice,
@@ -94,6 +95,14 @@ describe('CR-U-15 — a failed restore claims "your data was not changed" only w
   it('cross-language parity: the Rust put-back message carries the exact phrase', () => {
     const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
     expect(rust).toContain(`Part of your current data ${RESTORE_PUT_BACK_FAILED_PHRASE}: {}`);
+  });
+});
+
+describe('U1-m16 — a period-terminated reason never renders a double period', () => {
+  it('withoutTrailingPeriod drops exactly ONE trailing period', () => {
+    expect(withoutTrailingPeriod('db_restore: the selected backup IS the live database.')).toBe('db_restore: the selected backup IS the live database');
+    expect(withoutTrailingPeriod('disk full during restore')).toBe('disk full during restore');
+    expect(withoutTrailingPeriod('a..')).toBe('a.');
   });
 });
 

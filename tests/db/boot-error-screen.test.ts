@@ -760,3 +760,13 @@ describe('CR-U-15 — the restore-failure notice drops its "not changed" claim a
   });
 });
 
+describe('U1-m16 — the boot notice never renders a double period', () => {
+  it('a reason that ends with a period', () => {
+    sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'db_restore: the selected backup IS the live database.');
+    const root = document.createElement('div');
+    renderBootError(root, dbInit('x'));
+    expect(root.textContent).toContain('The last restore did not finish: db_restore: the selected backup IS the live database. Your data was not changed.');
+    expect(root.textContent).not.toContain('..');
+  });
+});
+

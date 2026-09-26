@@ -51,6 +51,12 @@ export function restoreLeftDataUnchanged(reason: string): boolean {
   return !reason.includes(RESTORE_PUT_BACK_FAILED_PHRASE);
 }
 
+/** U1-m16: the notices add their own period after `{reason}`; most Rust
+ * reasons already end with one. Drop exactly one trailing period. */
+export function withoutTrailingPeriod(reason: string): string {
+  return reason.endsWith('.') ? reason.slice(0, -1) : reason;
+}
+
 export function stashRestoreFailureNotice(reason: string): void { write(RESTORE_FAILURE_NOTICE_KEY, reason); }
 export function takeRestoreFailureNotice(): string | null { return take(RESTORE_FAILURE_NOTICE_KEY); }
 

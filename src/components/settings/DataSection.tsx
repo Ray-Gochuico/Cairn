@@ -19,7 +19,7 @@ import {
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { isWindows } from '@/lib/platform';
 import { isExploreMode } from '@/lib/explore-mode';
-import { restoreLeftDataUnchanged } from '@/lib/boot-notices';
+import { restoreLeftDataUnchanged, withoutTrailingPeriod } from '@/lib/boot-notices';
 
 /** Human-readable "when this backup was taken", e.g. "Jun 2, 2026, 11:50 PM". */
 function formatTakenAt(takenAt: Date): string {
@@ -111,12 +111,14 @@ export function DataSection() {
   // original data is intact (H-1), and they can retry.
   useEffect(() => {
     const reason = takeRestoreFailureNotice();
-    // CR-U-15: the "not changed" claim only when db_restore put everything back.
+    // CR-U-15: the "not changed" claim only when db_restore put everything
+    // back. U1-m16: one period after the reason, never two.
     if (reason) {
+      const clause = withoutTrailingPeriod(reason);
       setError(
         restoreLeftDataUnchanged(reason)
-          ? `Restore did not complete: ${reason}. Your data was not changed.`
-          : `Restore did not complete: ${reason}.`,
+          ? `Restore did not complete: ${clause}. Your data was not changed.`
+          : `Restore did not complete: ${clause}.`,
       );
     }
   }, []);
