@@ -259,7 +259,31 @@ describe('Vehicles page', () => {
     renderPage();
     const equityRow = screen.getByText('Equity').closest('div') as HTMLElement;
     expect(within(equityRow).getByText('—')).toBeInTheDocument();
-    expect(screen.queryByText('-$18,000')).not.toBeInTheDocument();
+    expect(screen.queryByText(/[-−]\$18,000/)).not.toBeInTheDocument(); // v1.7.1 M1: either glyph — a fabricated equity now prints U+2212
+  });
+
+  it('an underwater vehicle prints its negative equity with one true minus (v1.7.1 M1 — the control that keeps the anti-pin above non-vacuous)', () => {
+    useLoansStore.setState({
+      loans: [{
+        id: 99, householdId: 1, obligorPersonId: null, name: 'Auto loan', type: 'AUTO',
+        originalAmount: 25000, currentBalance: 18000, interestRate: 0.05, termMonths: 60,
+        firstPaymentDate: '2024-01-01', monthlyPayment: 400, extraPaymentDefault: 0,
+        linkedPropertyId: null, linkedVehicleId: 8,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useVehiclesStore.setState({
+      vehicles: [{
+        id: 8, householdId: 1, ownerPersonId: null, name: 'Truck', make: 'Ford', model: 'F150',
+        year: 2019, purchasePrice: 40000, purchaseDate: '2019-01-01', currentEstimatedValue: 12_000,
+        linkedLoanId: 99, excludedFromNetWorth: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderPage();
+    const equityRow = screen.getByText('Equity').closest('div') as HTMLElement;
+    expect(equityRow.textContent).toBe('Equity−$6,000');
+    expect(within(equityRow).getByText('−$6,000')).toHaveClass('text-destructive-soft-foreground');
   });
 
   it('renders a vehicle card with name and current value', () => {

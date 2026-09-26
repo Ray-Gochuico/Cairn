@@ -7,8 +7,35 @@ import {
   formatDate,
   formatMonth,
   formatCurrencyCents,
+  formatCurrency,
+  withTrueMinus,
 } from '@/lib/format';
 import { pctFromFraction } from '@/lib/calculators/scenario-assumptions';
+
+/* v1.7.1 M1: one deterministic sweep for the money-minus value-invariance pins
+   (CR-M1-4) — sub-dollar negatives, halves, the k/M boundaries, negative zero,
+   a few non-negatives, and a 2,000-value spread of fractional negatives. */
+const MONEY_SWEEP: number[] = [
+  -0.004, -0.005, -0.4, -0.5, -0.9999, -1, -1.5, -2.5, -499.5, -999.4, -999.5, -999.6,
+  -1000, -1234.5, -1250, -1500.04, -12_300, -99_999.5, -999_949, -999_950,
+  -1_000_000, -1_250_000, -5_500_000, -123_456_789.5, -0, 0, 0.4, 999.6, 1500, 80_000, 1_200_000,
+  ...Array.from({ length: 2000 }, (_, i) => -((i * 7919) % 2_000_003) / 7),
+];
+
+describe('withTrueMinus (v1.7.1 M1 — the leading-glyph rule, shared)', () => {
+  it('replaces a LEADING ASCII hyphen-minus with U+2212', () => {
+    expect(withTrueMinus('-$500')).toBe('−$500');
+    expect(withTrueMinus('-5.0')).toBe('−5.0');
+    expect(withTrueMinus('-$500').charCodeAt(0)).toBe(0x2212);
+  });
+  it('leaves every other character byte-identical — only the first character is ever a sign', () => {
+    expect(withTrueMinus('$500')).toBe('$500');
+    expect(withTrueMinus('+$500')).toBe('+$500');
+    expect(withTrueMinus('−$500')).toBe('−$500'); // idempotent
+    expect(withTrueMinus('')).toBe('');
+    expect(withTrueMinus('2027-06 a-b')).toBe('2027-06 a-b'); // a non-leading hyphen is never a sign
+  });
+});
 
 describe('formatDate', () => {
   it('renders a calendar-day ISO string as Mon D, YYYY', () => {
@@ -33,11 +60,44 @@ describe('formatCurrencyCents', () => {
   it('renders exact cents with thousands separators', () => {
     expect(formatCurrencyCents(6846.84)).toBe('$6,846.84');
   });
-  it('renders negatives with a leading minus and separators', () => {
-    expect(formatCurrencyCents(-2450)).toBe('-$2,450.00');
+  it('renders negatives with a leading TRUE MINUS (U+2212) and separators (v1.7.1 M1 — re-targeted from Intl\'s hyphen on purpose: the glyph is the point)', () => {
+    expect(formatCurrencyCents(-2450)).toBe('−$2,450.00');
+    expect(formatCurrencyCents(-2450).charCodeAt(0)).toBe(0x2212);
+  });
+  it('value invariance (CR-M1-4): the ONLY change from the Intl output is the leading hyphen → U+2212', () => {
+    const LEGACY_CENTS = new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2,
+    });
+    for (const v of MONEY_SWEEP) {
+      expect(formatCurrencyCents(v)).toBe(LEGACY_CENTS.format(v).replace(/^-/, '−'));
+      expect(formatCurrencyCents(v)).not.toContain('-');
+    }
   });
   it('pads whole dollars to two decimals', () => {
     expect(formatCurrencyCents(40)).toBe('$40.00');
+  });
+});
+
+describe('formatCurrency (v1.7.1 M1 — one true minus for money)', () => {
+  const LEGACY_WHOLE = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  it('a negative leads with U+2212, never the ASCII hyphen; non-negatives are byte-identical', () => {
+    expect(formatCurrency(-500)).toBe('−$500');
+    expect(formatCurrency(-1_234_567.89)).toBe('−$1,234,568');
+    expect(formatCurrency(-500).charCodeAt(0)).toBe(0x2212);
+    expect(formatCurrency(500)).toBe('$500');
+    expect(formatCurrency(0)).toBe('$0');
+    expect(formatCurrency(-0.4)).toBe('−$0'); // D-M1-2: glyph-only (CR-M1-4); the unsigned-zero question rides B-19
+  });
+  it('value invariance (CR-M1-4): the ONLY change from the Intl output is the leading hyphen → U+2212', () => {
+    for (const v of MONEY_SWEEP) {
+      expect(formatCurrency(v)).toBe(LEGACY_WHOLE.format(v).replace(/^-/, '−'));
+      expect(formatCurrency(v)).not.toContain('-');
+    }
+  });
+  it('one glyph, two helpers: every negative reads the same through formatCurrency and formatSignedCurrency', () => {
+    for (const v of MONEY_SWEEP.filter((x) => x < 0)) expect(formatCurrency(v)).toBe(formatSignedCurrency(v));
+    // −0 fails `x < 0`, so the filter drops it; pin its agreement explicitly (M1 review).
+    expect(formatSignedCurrency(-0)).toBe(formatCurrency(-0));
   });
 });
 
@@ -77,10 +137,31 @@ describe('formatCompactCurrency', () => {
     expect(formatCompactCurrency(1200000)).toBe('$1.2M');
     expect(formatCompactCurrency(5500000)).toBe('$5.5M');
   });
-  it('preserves sign for negative values', () => {
-    expect(formatCompactCurrency(-500)).toBe('$-500');
-    expect(formatCompactCurrency(-80000)).toBe('$-80k');
-    expect(formatCompactCurrency(-1200000)).toBe('$-1.2M');
+  it('a negative leads with U+2212 BEFORE the symbol — the sign never follows the "$" (v1.7.1 M1 — re-targeted: the order and the glyph are the point)', () => {
+    expect(formatCompactCurrency(-500)).toBe('−$500');
+    expect(formatCompactCurrency(-80000)).toBe('−$80k');
+    expect(formatCompactCurrency(-1200000)).toBe('−$1.2M');
+    expect(formatCompactCurrency(-1500)).toBe('−$1.5k');
+    expect(formatCompactCurrency(-0.4)).toBe('−$0'); // D-M1-2: glyph-only — a rounded-away negative keeps its sign
+  });
+  it('value invariance (CR-M1-4): the ONLY change from the pre-M1 output is "$-" → "−$"', () => {
+    // The pre-M1 body, verbatim — the oracle.
+    const legacyCompact = (v: number): string => {
+      const abs = Math.abs(v);
+      if (abs >= 1_000_000) {
+        const m = v / 1_000_000;
+        return '$' + (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+      }
+      if (abs >= 1_000) {
+        const k = v / 1_000;
+        return '$' + (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)) + 'k';
+      }
+      return '$' + v.toFixed(0);
+    };
+    for (const v of MONEY_SWEEP) {
+      expect(formatCompactCurrency(v)).toBe(legacyCompact(v).replace(/^\$-/, '−$'));
+      expect(formatCompactCurrency(v)).not.toContain('-');
+    }
   });
 });
 

@@ -68,6 +68,49 @@ describe('ManageSurface (W14)', () => {
     expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
     expect(await screen.findByText(/no tickers yet/i)).toBeInTheDocument();
   });
+
+  // A-11(4) (v1.7.1): the settle-scroll lands the region's top at the
+  // scroller's top (block:'start'), which needs at least a viewport of page
+  // below it. A short panel (the seeded Contributions: 343 px under a 654 px
+  // <main> at 1024×700) stopped the scroll at the container floor, 287 px
+  // short of flush (C1 smoke; measured at plan time). While ?manage is in the
+  // URL the region is at least one viewport tall, including after a tab click
+  // (the tab strip writes ?manage); a plain visit keeps its natural height
+  // until then. (Geometry is a smoke receipt — jsdom has no layout.)
+  it('A-11(4): with ?manage in the URL the region carries the one-viewport floor', () => {
+    render(
+      <MemoryRouter initialEntries={['/investments?manage=contributions']}>
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('region', { name: 'Manage' })).toHaveClass('min-h-screen');
+  });
+
+  it('A-11(4): without ?manage the region keeps its natural height — no spacer on a plain visit', () => {
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('region', { name: 'Manage' })).not.toHaveClass('min-h-screen');
+  });
+
+  // D-X1-5 (plan review): a tab click writes ?manage (self-write, no scroll),
+  // and the floor follows the URL — so switching to a short panel cannot
+  // shrink the scroller under the user.
+  it('A-11(4): a tab click on a plain visit writes ?manage, and the floor follows it', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <ManageSurface />
+      </MemoryRouter>,
+    );
+    const region = screen.getByRole('region', { name: 'Manage' });
+    expect(region).not.toHaveClass('min-h-screen'); // guard: a plain visit starts without it
+    await user.click(screen.getByRole('tab', { name: 'Contributions' }));
+    expect(screen.getByRole('tab', { name: 'Contributions' })).toHaveAttribute('aria-selected', 'true');
+    expect(region).toHaveClass('min-h-screen');
+  });
 });
 
 // C1 (smoke M3, 2026-09-02): `?manage=contributions` selected the tab but the

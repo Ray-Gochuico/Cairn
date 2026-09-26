@@ -59,3 +59,37 @@ describe('AccountBreakdownCard "as of" line (Wave-11 T4 miss)', () => {
     expect(screen.queryByText(/as of/)).toBeNull();
   });
 });
+
+describe('AccountBreakdownCard — one true minus (v1.7.1 M1)', () => {
+  function renderRows(rs: AccountBreakdownRow[], t: AccountBreakdownTotal) {
+    return render(
+      <MemoryRouter>
+        <AccountBreakdownCard
+          rows={rs}
+          total={t}
+          colorByAccountId={new Map(rs.map((r, i) => [r.accountId, i === 0 ? '#123456' : '#654321']))}
+          investableOnly={false}
+          onToggleInvestableOnly={() => {}}
+          asOfDate={null}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('a down month reads "−$1,000(−10.0%)" in the row and the header — the percent carries the dollar\'s glyph', () => {
+    const down: AccountBreakdownRow = { ...rows[0], currentValue: 9_000, valueAsOf: 10_000, changeAbs: -1_000, changePct: -0.1 };
+    renderRows([down], { currentValue: 9_000, valueAsOf: 10_000, pctOfTotal: 1, changeAbs: -1_000, changePct: -0.1 });
+    expect(screen.getByText('Brokerage').closest('li')!.textContent).toBe('Brokerage100% of portfolio$9,000−$1,000(−10.0%)');
+    expect(document.body.textContent).toContain('vs last month−$1,000(−10.0%)');
+  });
+
+  it('D-M1-6: a negative account\'s share reads "−25% of portfolio" beside its "−$2,000"', () => {
+    const up: AccountBreakdownRow = { ...rows[0], currentValue: 10_000, valueAsOf: 9_000, pctOfTotal: 1.25, changeAbs: 1_000, changePct: 0.111 };
+    const neg: AccountBreakdownRow = {
+      accountId: 2, name: 'Checking', type: AccountType.ACCOUNT_CASH,
+      currentValue: -2_000, valueAsOf: 500, pctOfTotal: -0.25, changeAbs: -2_500, changePct: -5,
+    };
+    renderRows([up, neg], { currentValue: 8_000, valueAsOf: 9_500, pctOfTotal: 1, changeAbs: -1_500, changePct: -1_500 / 9_500 });
+    expect(screen.getByText('Checking').closest('li')!.textContent).toBe('Checking−25% of portfolio−$2,000−$2,500(−500.0%)');
+  });
+});

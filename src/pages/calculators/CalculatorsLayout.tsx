@@ -11,6 +11,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useLoadGate } from '@/lib/use-load-gate';
+import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
@@ -342,6 +343,9 @@ export default function CalculatorsLayout() {
   // posture). After consumption, openId mirrors into the fragment via
   // replaceState (never pushState — Back leaves the page, no history spam).
   const consumedInitialHash = useRef(false);
+  // A-11(5) (v1.7.1): the card the consumed hash opened — the corrective
+  // scroll below is armed for it once.
+  const [hashScrollTarget, setHashScrollTarget] = useState<string | null>(null);
   useEffect(() => {
     if (consumedInitialHash.current || !gate.settled || settings === null) return;
     consumedInitialHash.current = true;
@@ -357,36 +361,28 @@ export default function CalculatorsLayout() {
     // block:'nearest' on the commit where it opens — at cold load the content
     // above (bar + sections) is still settling, so that scroll can no-op
     // against a transient position and later layout pushes the card below
-    // the fold. Re-run the scroll once the card's position has been STABLE
-    // for two consecutive 50ms ticks (bounded at 10). setTimeout, not rAF:
-    // rAF never fires in a hidden/background tab, which would strand a deep
-    // link opened there. Interactive opens never take this path (the hash is
-    // consumed ONCE), so clicking a visible trigger keeps its jank-free
-    // 'nearest' behavior.
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let lastTop: number | null = null;
-    let stableTicks = 0;
-    let ticks = 0;
-    const settleTick = () => {
-      const el = document.getElementById(target);
-      if (!el) return;
-      const top = el.getBoundingClientRect?.().top ?? 0;
-      stableTicks = lastTop !== null && Math.abs(top - lastTop) < 1 ? stableTicks + 1 : 0;
-      lastTop = top;
-      ticks += 1;
-      if (stableTicks >= 2 || ticks >= 10) {
-        // A hidden tab never animates a smooth scroll (frames are throttled
-        // to zero) — jump instantly there, and under reduced motion.
-        const instant = reduced || document.visibilityState !== 'visible';
-        el.scrollIntoView?.({ block: 'nearest', behavior: instant ? 'auto' : 'smooth' });
-        return;
-      }
-      window.setTimeout(settleTick, 50);
-    };
-    window.setTimeout(settleTick, 50);
+    // the fold. The layout re-runs the scroll once the card's position has
+    // SETTLED (the effect below). Interactive opens never take this path (the
+    // hash is consumed ONCE), so clicking a visible trigger keeps its
+    // jank-free 'nearest' behavior.
+    setHashScrollTarget(target);
   }, [gate.settled, settings, hiddenSet, isCardAvailable]);
+
+  // A-11(5) (v1.7.1): the corrective scroll runs on the shared
+  // scrollIntoViewWhenSettled — two stable 50 ms ticks, bounded at 10;
+  // setTimeout, not rAF, so a hidden tab never strands it; instant under
+  // reduced motion or in a hidden tab — block:'nearest' as before. THIS
+  // effect arms it, keyed on the consumed target, and returns the helper's
+  // cancel, so an unmount mid-settle stops the poll (the inline loop had no
+  // cancel). It is deliberately not the consume effect's cleanup: settings,
+  // hiddenSet and isCardAvailable can change identity while the poll runs,
+  // and a cleanup there would cancel the scroll with no re-arm
+  // (consumedInitialHash is already set).
+  useEffect(() => {
+    const target = hashScrollTarget;
+    if (target === null) return;
+    return scrollIntoViewWhenSettled(() => document.getElementById(target), 'nearest');
+  }, [hashScrollTarget]);
 
   useEffect(() => {
     if (!consumedInitialHash.current) return;

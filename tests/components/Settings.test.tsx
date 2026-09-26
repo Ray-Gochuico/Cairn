@@ -50,11 +50,12 @@ describe('Settings page', () => {
     ]) {
       expect(h2s).toContain(title);
     }
-    // 12 section titles + the interview disclosure body's own
-    // '## Mechanical frameworks, not advice' markdown heading (the CI-47
-    // body is verbatim legal copy; DisclosureViewer renders body h2s by
-    // design — see its [&_h2] prose styling).
-    expect(h2s).toHaveLength(13);
+    // 12 section titles. The interview disclosure body's own
+    // '## Mechanical frameworks, not advice' heading used to be a 13th h2;
+    // since A-11(2) (v1.7.1) DisclosureViewer renders markdown headings one
+    // level under its <h3> title, so it is an h4 (the body text is unchanged).
+    expect(h2s).toHaveLength(12);
+    expect(screen.getByRole('heading', { level: 4, name: 'Mechanical frameworks, not advice' })).toBeInTheDocument();
   });
 
   it('renders a sticky section table-of-contents with anchors to every section', () => {

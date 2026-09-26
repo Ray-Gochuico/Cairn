@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { formatCurrency, formatDate, withTrueMinus } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CHART_NEUTRAL } from '@/components/charts/palette';
 import type {
@@ -46,16 +46,17 @@ export interface AccountBreakdownCardProps {
   emptyMessage?: string;
 }
 
-/** "+10.0%" / "-3.4%" from a fraction (0.1 -> "+10.0%"). Mirrors GrowthCard. */
+/** "+10.0%" / "−3.4%" from a fraction (0.1 -> "+10.0%"). Mirrors GrowthCard (v1.7.1 M1: U+2212). */
 function formatPct(fraction: number): string {
   const pct = fraction * 100;
   const sign = pct >= 0 ? '+' : '';
-  return `${sign}${pct.toFixed(1)}%`;
+  return withTrueMinus(`${sign}${pct.toFixed(1)}%`);
 }
 
-/** Whole-percent label for the stacked bar / row share (e.g. 0.5 -> "50%"). */
+/** Whole-percent label for the stacked bar / row share (e.g. 0.5 -> "50%";
+ *  a negative account's share reads "−25%" — v1.7.1 M1). */
 function formatShare(fraction: number): string {
-  return `${(fraction * 100).toFixed(0)}%`;
+  return withTrueMinus(`${(fraction * 100).toFixed(0)}%`);
 }
 
 /**

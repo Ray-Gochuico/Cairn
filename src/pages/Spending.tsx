@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { formatCurrencyCents, formatDate, formatMonth } from '@/lib/format';
+import { formatCurrencyCents, formatDate, formatMonth, TRUE_MINUS } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -493,7 +493,7 @@ export default function Spending() {
                 label="Gross minus spending"
                 value={filter === 'joint'
                   ? '—'
-                  : `${cashflow.net >= 0 ? '+' : ''}$${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  : `${cashflow.net >= 0 ? '+' : TRUE_MINUS}$${Math.abs(cashflow.net).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                 subtitle={filter === 'joint'
                   ? 'Income is per-person — never joint.'
                   : "Not take-home surplus — taxes aren't deducted"}
