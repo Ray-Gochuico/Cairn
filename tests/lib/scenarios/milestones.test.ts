@@ -94,6 +94,43 @@ describe('detectMilestones', () => {
     expect(detectMilestones([], fiParams).netWorth30y).toBeUndefined();
   });
 
+  // v1.8.0 A-3a (CR-A3-2): the milestone carries the elapsed months of the
+  // state netWorth30y was read from, counted from monthISO exactly as toReal
+  // counts them (real.ts) — the display recipe's exponent, so the scoreboard
+  // can equal the chart's own state at that month (the m4 law).
+  describe("netWorth30yElapsedMonths — the horizon state's own elapsed months (A-3a)", () => {
+    /** n consecutive engine months from 2026-05 (engine.ts addMonths), net worth 1000 + i. */
+    const run = (n: number): MonthlyState[] =>
+      Array.from({ length: n }, (_, i) => ({
+        monthISO: `${2026 + Math.floor((4 + i) / 12)}-${String(((4 + i) % 12) + 1).padStart(2, '0')}`,
+        investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {},
+        netWorth: 1000 + i, incomeAfterTax: 0, expenses: 0, savings: 0, events: [],
+      }));
+
+    it('reads 359 at the 30-year mark (360 and 480 states: 2026-05 → 2056-04), never the final state', () => {
+      expect(run(360)[359].monthISO).toBe('2056-04');
+      expect(detectMilestones(run(360), fiParams)).toMatchObject({ netWorth30y: 1359, netWorth30yElapsedMonths: 359 });
+      expect(detectMilestones(run(480), fiParams)).toMatchObject({ netWorth30y: 1359, netWorth30yElapsedMonths: 359 });
+    });
+
+    it("reads the final state's offset on a shorter horizon (a 23-year horizon → 275)", () => {
+      expect(detectMilestones(run(276), fiParams)).toMatchObject({ netWorth30y: 1275, netWorth30yElapsedMonths: 275 });
+    });
+
+    it('counts months from monthISO like toReal, not array positions (two states a year apart → 12)', () => {
+      const states = buildStates([
+        { month: '2026-05', netWorth: 900_000, debt: 0, expenses: 0 },
+        { month: '2027-05', netWorth: 1_025_000, debt: 0, expenses: 0 },
+      ]);
+      expect(detectMilestones(states, fiParams)).toMatchObject({ netWorth30y: 1_025_000, netWorth30yElapsedMonths: 12 });
+    });
+
+    it('a one-state projection reads month 0; an empty one carries no stamp', () => {
+      expect(detectMilestones(run(1), fiParams).netWorth30yElapsedMonths).toBe(0);
+      expect(detectMilestones([], fiParams).netWorth30yElapsedMonths).toBeUndefined();
+    });
+  });
+
   it('detects the retirement month (first month where incomeAfterTax transitions to 0)', () => {
     const states: MonthlyState[] = [
       { monthISO: '2026-05', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
