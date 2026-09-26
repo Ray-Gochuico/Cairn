@@ -71,6 +71,10 @@ export interface BootScreenOptions {
 /** CR-U-9: an armed row ignores clicks for this long after arming, so the
  * second click of a double-click can never confirm. */
 const ARM_GUARD_MS = 500;
+/** CR-U-23b: the second click of a double-click (detail > 1) is dropped only
+ * this long after arming. After it, any click confirms — a slow macOS
+ * double-click setting can make a deliberate click arrive as detail 2. */
+const MULTI_CLICK_WINDOW_MS = 1500;
 
 const TEXT_COLOR = '#1f2937';
 const ERROR_COLOR = '#dc2626';
@@ -471,9 +475,10 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         return;
       }
       // CR-U-9: never the second click of a double-click, never inside the
-      // arm window. U1F-m16: a slow double-click setting can turn a
-      // deliberate click into detail 2 — say once, politely, what to do.
-      if (ev.detail > 1) {
+      // arm window. U1F-m16/CR-U-23b: a slow double-click setting can turn a
+      // deliberate click into detail 2 — the multi-click drop is bounded to
+      // MULTI_CLICK_WINDOW_MS, and the first drop says once what to do.
+      if (ev.detail > 1 && ctx.now() - armedAt < MULTI_CLICK_WINDOW_MS) {
         if (!multiClickNoted) {
           multiClickNoted = true;
           ctx.status.textContent = 'Confirm restore is ready — select it once more to replace your data.';

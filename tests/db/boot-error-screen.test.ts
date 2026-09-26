@@ -884,6 +884,52 @@ describe('CR-U-20g (U1F-m16) — a dropped multi-click on an armed row is announ
   });
 });
 
+describe('CR-U-23b — a multi-click is dropped only within 1500 ms of arming (the slow-double-click trap)', () => {
+  const NOTE = 'Confirm restore is ready — select it once more to replace your data.';
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+
+  async function arm() {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    return { btn, armedAt: clockMs };
+  }
+
+  it('a detail-2 click at +1499 ms is dropped (with the once-per-arm notice)', async () => {
+    const { btn, armedAt } = await arm();
+    clockMs = armedAt + 1499;
+    clickWith(btn, 2);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+    expect(root.querySelector('[data-testid="boot-restore-status"]')!.textContent).toBe(NOTE);
+  });
+
+  it('a detail-2 click at +1500 ms is accepted: it restores once', async () => {
+    const { btn, armedAt } = await arm();
+    clockMs = armedAt + 1500;
+    clickWith(btn, 2);
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+  });
+
+  it('the 500 ms absolute guard still holds for a detail-1 click', async () => {
+    const { btn, armedAt } = await arm();
+    clockMs = armedAt + 499;
+    clickWith(btn, 1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });
