@@ -29,6 +29,8 @@ import { seedAtSchema, seedBefore0030 } from './upgrade-path-seed';
 let dir: string;
 let all: Migration[];
 let FRESH: string[];
+/** Rows a fresh build's migrations seed, per table (reference data: tax_rules, categories, tickers, household, …). */
+let FRESH_ROWS: Record<string, number>;
 
 async function schemaOf(db: SqliteAdapter): Promise<string[]> {
   const rows = await db.select<{ type: string; name: string; tbl_name: string; sql: string | null }>(
@@ -67,6 +69,7 @@ beforeAll(async () => {
   const fresh = new SqliteAdapter(path.join(dir, 'fresh.db'));
   await runMigrations(fresh, all);
   FRESH = await schemaOf(fresh);
+  FRESH_ROWS = await countsOf(fresh);
   await fresh.close();
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -100,6 +103,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
   const at29: Record<string, number> = {};
   let before: Record<string, number>;
   let after: Record<string, number>;
+  let seededAtN: Record<string, number>; // what the migrations alone seed by schema n (no user rows)
   let db: SqliteAdapter;
 
   beforeAll(async () => {
@@ -123,6 +127,13 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     at.disclosureOnDelete = (await one<{ on_delete: string }>(built, "SELECT on_delete FROM pragma_foreign_key_list('disclosure_acceptances')")).on_delete;
     await seedAtSchema(built, n);
     before = await countsOf(built);
+    const plain = new SqliteAdapter(':memory:');
+    try {
+      await runMigrations(plain, all.slice(0, n));
+      seededAtN = await countsOf(plain);
+    } finally {
+      await plain.close();
+    }
     await built.close(); // checkpoints the WAL: the file on disk is what a relaunch opens
     db = new SqliteAdapter(file);
     await runMigrations(db, all);
@@ -165,8 +176,18 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     expect(await readChainMarker(db)).toBeNull();
   });
 
-  it('every row is preserved: each table that existed at the released schema holds exactly as many rows after the chain', () => {
-    for (const [t, c] of Object.entries(before)) expect([t, after[t]]).toEqual([t, c]);
+  // Code review CR-U3-8d: exact for the USER's rows, neutral to the chain's own
+  // seeds. A table's user rows are its rows beyond what the migrations seed (at
+  // schema n before the chain, in a fresh build after it), so a later
+  // reference-data migration (a new tax_rules row, a new category) changes
+  // both sides alike, while a migration that drops or duplicates a user row
+  // still fails here.
+  it('every user row is preserved: each table that existed at the released schema holds exactly its user rows after the chain', () => {
+    const userRows = (counts: Record<string, number>, seeded: Record<string, number>) =>
+      Object.keys(before).map((t) => [t, counts[t] - (seeded[t] ?? 0)]);
+    expect(userRows(after, FRESH_ROWS)).toEqual(userRows(before, seededAtN));
+    // The comparison is not vacuous: every table the migrations leave empty holds user rows here.
+    expect(userRows(before, seededAtN).filter(([t, c]) => !seededAtN[t] && c === 0)).toEqual([]);
   });
 
   it('the upgraded schema is identical to a fresh build (normalized sqlite_master)', async () => {
