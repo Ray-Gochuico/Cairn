@@ -225,3 +225,74 @@ describe('release.yml — every build job needs the test gate directly (v1.8.0 T
     }
   });
 });
+
+// v1.8.0 T12 (post-release review L18): tag mode checks only the previous tag's
+// row and this release's, so a later edit of an intermediate row ('v1.8.0': 56
+// → 57) would drop a shipped schema from the upgrade harness with every test
+// green. The release gate also runs the guard's --all mode, which re-checks
+// every tag's row against the tag itself; the tag exists by then, so --all can
+// pass (before `git tag` it refuses the new row). Pinned the P5 way, like the
+// U3 steps above: live name line, exact run line, no if: / continue-on-error:,
+// inside the test gate, after the tag-mode guard.
+const ALL_TAGS_STEP = {
+  name: 'Released-schema guard (every tag)',
+  run: 'node scripts/released-schema-guard.mjs --all',
+} as const;
+
+/** Why the test gate does NOT run the guard's --all mode as a live, blocking step after the tag-mode guard ([] = it does). */
+function allTagsGuardProblems(yml: string): string[] {
+  const job = testGateJob(yml);
+  if (job === '') return ['the test-gate: job block was not found — renamed? re-point this pin'];
+  const block = stepBlock(job, `      - name: ${ALL_TAGS_STEP.name}`);
+  if (block === '') return [`the test gate has no live "- name: ${ALL_TAGS_STEP.name}" step`];
+  const problems: string[] = [];
+  if (!block.split('\n').includes(`        run: ${ALL_TAGS_STEP.run}`)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" does not run \`${ALL_TAGS_STEP.run}\` on a live line`);
+  }
+  if (/^[ \t]*(?:continue-on-error|if)[ \t]*:/m.test(block)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" is conditional or non-blocking (if: / continue-on-error:)`);
+  }
+  const tagMode = stepBlock(job, `      - name: ${STEPS[1].name}`);
+  if (tagMode === '' || job.indexOf(block) < job.indexOf(tagMode)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" does not run after "${STEPS[1].name}"`);
+  }
+  return problems;
+}
+
+describe('release.yml — the test gate re-checks every released tag with the guard (v1.8.0 T12, post-release review L18)', () => {
+  it('runs `node scripts/released-schema-guard.mjs --all` live and blocking in the test gate, after the tag-mode guard, once in the file', () => {
+    expect(allTagsGuardProblems(YML)).toEqual([]);
+    expect(YML.split(`        run: ${ALL_TAGS_STEP.run}\n`).length - 1).toBe(1);
+  });
+
+  it('the pin refuses the --all step commented out, non-blocking, conditional, renamed, moved or re-pointed (planted)', () => {
+    const NAME_LINE = `      - name: ${ALL_TAGS_STEP.name}\n`;
+    const RUN_LINE = `        run: ${ALL_TAGS_STEP.run}\n`;
+    const start = YML.indexOf(NAME_LINE);
+    const end = YML.indexOf(RUN_LINE, start) + RUN_LINE.length;
+    expect(start, 'the landed --all step was not found').toBeGreaterThan(-1);
+    const step = YML.slice(start, end);
+    const without = YML.replace(`\n${step}`, '');
+    const planted: Record<string, string> = {
+      'step removed': without,
+      'commented out': YML.replace(step, step.replace(/^ {6}/gm, '      # ')),
+      'run line commented': YML.replace(RUN_LINE, RUN_LINE.replace('        run:', '        # run:')),
+      'name line commented (the run folds into the step above)': YML.replace(NAME_LINE, NAME_LINE.replace('      - name:', '      # - name:')),
+      'continue-on-error': YML.replace(RUN_LINE, `${RUN_LINE}        continue-on-error: true\n`),
+      'if: false': YML.replace(NAME_LINE, `${NAME_LINE}        if: false\n`),
+      '|| true': YML.replace(RUN_LINE, RUN_LINE.replace(/\n$/, ' || true\n')),
+      'tag mode instead of --all': YML.replace(RUN_LINE, '        run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"\n'),
+      renamed: YML.replace(NAME_LINE, '      - name: Released-schema guard\n'),
+      'moved into its own job': without.replace(
+        '\n  build-macos-arm64:\n',
+        `\n  all-tags:\n    runs-on: macos-14\n    steps:\n${step}\n  build-macos-arm64:\n`,
+      ),
+      'before the tag-mode guard': without.replace(`      - name: ${STEPS[1].name}\n`, `${step}\n      - name: ${STEPS[1].name}\n`),
+    };
+    for (const [label, text] of Object.entries(planted)) expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+    const survivors = Object.entries(planted)
+      .filter(([, text]) => allTagsGuardProblems(text).length === 0)
+      .map(([label]) => label);
+    expect(survivors, 'plants the pin let through').toEqual([]);
+  });
+});
