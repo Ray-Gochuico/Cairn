@@ -251,6 +251,12 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     .map((m) => registryOrdinal(m.version))
     .find((o) => o !== undefined);
   const origin = migrations.length - pending.length;
+  // Code review CR-U3-7: the schema the file held before ANY attempt of this
+  // update. A file a pre-U3 runner left partway still shows it as
+  // 0 < user_version < applied (that runner stamped only after a full chain);
+  // this chain's first commit stamps that signal away, so the marker carries
+  // it. Otherwise the origin is what the file already had.
+  const markOrigin = currentVersion > 0 && currentVersion < origin ? currentVersion : origin;
   const existing = await readChainMarker(db);
   // A resumed chain keeps the marker it already has (its origin is the true
   // one); a marker for another target is stale and is replaced.
@@ -275,7 +281,7 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     if (i === 0 && markChain) {
       batch.push(clearMarkers, {
         sql: 'INSERT INTO schema_migrations (version) VALUES (?)',
-        params: [`chain:${origin}->${lastOrdinal}`],
+        params: [`chain:${markOrigin}->${lastOrdinal}`],
       });
     }
     if (i === pending.length - 1) batch.push(clearMarkers);

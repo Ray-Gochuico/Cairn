@@ -86,6 +86,34 @@ describe('maybeTakePreUpdateCopy × the chain marker', () => {
     expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: 55, now: expect.any(Date), originFrom: 53 });
   });
 
+  // Code review CR-U3-7: the gate → runner → gate hand-off on a file a PRE-U3
+  // runner left partway. Its only origin signal is 0 < user_version < applied,
+  // and the first U3 commit stamps it away, so the runner's marker must carry
+  // that origin, not its own applied count. The copy store below follows
+  // takePreUpdateCopy's reuse order (the originFrom copy, then today's from→to
+  // copy, else a new one), so copyIsFromBeforeUpdate is observed, not assumed.
+  it('a v1.7.0-partway file that fails AGAIN after a U3 commit keeps its TRUE origin: both boots report chainOrigin 52, and neither calls a partway copy "from before the update"', async () => {
+    await runMigrations(db, all.slice(0, 53));
+    await db.execute('PRAGMA user_version = 52');   // a v1.7.0 chain from 52 committed 0053, then stopped
+    await db.execute('ALTER TABLE tickers ADD COLUMN regular_market_change REAL'); // 0055's first statement will collide
+    const copies: { from: number; to: number; name: string }[] = [];
+    takePreUpdateCopy.mockImplementation(async ({ from, to, originFrom }: { from: number; to: number; originFrom?: number }) => {
+      const hit = copies.find((c) => c.from === originFrom) ?? copies.find((c) => c.from === from && c.to === to);
+      if (hit) return { path: `/x/backups/${hit.name}`, reused: true };
+      const name = `cairn-pre-update-${from}-to-${to}-20260925-10150${copies.length}.db`;
+      copies.push({ from, to, name });
+      return { path: `/x/backups/${name}`, reused: false };
+    });
+
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', chainOrigin: 52, copyIsFromBeforeUpdate: false });
+    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 53, to: 55, now: expect.any(Date), originFrom: 52 });
+    expect(await readChainMarker(db)).toEqual({ origin: 52, target: 55 }); // 0054 committed WITH the marker; user_version is now 54
+
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', chainOrigin: 52, copyIsFromBeforeUpdate: false });
+    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: 55, now: expect.any(Date), originFrom: 52 });
+    expect(copies.map((c) => c.from)).toEqual([53, 54]); // the 53→55 copy (already partway) is never reused as the origin
+  });
+
   // Plan review R-2: driven through initDatabase(), so a boot that ran the
   // runner before the gate would be seen (the gate alone can never write a marker).
   it('ORDER (through initDatabase): the copy sees the file before THIS attempt touches it — applied 53, no marker', async () => {

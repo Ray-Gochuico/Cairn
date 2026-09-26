@@ -71,6 +71,26 @@ describe('the update-chain marker (runner side)', () => {
     expect((await pendingMigrations(db, all)).applied).toBe(5);
   });
 
+  // Code review CR-U3-7: a file a pre-U3 runner left partway carries its origin
+  // only as 0 < user_version < applied; the marker must keep that origin.
+  it('a chain on a PRE-U3 partway file (user_version 52 < applied 53) marks origin 52; a user_version of 0 or ≥ applied is not an origin', async () => {
+    await runMigrations(db, all.slice(0, 53));
+    await db.execute('PRAGMA user_version = 52');
+    await expect(runMigrations(db, failAt(54))).rejects.toThrow(/u3_missing/);
+    expect(await readChainMarker(db)).toEqual({ origin: 52, target: 55 });
+    for (const uv of [0, 55]) {   // a pre-guard dev file (0), and a pre-U3 runner's constant stamp after a subset (55)
+      const other = new SqliteAdapter(':memory:');
+      try {
+        await runMigrations(other, all.slice(0, 53));
+        await other.execute(`PRAGMA user_version = ${uv}`);
+        await expect(runMigrations(other, failAt(54))).rejects.toThrow(/u3_missing/);
+        expect([uv, await readChainMarker(other)]).toEqual([uv, { origin: 53, target: 55 }]);
+      } finally {
+        await other.close();
+      }
+    }
+  });
+
   it('a stale marker for another target is replaced by the next chain and removed when it finishes', async () => {
     await runMigrations(db, all.slice(0, 50));
     await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:47->53')");
