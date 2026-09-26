@@ -11,6 +11,7 @@ type Id = keyof typeof DISCLOSURES;
 describe('tests/helpers/disclosure-versions — the one literal version table (A-7(7))', () => {
   it('carries exactly the five registry ids', () => {
     expect(Object.keys(DISCLOSURE_VERSIONS).sort()).toEqual(Object.keys(DISCLOSURES).sort());
+    expect(Object.keys(DISCLOSURE_VERSIONS)).toHaveLength(5); // the name's "five", pinned (D7 review)
   });
 
   it('every value is an x.y version string', () => {

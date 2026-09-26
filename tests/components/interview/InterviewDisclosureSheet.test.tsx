@@ -22,7 +22,8 @@ describe('InterviewDisclosureSheet — the what-changed note (A-7(5))', () => {
     expect(note.open).toBe(false);
     expect(within(note).getByText(`What changed in version ${DISCLOSURE_VERSIONS.interview}`)).toBeInTheDocument();
     // D-D7-4 (plan review): on open, focus sits on the note's summary, the first
-    // tabbable element in the sheet (before the note: the Close button).
+    // tabbable element in the sheet (before A-7(5), focus opened on the Close
+    // button, which now follows the note).
     expect(document.activeElement).toBe(within(note).getByText(`What changed in version ${DISCLOSURE_VERSIONS.interview}`));
     expect(within(note).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
       DISCLOSURES.interview.diffFromPrevious,
