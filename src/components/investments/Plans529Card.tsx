@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { Account, AccountSnapshot, Contribution, Dependent } from '@/types/schema';
 import { formatCurrency } from '@/lib/format';
 import type { RegisteredFigure } from '@/lib/calculators/basis-view';
+import { FUTURE_SUFFIX } from '@/lib/calculators/basis-vocabulary';
 
 /**
  * 529 Plans card body — extracted 1:1 from the Investments page cardRegistry
@@ -133,9 +134,10 @@ function Plans529CardImpl({
                   </div>
                   {dep != null && (
                     // W5.1 (F8, D-W51-8): a nominal FV — PINNED future dollars, phrased on the row.
+                    // v1.7.1 A-5a: the mark is the vocabulary's FUTURE_SUFFIX, never retyped.
                     <div className="font-mono tabular-nums" data-testid="plan529-at-18">
                       {formatCurrency(projected)}{' '}
-                      <span className="text-muted-foreground">at 18 (future $)</span>
+                      <span className="text-muted-foreground">{`at 18 ${FUTURE_SUFFIX}`}</span>
                     </div>
                   )}
                 </div>
