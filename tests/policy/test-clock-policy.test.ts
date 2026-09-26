@@ -43,7 +43,8 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   // uses vi.useFakeTimers + setSystemTime, which the detector counts as
   // fake-timer usage.
   'tests/domain/fund-holdings.test.ts',
-  'tests/lib/loan-history.test.ts',
+  // loan-history.test.ts pruned 2026-09 (v1.8.0 A-2′): its default-anchor describe
+  // uses fake timers; four legacy tests still read the real clock (chip).
   'tests/market/price-cache.test.ts',
   'tests/pdf/layout.test.ts',
   'tests/stores/properties-store.test.ts',

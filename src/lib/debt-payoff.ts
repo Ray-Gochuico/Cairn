@@ -7,6 +7,7 @@
  * future consumers.
  */
 import { amortize, nextPaymentDateFrom, type Amortization } from '@/lib/amortization';
+import { localTodayISO } from '@/lib/dates';
 import type { Loan } from '@/types/schema';
 
 export type Strategy = 'none' | 'snowball' | 'avalanche';
@@ -49,8 +50,9 @@ export function projectionsFor(
   loans: Loan[],
   strategy: Strategy,
   extraTotal: number,
-  /** Injectable for tests / deterministic rendering; anchors the remaining schedule. */
-  todayISO: string = new Date().toISOString().slice(0, 10),
+  /** Injectable for tests / deterministic rendering; anchors the remaining schedule.
+   *  Defaults to the LOCAL calendar day (v1.8.0 A-2′). */
+  todayISO: string = localTodayISO(),
 ): LoanProjection[] {
   const targetIdx = pickStrategyTargetIndex(loans, strategy);
   return loans.map((loan, i) => {

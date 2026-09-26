@@ -2,7 +2,7 @@
  * T6 Fix-3: Verify domain math is exported from @/lib/debt-payoff (not the card).
  * The card re-exports nothing after the refactor; consumers import from the lib.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   pickStrategyTargetIndex,
   projectionsFor,
@@ -88,5 +88,39 @@ describe('projectionsFor (from @/lib/debt-payoff)', () => {
     expect(p.amortization.monthlyPayment).toBe(500);
     expect(p.amortization.schedule[0].interest).toBeCloseTo(50, 2);
     expect(p.amortization.schedule[0].principal).toBeCloseTo(450, 2);
+  });
+});
+
+describe('v1.8.0 A-2′: projectionsFor\'s todayISO default is the LOCAL day (the next-payment anchor)', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  // LA_EVENING: Dec 31, 2025 19:00 PST — UTC day Jan 1. AKL_MORNING: Jan 1, 2026 09:00 NZDT — UTC day Dec 31.
+  const laEvening = () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+  };
+  const aklMorning = () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+  };
+  // A loan paying on the 31st: from Dec 31 the next payment is Dec 31 itself; from Jan 1
+  // it is Jan 31 (nextPaymentDateFrom steps monthly, clamping the 31st to each month's end).
+  const loan = makeLoan({ firstPaymentDate: '2020-01-31', monthlyPayment: 200, currentBalance: 5_000, termMonths: 120 });
+
+  it('LA evening (Dec 31 locally): the first remaining payment is 2025-12-31', () => {
+    laEvening();
+    expect(projectionsFor([loan], 'none', 0)[0].amortization.schedule[0].paymentDate).toBe('2025-12-31');
+  });
+
+  it('Auckland morning (Jan 1 locally): the first remaining payment is 2026-01-31', () => {
+    aklMorning();
+    expect(projectionsFor([loan], 'none', 0)[0].amortization.schedule[0].paymentDate).toBe('2026-01-31');
   });
 });
