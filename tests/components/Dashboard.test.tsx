@@ -726,6 +726,37 @@ describe('net-worth MoM pill (Wave 2 §2)', () => {
     // '+$14,988 (+124900.0%)' and this query would fail.
     expect(within(netWorthCard).getByText('+$14,988')).toBeInTheDocument();
   });
+
+  it('M1 (v1.7.1): a down month reads "−$5,000 (−25.0%)" — one true minus on the dollar AND the percent (the chart header\'s glyph)', () => {
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 20_000 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: 15_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('−$5,000 (−25.0%)')).toBeInTheDocument();
+    expect(netWorthCard.textContent).toBe('Net Worth$15,000−$5,000 (−25.0%)vs last month');
+  });
+
+  it('M1 (D-M1-3): a negative total reads "−$5,000" on the Net Worth and Liquid Investments pills — the values share the delta\'s glyph', () => {
+    // A negative balance is writable (the CSV snapshot importer and the monthly window accept one).
+    primeStores({
+      accounts: [{ id: 1, type: AccountType.ACCOUNT_CASH, name: 'Checking' }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 1_000 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: -5_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const byLabel = (label: string) => cards.find((c) => within(c).queryByText(label))!;
+    expect(byLabel('Net Worth').textContent).toBe('Net Worth−$5,000−$6,000 (−600.0%)vs last month');
+    expect(within(byLabel('Liquid Investments')).getByTestId('metric-card-value').textContent).toBe('−$5,000');
+  });
 });
 
 describe('Dashboard load gate (W10 S3/S4, M3)', () => {

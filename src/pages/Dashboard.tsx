@@ -52,7 +52,7 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { useViewScope } from '@/lib/use-view-scope';
 import { partitionHidden } from '@/lib/view-scope';
 import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
-import { formatPercent } from '@/lib/format';
+import { formatPercent, withTrueMinus } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -153,18 +153,21 @@ const signedCurrencyFormatter = new Intl.NumberFormat('en-US', {
   signDisplay: 'always',
 });
 
+// v1.7.1 M1: both Intl formatters above lead a negative with the ASCII hyphen;
+// withTrueMinus swaps exactly that glyph (the value and grouping never move),
+// so the pills read "−$5,000 (−25.0%)" like the chart header beside them.
 function formatUSD(value: number): string {
-  return currencyFormatter.format(value);
+  return withTrueMinus(currencyFormatter.format(value));
 }
 
 function formatSignedUSD(value: number): string {
-  return signedCurrencyFormatter.format(value);
+  return withTrueMinus(signedCurrencyFormatter.format(value));
 }
 
-/** " (+50.0%)" suffix for a pct already vetted by deltaPctOrNull (0–100 scale). */
+/** " (+50.0%)" / " (−50.0%)" suffix for a pct already vetted by deltaPctOrNull (0–100 scale). */
 function formatPctSuffix(pct: number): string {
   const sign = pct >= 0 ? '+' : '';
-  return ` (${sign}${pct.toFixed(1)}%)`;
+  return ` (${withTrueMinus(`${sign}${pct.toFixed(1)}`)}%)`;
 }
 
 
