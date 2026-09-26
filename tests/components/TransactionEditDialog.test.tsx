@@ -261,7 +261,8 @@ describe('TransactionEditDialog', () => {
       const onSaved = renderRow(t);
       await user.click(screen.getByLabelText('Reimbursable'));
       await user.click(screen.getByRole('button', { name: /^save$/i }));
-      await user.click(await screen.findByRole('button', { name: 'Clear and save' }));
+      const confirmDialog = await screen.findByRole('dialog', { name: CONFIRM_TITLE });
+      await user.click(within(confirmDialog).getByRole('button', { name: 'Clear and save' }));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
       expect(await stored(t.id!)).toEqual({ merchant: 'Skyline Bistro', reimbursable: 0, reimbursed_at: null, reimbursed_amount: null });
     });
@@ -272,7 +273,9 @@ describe('TransactionEditDialog', () => {
       const onSaved = renderRow(t);
       await user.click(screen.getByLabelText('Reimbursable'));
       await user.click(screen.getByRole('button', { name: /^save$/i }));
-      await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+      // Scoped to the confirm: the editor has its own Cancel button.
+      const confirmDialog = await screen.findByRole('dialog', { name: CONFIRM_TITLE });
+      await user.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }));
       await waitFor(() => expect(screen.queryByRole('dialog', { name: CONFIRM_TITLE })).toBeNull());
       expect(screen.getByRole('dialog', { name: 'Edit transaction' })).toBeInTheDocument();
       expect(screen.getByLabelText('Reimbursable')).not.toBeChecked();
