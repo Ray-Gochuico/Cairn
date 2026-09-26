@@ -575,30 +575,34 @@ pub async fn db_validate_backup(path: String) -> Result<BackupValidation, String
 /// CONTRACT: the JS caller MUST have already closed the live pool
 /// (`Database.close()` → `plugin:sql|close`) and awaited it before invoking
 /// this — see the module-level safety note and `src/lib/backup-restore.ts`.
-/// This command re-validates `source` (defence in depth) and, only if valid,
-/// replaces the live database file, setting its WAL sidecars aside until the
-/// swap has succeeded (CR-U-15). On success the JS
-/// side reloads the webview to re-init on the restored database. Returns an
-/// error (and leaves the live DB untouched) if validation fails.
+/// The command resolves the live file path the plugin uses and hands both
+/// paths to `restore_checked`, which re-validates `source` (defence in
+/// depth) and, only if valid, replaces the live database file, setting its
+/// WAL sidecars aside until the swap has succeeded (CR-U-15). On success the
+/// JS side reloads the webview to re-init on the restored database. Returns
+/// an error (and leaves the live DB untouched) if validation fails.
 #[tauri::command]
 pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Result<(), String> {
-    let source_path = PathBuf::from(&source);
+    let live_path = resolve_sqlite_path(&app, &db)?;
+    restore_checked(Path::new(&source), &live_path).await
+}
 
+/// The testable core of `db_restore` (v1.7.2, L37): everything the command
+/// does once the live path is known, so both guards are pinned by
+/// `cargo test` without an `AppHandle` (the house split, as
+/// `sample_reset_guarded`).
+async fn restore_checked(source: &Path, live: &Path) -> Result<(), String> {
     // 1. Re-validate BEFORE touching anything destructive (the UI validated
     //    too, but the file could have changed between pre-flight and confirm).
-    let validation = validate_backup_file(&source_path).await;
+    let validation = validate_backup_file(source).await;
     if !validation.ok {
         return Err(validation
             .reason
             .unwrap_or_else(|| "The selected file is not a valid Cairn backup.".to_string()));
     }
 
-    // 2. Resolve the live file path the plugin uses.
-    let live_path = resolve_sqlite_path(&app, &db)?;
-
-    // Guard against a no-op self-restore that would truncate the live file
-    // (copying a file onto itself via std::fs::copy is undefined/destructive).
-    if let (Ok(a), Ok(b)) = (source_path.canonicalize(), live_path.canonicalize()) {
+    // 2. Never restore the live file onto itself.
+    if let (Ok(a), Ok(b)) = (source.canonicalize(), live.canonicalize()) {
         if a == b {
             return Err("db_restore: the selected backup IS the live database.".to_string());
         }
@@ -607,9 +611,7 @@ pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Re
     // 3. Swap the file; the old sidecars are set aside and put back if the
     //    swap fails. The live pool was closed by the JS caller before this
     //    invoke (or was never loaded, on the boot-screen path).
-    replace_database_file(&source_path, &live_path).await?;
-
-    Ok(())
+    replace_database_file(source, live).await
 }
 
 /// The ONE database URL `db_sample_reset` may touch (W4 D-S8). Mirrored in TS
@@ -1541,6 +1543,48 @@ mod tests {
     fn real_sync_reports_a_failure() {
         let dir = tempfile::tempdir().unwrap();
         assert!(real_sync(&dir.path().join("does-not-exist.db")).is_err());
+    }
+
+    // ---- v1.7.2 L37: db_restore's core, driven without an AppHandle. ----
+
+    #[tokio::test]
+    async fn restore_checked_refuses_an_invalid_source_with_its_own_reason_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let junk = dir.path().join("junk.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let reason = validate_backup_file(&junk).await.reason.expect("junk is refused");
+        let err = restore_checked(&junk, &live).await.unwrap_err();
+        assert_eq!(err, reason, "the validator's reason, as it is");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn restore_checked_refuses_the_live_file_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("finance.db");
+        seeded_pool(&live).await.close().await;
+        let before = std::fs::read(&live).unwrap();
+        let err = restore_checked(&live, &live).await.unwrap_err();
+        assert_eq!(err, "db_restore: the selected backup IS the live database.");
+        #[cfg(unix)]
+        {
+            // The same file under another name is the same file.
+            let alias = dir.path().join("alias.db");
+            std::os::unix::fs::symlink(&live, &alias).unwrap();
+            let err = restore_checked(&alias, &live).await.unwrap_err();
+            assert_eq!(err, "db_restore: the selected backup IS the live database.");
+        }
+        assert_eq!(std::fs::read(&live).unwrap(), before, "the live file is byte-for-byte the same");
+        assert!(!restore_tmp_path(&live).exists(), "refused before staging");
+    }
+
+    #[tokio::test]
+    async fn restore_checked_restores_a_valid_backup() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        restore_checked(&backup, &live).await.expect("a valid backup restores");
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+        assert!(!wal.exists() && !shm.exists(), "the replaced file's sidecars went with it");
+        assert!(!restore_tmp_path(&live).exists());
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
