@@ -307,6 +307,21 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     ).toBeInTheDocument();
   });
 
+  it('while exploring, the real profile notes stay put: the raw updater keys show neither the end line nor the alert (D-S7, prefKey)', async () => {
+    localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    sessionStorage.setItem(INSTALLED_KEY, '1.7.1');
+    sessionStorage.setItem(FAILURE_KEY, 'Failed to move the new app into place.');
+    render(<UpdaterSection reload={vi.fn()} />);
+    await screen.findByText('1.7.0'); // let the version read settle
+    expect(screen.getByTestId('sample-mode-updater-note')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(INSTALLED)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    // An explore mount never takes the real profile's notes.
+    expect(sessionStorage.getItem(INSTALLED_KEY)).toBe('1.7.1');
+    expect(sessionStorage.getItem(FAILURE_KEY)).toBe('Failed to move the new app into place.');
+  });
+
   it('a failed CHECK keeps its own line (never the install line)', async () => {
     mockCheck.mockRejectedValue(new Error('network unreachable'));
     const user = userEvent.setup();
