@@ -11,7 +11,9 @@ import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { MAX_SCHEMA_VERSION } from '@/db/migrations';
 import { rotateBackups } from '@/lib/backup-restore';
-import { PreUpdateCopyError, takePreUpdateCopy } from '@/lib/pre-update-copy';
+import { DEFINITIVE_INVALID_PHRASES, PreUpdateCopyError, isDefinitivelyInvalidCopy, takePreUpdateCopy } from '@/lib/pre-update-copy';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 const mockAppConfigDir = appConfigDir as unknown as ReturnType<typeof vi.fn>;
@@ -420,3 +422,26 @@ describe('THE LOOP PROOF (critic a): a failed-migration boot + restore never evi
     expect(removed()).toEqual([`${DIR}/cairn-20260910-000000.db`]);   // the oldest MANUAL, never the family file
   });
 });
+
+describe('CR-U-20d (U1F-m4) — the sweep phrases are pinned across the two languages, both ways', () => {
+  const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
+
+  it("the cargo pin (validate_reasons_carry_the_phrases_the_pre_update_sweep_reads) tests exactly the JS matcher's phrases", () => {
+    const m = /const DEFINITIVE: \[&str; \d+\] = \[([\s\S]*?)\];/.exec(rust);
+    expect(m, 'the cargo DEFINITIVE array').not.toBeNull();
+    expect([...m![1].matchAll(/"([^"]+)"/g)].map((x) => x[1])).toEqual([...DEFINITIVE_INVALID_PHRASES]);
+  });
+
+  it("of the validator's own reject texts, ONLY the quick_check and the no-schema_migrations ones are definitive", () => {
+    const start = rust.indexOf('pub async fn validate_backup_file');
+    const body = rust.slice(start, rust.indexOf('\n}\n', start));
+    const literals = [...body.matchAll(/reject\(\s*(?:format!\(\s*)?"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]);
+    expect(literals.length).toBe(9);
+    const definitive = literals.filter((l) => isDefinitivelyInvalidCopy(l.replace(/\{[^}]*\}/g, '')));
+    expect(definitive).toEqual([
+      expect.stringContaining('The backup failed an integrity check (quick_check returned'),
+      'This does not look like a Cairn backup (no schema_migrations table).',
+    ]);
+  });
+});
+

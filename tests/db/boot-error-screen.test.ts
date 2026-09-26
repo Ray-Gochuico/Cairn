@@ -691,6 +691,69 @@ describe('CR-U-18 — the hold is scoped to the failed-migration screen and its 
   });
 });
 
+describe('CR-U-20d (U1F-m15/m17) — the arm window edge, the name after every disarm, Escape during a restore', () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    document.body.append(root);
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+  afterEach(() => root.remove());
+  const preName = () => `Restore the copy from before the update, ${whenOf(PRE.takenAt)}`;
+
+  async function arm(err: unknown = new DatabaseCorruptError('x')) {
+    renderBootError(root, err, { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    return { btn, armedAt: clockMs };
+  }
+
+  it('the window is exactly 500 ms: a click at +499 ms restores nothing, a click at +500 ms restores once', async () => {
+    const { btn, armedAt } = await arm();
+    clockMs = armedAt + 499;
+    btn.click();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mRestore).not.toHaveBeenCalled();
+    clockMs = armedAt + 500;
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+  });
+
+  it('the accessible name comes back after Cancel, after Escape and after a "Restore did not start" rejection', async () => {
+    const { btn } = await arm();
+    [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
+    expect(btn.getAttribute('aria-label')).toBe(preName());
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    rows(root)[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(btn.getAttribute('aria-label')).toBe(preName());
+    mRestore.mockRejectedValue(new Error('close failed'));
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
+    expect(btn.getAttribute('aria-label')).toBe(preName());
+  });
+
+  it('Escape while a restore is in flight changes nothing: the confirm label and Cancel stay', async () => {
+    mRestore.mockImplementation(() => new Promise(() => {}));
+    const { btn } = await arm();
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    rows(root)[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(btn.textContent).toBe(armedLabel);
+    expect([...rows(root)[0].querySelectorAll('button')].map((b) => b.textContent)).toEqual([armedLabel, 'Cancel']);
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });

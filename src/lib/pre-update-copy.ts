@@ -50,17 +50,23 @@ export class PreUpdateCopyError extends Error {
  * "(code: N) …" message). Any other rejection — the file could not be opened
  * (a lock, a permission, an I/O error) or its check could not run — says
  * nothing about the file, so the sweep KEEPS it. The phrases are pinned in
- * tests/lib/pre-update-copy.test.ts with the real Rust formats.
+ * tests/lib/pre-update-copy.test.ts with the real Rust formats, and held
+ * equal to the cargo pin's list across the two languages (CR-U-20d).
  */
 export function isDefinitivelyInvalidCopy(reason: string | null): boolean {
   if (reason === null) return false;
-  return (
-    reason.startsWith('The backup failed an integrity check') ||
-    reason.includes('no schema_migrations table') ||
-    reason.includes('file is not a database') ||
-    reason.includes('database disk image is malformed')
-  );
+  return DEFINITIVE_INVALID_PHRASES.some((phrase) => reason.includes(phrase));
 }
+
+/** The definitive phrases, in the order the cargo pin lists them
+ * (src-tauri/src/db_backup.rs validate_reasons_carry_the_phrases_the_pre_update_sweep_reads);
+ * the two lists are held equal by tests/lib/pre-update-copy.test.ts (CR-U-20d). */
+export const DEFINITIVE_INVALID_PHRASES: readonly string[] = [
+  'The backup failed an integrity check',
+  'no schema_migrations table',
+  'file is not a database',
+  'database disk image is malformed',
+];
 
 export interface TakePreUpdateCopyArgs {
   from: number;
