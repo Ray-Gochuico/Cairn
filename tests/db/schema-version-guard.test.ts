@@ -135,6 +135,14 @@ describe('per-migration stamping (v1.7.1 U3): user_version commits WITH each mig
     expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
   });
 
+  // Code review CR-U3-8c: the per-migration `it` above fails before the trailing
+  // stamp runs, so the trailing stamp's own never-lower rule gets its own pin.
+  it('the trailing stamp never LOWERS user_version either: a prefix run on a newer file keeps its stamp', async () => {
+    await runMigrations(db, all);
+    await runMigrations(db, all.slice(0, 53));                   // nothing pending; the last ordinal passed is 53
+    expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION);
+  });
+
   it('the trailing stamp still writes when nothing is pending (the header write PR-1 relies on)', async () => {
     await runMigrations(db, all);
     await db.execute('PRAGMA user_version = 0');                 // a pre-guard dev file
