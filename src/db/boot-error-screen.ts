@@ -646,6 +646,7 @@ export function renderBootError(
     // named for what it is.
     const fromBeforeUpdate = (e as { copyIsFromBeforeUpdate?: unknown }).copyIsFromBeforeUpdate !== false;
     const chainOrigin = (e as { chainOrigin?: unknown }).chainOrigin;
+    const chainTarget = (e as { chainTarget?: unknown }).chainTarget;
     const body =
       typeof copyPath === 'string' && copyPath.length > 0
         ? fromBeforeUpdate
@@ -676,12 +677,17 @@ export function renderBootError(
       now,
       // CR-U-18: only this screen holds, and only for the named true copy.
       holdFor: (entry) => fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
-      // U1F-m10 / CR-U-23a: the named copy when it is a partway one, and
-      // EVERY family copy whose `from` is not the chain's origin, is
-      // labelled for what it is.
+      // U1F-m10 / CR-U-23a/24: the named copy when it is a partway one, and
+      // THIS chain's other partway copies (toward the same target, from a
+      // schema past the origin), are labelled for what they are. Copies from
+      // earlier updates and from newer builds keep 'Before update'.
       notBeforeUpdate: (entry) =>
         (!fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath) ||
-        (typeof chainOrigin === 'number' && typeof entry.schemaFrom === 'number' && entry.schemaFrom !== chainOrigin),
+        (typeof chainOrigin === 'number' &&
+          typeof chainTarget === 'number' &&
+          typeof entry.schemaFrom === 'number' &&
+          entry.schemaTo === chainTarget &&
+          entry.schemaFrom > chainOrigin),
     });
     root.replaceChildren(container);
     return;

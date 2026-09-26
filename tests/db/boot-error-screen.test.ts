@@ -1036,12 +1036,17 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(pane).not.toContain('Cairn could not finish updating your data');
   });
 
-  it('CR-U-23a: EVERY family row whose schemaFrom is not the chain origin is labelled honestly; the origin copy keeps "Before update"', async () => {
+  it('CR-U-23a/24: only THIS chain\'s partway copies (to = the target, from > the origin) read "Saved before this attempt"; every other copy keeps its label', async () => {
     const NAMED = { ...PRE, name: 'cairn-pre-update-54-to-55-20260926-090000.db', path: '/x/backups/cairn-pre-update-54-to-55-20260926-090000.db', takenAt: new Date(2026, 8, 26, 9, 0, 0), schemaFrom: 54 };
     const EARLIER_PARTWAY = { ...PRE, name: 'cairn-pre-update-54-to-55-20260925-180000.db', path: '/x/backups/cairn-pre-update-54-to-55-20260925-180000.db', takenAt: new Date(2026, 8, 25, 18, 0, 0), schemaFrom: 54 };
-    mList.mockResolvedValue([NAMED, EARLIER_PARTWAY, PRE, MANUAL]);
-    renderBootError(root, new MigrationFailedError(new Error('x'), NAMED.path, false, 53));
-    await vi.waitFor(() => expect(rows(root)).toHaveLength(4));
+    // CR-U-24: rows from EARLIER updates and from newer builds keep their labels.
+    const OLDER_CHAIN = { ...PRE, name: 'cairn-pre-update-52-to-53-20260801-090000.db', path: '/x/backups/cairn-pre-update-52-to-53-20260801-090000.db', takenAt: new Date(2026, 7, 1, 9, 0, 0), schemaFrom: 52, schemaTo: 53 };
+    const OLDER_TO_TARGET = { ...PRE, name: 'cairn-pre-update-52-to-55-20260701-090000.db', path: '/x/backups/cairn-pre-update-52-to-55-20260701-090000.db', takenAt: new Date(2026, 6, 1, 9, 0, 0), schemaFrom: 52, schemaTo: 55 };
+    const NEWER_BUILD = { ...PRE, name: 'cairn-pre-update-57-to-58-20260927-090000.db', path: '/x/backups/cairn-pre-update-57-to-58-20260927-090000.db', takenAt: new Date(2026, 8, 27, 9, 0, 0), schemaFrom: 57, schemaTo: 58 };
+    const DIFFERENT_TO = { ...PRE, name: 'cairn-pre-update-54-to-56-20260924-090000.db', path: '/x/backups/cairn-pre-update-54-to-56-20260924-090000.db', takenAt: new Date(2026, 8, 24, 9, 0, 0), schemaFrom: 54, schemaTo: 56 };
+    mList.mockResolvedValue([NAMED, EARLIER_PARTWAY, PRE, MANUAL, OLDER_CHAIN, OLDER_TO_TARGET, NEWER_BUILD, DIFFERENT_TO]);
+    renderBootError(root, new MigrationFailedError(new Error('x'), NAMED.path, false, 53, 55));
+    await vi.waitFor(() => expect(rows(root)).toHaveLength(8));
     const label = (i: number) => rows(root)[i].querySelector('span')?.textContent;
     const name = (i: number) => rows(root)[i].querySelector('button')?.getAttribute('aria-label');
     expect(label(0)).toBe(`Saved before this attempt — ${whenOf(NAMED.takenAt)}`);
@@ -1049,7 +1054,13 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(name(1)).toBe(`Restore the copy saved before this attempt, ${whenOf(EARLIER_PARTWAY.takenAt)}`);
     expect(label(2)).toBe(`Before update — ${whenOf(PRE.takenAt)}`);          // schemaFrom 53 = the origin
     expect(name(2)).toBe(`Restore the copy from before the update, ${whenOf(PRE.takenAt)}`);
-    expect(label(3)).toBe(whenOf(MANUAL.takenAt));
+    // pre-update rows list first, in listBackups order: [NAMED, EARLIER_PARTWAY, PRE, OLDER_CHAIN, OLDER_TO_TARGET, NEWER_BUILD, DIFFERENT_TO, MANUAL]
+    expect(label(3)).toBe(`Before update — ${whenOf(OLDER_CHAIN.takenAt)}`);    // an earlier update (different to)
+    expect(label(4)).toBe(`Before update — ${whenOf(OLDER_TO_TARGET.takenAt)}`); // an earlier chain toward the same target: from < origin
+    expect(name(4)).toBe(`Restore the copy from before the update, ${whenOf(OLDER_TO_TARGET.takenAt)}`);
+    expect(label(5)).toBe(`Before update — ${whenOf(NEWER_BUILD.takenAt)}`);    // a newer build's copy
+    expect(label(6)).toBe(`Before update — ${whenOf(DIFFERENT_TO.takenAt)}`);   // from > origin, but not toward this target
+    expect(label(7)).toBe(whenOf(MANUAL.takenAt));
   });
 
   it('CR-U-23a: without a known origin, the NAMED partway copy is still matched by path; the others keep their labels', async () => {

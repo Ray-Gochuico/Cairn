@@ -89,4 +89,9 @@ describe('MigrationFailedError', () => {
     expect(new MigrationFailedError('x', '/x/a.db').chainOrigin).toBeNull();
     expect(new MigrationFailedError('x', '/x/a.db', false, 53).chainOrigin).toBe(53);
   });
+
+  it("CR-U-24: carries the update's target schema (default null)", () => {
+    expect(new MigrationFailedError('x', '/x/a.db').chainTarget).toBeNull();
+    expect(new MigrationFailedError('x', '/x/a.db', false, 53, 55).chainTarget).toBe(55);
+  });
 });

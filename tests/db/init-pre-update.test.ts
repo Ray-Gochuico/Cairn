@@ -215,6 +215,7 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
       preUpdateCopyPath: partwayCopy,
       copyIsFromBeforeUpdate: false,
       chainOrigin: 53,                                            // CR-U-23a: the chain started at 53
+      chainTarget: all.length,                                    // CR-U-24: …toward 55
     });
   });
 
@@ -227,11 +228,11 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
 
   it('maybeTakePreUpdateCopy alone: { copyPath, updating }, with the path in Tauri while updating, a null path in the browser, and updating false once migrated', async () => {
     await atSchema53();
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true, copyIsFromBeforeUpdate: true, chainOrigin: 53 });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true, copyIsFromBeforeUpdate: true, chainOrigin: 53, chainTarget: all.length });
     isTauri.mockReturnValue(false);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true, copyIsFromBeforeUpdate: false, chainOrigin: 53 });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true, copyIsFromBeforeUpdate: false, chainOrigin: 53, chainTarget: all.length });
     await runMigrations(db, all);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false, copyIsFromBeforeUpdate: false, chainOrigin: null });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false, copyIsFromBeforeUpdate: false, chainOrigin: null, chainTarget: null });
   });
 });
 

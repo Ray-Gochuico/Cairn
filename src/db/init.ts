@@ -133,7 +133,7 @@ export async function maybeTakePreUpdateCopy(
 ): Promise<PreUpdateGate> {
   const { applied, pending } = await pendingMigrations(db, migrations);
   const updating = applied > 0 && pending.length > 0;
-  const none = { copyPath: null, updating, copyIsFromBeforeUpdate: false, chainOrigin: null };
+  const none = { copyPath: null, updating, copyIsFromBeforeUpdate: false, chainOrigin: null, chainTarget: null };
   if (!updating) return none;
   const userVersion = await readUserVersion(db);
   if (userVersion > MAX_SCHEMA_VERSION) return none;
@@ -141,13 +141,14 @@ export async function maybeTakePreUpdateCopy(
   const originFrom = userVersion > 0 && userVersion < applied ? userVersion : undefined;
   // CR-U-23a: the schema before ANY attempt of this update.
   const chainOrigin = originFrom ?? applied;
-  if (!isTauriRuntime() || opts.skipCopy) return { ...none, chainOrigin };
+  const chainTarget = migrations.length; // CR-U-24: the schema this update moves to
+  if (!isTauriRuntime() || opts.skipCopy) return { ...none, chainOrigin, chainTarget };
   const { path } = await takePreUpdateCopy({ from: applied, to: migrations.length, now: new Date(), originFrom });
   // U1-m9: the copy holds the data from before the update only when its
   // `from` is the chain's origin (the file's schema before ANY attempt).
   const name = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
   const copyIsFromBeforeUpdate = parsePreUpdateCopyName(name)?.schemaFrom === chainOrigin;
-  return { copyPath: path, updating, copyIsFromBeforeUpdate, chainOrigin };
+  return { copyPath: path, updating, copyIsFromBeforeUpdate, chainOrigin, chainTarget };
 }
 
 export interface PreUpdateGate {
@@ -160,6 +161,8 @@ export interface PreUpdateGate {
   copyIsFromBeforeUpdate: boolean;
   /** The schema before ANY attempt of this update; null when not updating. */
   chainOrigin: number | null;
+  /** The schema this update moves to; null when not updating. */
+  chainTarget: number | null;
 }
 
 export async function initDatabase(): Promise<void> {
@@ -225,7 +228,7 @@ async function initRealDatabase(gateOpts: { skipCopy: boolean; holdUpdate: boole
     // Nothing was being updated (nothing pending, or a fresh file): not an
     // update failure, so the generic screen, as in 1.7.0 (D-U1-19).
     if (!gate.updating) throw e;
-    throw new MigrationFailedError(e, gate.copyPath, gate.copyIsFromBeforeUpdate, gate.chainOrigin);
+    throw new MigrationFailedError(e, gate.copyPath, gate.copyIsFromBeforeUpdate, gate.chainOrigin, gate.chainTarget);
   }
   // U1F-m10: the note says whether its copy is from before the update.
   if (gate.copyPath !== null) stashPostUpdateNotice(gate.copyPath, gate.copyIsFromBeforeUpdate);
