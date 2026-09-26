@@ -39,7 +39,8 @@
 //! 3. `db_restore` re-validates (defence in depth) and then
 //!    `replace_database_file` performs an ATOMIC swap that always leaves a valid
 //!    `finance.db` (full ordering + crash analysis on that function): it stages
-//!    the backup into a sibling temp file, sets the OLD `-wal`/`-shm` sidecars
+//!    the backup into a sibling temp file THROUGH SQLite (`VACUUM INTO`, so a
+//!    `-wal` beside the backup is read too — v1.7.2), sets the OLD `-wal`/`-shm` sidecars
 //!    ASIDE (renamed, put back if the swap fails, deleted only after it
 //!    succeeds — v1.7.1 CR-U-15), then `rename`s the temp file over `finance.db`.
 //!    The live file is NEVER the copy target, so the in-copy truncation window a
@@ -68,7 +69,7 @@
 //! enforced in `src/lib/backup-restore.ts`.
 
 use serde::Serialize;
-use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{ConnectOptions, Connection, Pool, Row, Sqlite};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -252,12 +253,15 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///      folder, then restore again (never 'try again': that button re-runs the
 ///      boot). A leftover `-shm` set-aside is the rebuildable index — no data
 ///      — so it never refuses: it is removed best-effort (CR-U-25).
-///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`),
-///      make it owner-writable (a read-only backup stages a read-only copy)
-///      and flush it to stable storage (`sync_all`). A failure here leaves
-///      `live` and its sidecars untouched (the temp file is removed). `live`
-///      is never the copy target, so the in-copy truncation window of a plain
-///      `fs::copy(backup, live)` does not exist.
+///   1. Stage `backup` → a temp file in the SAME directory
+///      (`<live>.restore-tmp`) THROUGH SQLite (v1.7.2, L1): `backup` is opened
+///      read-only by filename and copied with `VACUUM INTO`, so committed
+///      frames in a `-wal` beside a WAL-mode backup reach the staged file,
+///      which is one self-contained rollback-mode file. Make it
+///      owner-writable and flush it to stable storage (`sync_all`). A
+///      failure here leaves `live` and its sidecars untouched (the temp file
+///      is removed). `live` is never the copy target, so the in-copy
+///      truncation window of a plain `fs::copy(backup, live)` does not exist.
 ///   2. RENAME the old `-wal` / `-shm` aside to `<sidecar>.restore-old` (a
 ///      missing sidecar is skipped). They must not sit next to the restored
 ///      file — a stale WAL would be replayed over it on reopen — but they are
@@ -345,8 +349,8 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
 
     // 0a. Never restore FROM this module's own staging file (U1F-m9): step 1
-    //     would truncate it while copying it onto itself, and an empty file
-    //     would be swapped in.
+    //     removes a leftover staging file before staging, so restoring FROM
+    //     it would delete the file chosen.
     if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
         if src == staging {
             return Err(
@@ -373,15 +377,43 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
         let _ = std::fs::remove_file(shm_aside);
     }
 
-    // 1. Stage the restore in a sibling temp file. A mid-copy failure here
-    //    cannot corrupt `live` because `live` is never the copy target.
-    if let Err(e) = std::fs::copy(backup, &tmp) {
+    // 1. Stage the restore in a sibling temp file, THROUGH SQLite (v1.7.2,
+    //    L1): `std::fs::copy` took the main file alone, so a backup with a
+    //    `-wal` beside it (a raw copy of a data folder taken while Cairn was
+    //    open) restored older than the file the validator had checked, or
+    //    empty. A failure here cannot corrupt `live`: it is never the copy
+    //    target. VACUUM INTO refuses a non-empty target, so a staging file an
+    //    interrupted restore left is removed first (`fs::copy` overwrote it;
+    //    step 0a refuses to restore FROM it).
+    let _ = std::fs::remove_file(&tmp);
+    if let Err(e) = stage_through_sqlite(backup, &tmp).await {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
         ));
     }
     Ok(())
+}
+
+/// Step 1's copy (v1.7.2, L1; CR-172-1): open `backup` read-only BY FILENAME
+/// (no URL parsing, L8) and `VACUUM INTO` `tmp` (`backup_to`). SQLite reads
+/// a `-wal` beside a WAL-mode source; the output is one self-contained
+/// rollback-mode file, created fresh, so no mode bits or file flags come
+/// with it. The source is only read: its main file and `-wal` are never
+/// written.
+async fn stage_through_sqlite(backup: &Path, tmp: &Path) -> Result<(), String> {
+    let opts = SqliteConnectOptions::new()
+        .filename(backup)
+        .read_only(true)
+        .create_if_missing(false);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .map_err(|e| e.to_string())?;
+    let staged = backup_to(&pool, tmp).await;
+    pool.close().await;
+    staged
 }
 
 /// The rest of `replace_database_file`, on the staged `<live>.restore-tmp`:
@@ -397,10 +429,10 @@ fn swap_staged(
     let sidecars = sidecar_paths(live);
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
 
-    //    `fs::copy` carries the backup's permission bits, so a read-only
-    //    backup would stage a read-only copy that cannot be opened for the
-    //    flush below — and would become a read-only finance.db. Make it
-    //    owner-writable first (CR-U-22).
+    //    SQLite creates the staged file with its default mode less the
+    //    process umask, so an unusual umask could still stage a read-only
+    //    copy that cannot be opened for the flush below — and would become a
+    //    read-only finance.db. Make it owner-writable first (CR-U-22).
     if let Err(e) = make_owner_writable(&tmp) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
@@ -972,10 +1004,10 @@ mod tests {
 
         replace_database_file(&backup, &live).await.expect("replace");
 
-        // The live file now matches the backup byte-for-byte...
-        let backup_bytes = std::fs::read(&backup).unwrap();
-        let live_bytes = std::fs::read(&live).unwrap();
-        assert_eq!(live_bytes, backup_bytes, "live file should equal the backup");
+        // The live file now holds exactly the backup's content (v1.7.2: the
+        // staged file is rebuilt through SQLite, so its header bookkeeping —
+        // the schema cookie — differs from the backup's bytes)...
+        assert_eq!(db_content(&live).await, db_content(&backup).await, "the live file holds the backup's content");
         // ...and opens as the restored DB with the seeded rows...
         assert_eq!(count_rows(&live, "accounts").await, 2);
         // ...and the stale sidecars are gone.
@@ -1257,7 +1289,7 @@ mod tests {
     async fn replace_database_file_success_removes_the_old_sidecars_and_their_set_aside_copies() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         replace_database_file(&backup, &live).await.expect("replace");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!wal.exists() && !shm.exists(), "the old sidecars are gone");
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "their set-aside copies are gone too");
         assert!(!restore_tmp_path(&live).exists());
@@ -1376,7 +1408,7 @@ mod tests {
         assert!(first.contains("The index file"), "{first}");
         assert!(aside(&shm).exists(), "the stuck -shm set-aside is still there");
         replace_database_file(&backup, &live).await.expect("the leftover -shm set-aside does not block the next restore");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!wal.exists() && !shm.exists());
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "no set-aside file is left behind");
         assert_eq!(count_rows(&live, "accounts").await, 2);
@@ -1521,7 +1553,7 @@ mod tests {
         // NIT (b): the BACKUP itself is untouched — still read-only, same bytes.
         assert!(std::fs::metadata(&backup).unwrap().permissions().readonly(), "the backup keeps its read-only mode");
         assert_eq!(std::fs::read(&backup).unwrap(), backup_before, "the backup's bytes are untouched");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
         assert!(!restore_tmp_path(&live).exists());
         assert_eq!(count_rows(&live, "accounts").await, 2);
@@ -1645,6 +1677,233 @@ mod tests {
         let err = restore_checked(&junk, &live).await.unwrap_err();
         assert!(err.contains("file is not a database"), "{err}");
         assert_untouched(&live, &wal, &shm);
+    }
+
+    // ---- v1.7.2 L1 (CR-172-1/4): what was validated is what is restored. ----
+
+    /// Every schema object's SQL, every row of every table (SQL-quoted), and
+    /// `user_version`: what "holds the backup's content" means once the
+    /// staged file is rebuilt through SQLite (its header bookkeeping — the
+    /// schema cookie — differs from the source's bytes by design).
+    async fn db_content(path: &Path) -> Vec<String> {
+        let url = format!("sqlite://{}?mode=ro", path.to_string_lossy());
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.expect("open");
+        let uv: i64 = sqlx::query("PRAGMA user_version").fetch_one(&pool).await.unwrap().get(0);
+        let mut out = vec![format!("user_version {uv}")];
+        let objects = sqlx::query("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        for o in &objects {
+            let (ty, name, sql): (String, String, Option<String>) = (o.get(0), o.get(1), o.get(2));
+            out.push(format!("{ty} {name}: {}", sql.unwrap_or_default()));
+            if ty == "table" {
+                let cols: Vec<String> = sqlx::query(&format!("SELECT name FROM pragma_table_info('{name}')"))
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap()
+                    .iter()
+                    .map(|c| format!("quote(\"{}\")", c.get::<String, _>(0)))
+                    .collect();
+                let rows = sqlx::query(&format!("SELECT {} FROM \"{name}\" ORDER BY rowid", cols.join(" || '|' || ")))
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+                out.extend(rows.iter().map(|r| format!("{name}: {}", r.get::<String, _>(0))));
+            }
+        }
+        pool.close().await;
+        out
+    }
+
+    /// A raw copy of a WAL-mode data folder taken while Cairn had it open
+    /// (Finder, Time Machine): `finance.db` + `-wal` + `-shm`, copied with the
+    /// writer still connected. With `checkpoint_first`, two accounts are in
+    /// the main file; three more (all five without it, plus every table) are
+    /// committed in the copied `-wal` only.
+    async fn raw_copy_of_an_open_wal_database(dir: &Path, checkpoint_first: bool) -> PathBuf {
+        let orig = dir.join("open");
+        std::fs::create_dir(&orig).unwrap();
+        let open = orig.join("finance.db");
+        let url = format!("sqlite://{}?mode=rwc", open.to_string_lossy());
+        // ONE connection: the PRAGMAs are per connection.
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.unwrap();
+        for sql in [
+            "PRAGMA journal_mode = WAL",
+            "PRAGMA wal_autocheckpoint = 0",
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)",
+            "INSERT INTO schema_migrations (version) VALUES ('0001_initial')",
+            "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT)",
+            "INSERT INTO accounts (name) VALUES ('Checking'), ('Brokerage')",
+        ] {
+            sqlx::query(sql).execute(&pool).await.unwrap();
+        }
+        sqlx::query(&format!("PRAGMA user_version = {MAX_SCHEMA_VERSION}")).execute(&pool).await.unwrap();
+        if checkpoint_first {
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO accounts (name) VALUES ('Roth IRA'), ('HSA'), ('529')").execute(&pool).await.unwrap();
+        let copied = dir.join("copied");
+        std::fs::create_dir(&copied).unwrap();
+        for suffix in ["", "-wal", "-shm"] {
+            let from = PathBuf::from(format!("{}{suffix}", open.display()));
+            std::fs::copy(&from, PathBuf::from(format!("{}{suffix}", copied.join("finance.db").display()))).unwrap();
+        }
+        pool.close().await;
+        copied.join("finance.db")
+    }
+
+    #[tokio::test]
+    async fn restore_of_a_partly_checkpointed_wal_source_restores_the_rows_it_validated() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        // Precondition: the main file alone is older — the -wal holds 3 rows.
+        let main_only = dir.path().join("main-only.db");
+        std::fs::copy(&src, &main_only).unwrap();
+        assert_eq!(count_rows(&main_only, "accounts").await, 2, "the main file alone has 2 accounts");
+        let validated = validate_backup_file(&src).await;
+        assert!(validated.ok, "{:?}", validated.reason);
+        let validated_rows = count_rows(&src, "accounts").await;
+        assert_eq!(validated_rows, 5, "what the validator reads: main file + -wal");
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(count_rows(&live, "accounts").await, validated_rows, "rows validated == rows restored");
+    }
+
+    #[tokio::test]
+    async fn restore_of_a_never_checkpointed_wal_source_is_not_an_empty_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), false).await;
+        let main_only = dir.path().join("main-only.db");
+        std::fs::copy(&src, &main_only).unwrap();
+        assert_eq!(count_tables_named(&main_only, "accounts").await, 0, "the main file alone has no tables yet");
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(db_content(&live).await, db_content(&src).await, "every table, row and the schema version");
+        assert_eq!(count_rows(&live, "accounts").await, 5);
+    }
+
+    #[tokio::test]
+    async fn the_restored_file_is_one_self_contained_rollback_mode_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), false).await;
+        let (_live_dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        // Read the header before any connection opens the restored file.
+        let header = std::fs::read(&live).unwrap();
+        assert_eq!(&header[..16], b"SQLite format 3\0");
+        assert_eq!((header[18], header[19]), (1, 1), "rollback mode: the file alone is the whole database");
+        assert!(!wal.exists() && !shm.exists(), "no -wal or -shm beside the restored file");
+        for suffix in ["-wal", "-shm", "-journal"] {
+            let beside_tmp = PathBuf::from(format!("{}{suffix}", restore_tmp_path(&live).display()));
+            assert!(!beside_tmp.exists(), "nothing left beside the staging file: {suffix}");
+        }
+    }
+
+    #[tokio::test]
+    async fn restore_leaves_the_source_files_byte_identical() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        // The Settings pre-flight (DataSection doRestore) validates first; a
+        // reader writes its lock slots into an existing -shm index there.
+        assert!(validate_backup_file(&src).await.ok);
+        let files = |p: &Path| ["", "-wal", "-shm"].map(|suffix| std::fs::read(format!("{}{suffix}", p.display())).ok());
+        let before = files(&src);
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(files(&src), before, "the source's main file, -wal and -shm are byte-identical");
+        let mut listed: Vec<String> = std::fs::read_dir(src.parent().unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        listed.sort();
+        assert_eq!(listed, ["finance.db", "finance.db-shm", "finance.db-wal"], "nothing added beside the source");
+    }
+
+    /// CR-U-22 stays load-bearing now that SQLite creates the staged file
+    /// fresh (only an unusual umask would make it read-only): pinned on the
+    /// swap half directly, with a read-only staged copy.
+    #[tokio::test]
+    async fn swap_staged_makes_a_read_only_staged_copy_writable_before_its_flush() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let tmp = restore_tmp_path(&live);
+        std::fs::copy(&backup, &tmp).unwrap();
+        let mut ro = std::fs::metadata(&tmp).unwrap().permissions();
+        ro.set_readonly(true);
+        std::fs::set_permissions(&tmp, ro).unwrap();
+        swap_staged(&live, &mut |from: &Path, to: &Path| std::fs::rename(from, to), &mut |p: &Path| real_sync(p))
+            .expect("a read-only staged copy is made writable, flushed and swapped in");
+        assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+    }
+
+    /// Cairn's own backups are rollback-mode files, so reading one needs no
+    /// file beside it: a backup in a folder Cairn cannot write (a read-only
+    /// volume, a locked folder) restores as it did with `fs::copy`.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_backup_in_a_folder_cairn_cannot_write_still_restores() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        let inside = locked.join("backup.db");
+        std::fs::copy(&backup, &inside).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = restore_checked(&inside, &live).await;
+
+        let listed = std::fs::read_dir(&locked).unwrap().count();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.expect("a backup in a read-only folder restores");
+        assert_eq!(listed, 1, "nothing was created beside the backup");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
+    }
+
+    /// The Time Machine / read-only-volume shape (v1.7.2 plan review): a raw
+    /// copy of an open WAL database, `-shm` included, read-only files in a
+    /// folder Cairn cannot write. SQLite reads a read-only `-shm` from its own
+    /// memory and still replays the `-wal`, so every committed row is
+    /// restored, and the staging adds nothing beside the source.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_raw_wal_copy_in_a_folder_cairn_cannot_write_restores_every_row() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        let folder = src.parent().unwrap().to_path_buf();
+        for suffix in ["", "-wal", "-shm"] {
+            let file = format!("{}{suffix}", src.display());
+            std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o444)).unwrap();
+        }
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        let result = restore_checked(&src, &live).await;
+        let mut listed: Vec<String> = std::fs::read_dir(&folder)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        listed.sort();
+
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.expect("a raw WAL copy in a read-only folder restores");
+        assert_eq!(listed, ["finance.db", "finance.db-shm", "finance.db-wal"], "nothing added beside the source");
+        assert_eq!(count_rows(&live, "accounts").await, 5, "every committed row, the -wal's included");
+    }
+
+    #[tokio::test]
+    async fn a_staging_file_left_by_an_interrupted_restore_does_not_block_the_next_one() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        std::fs::write(restore_tmp_path(&live), b"LEFT BY AN INTERRUPTED RESTORE").unwrap();
+        replace_database_file(&backup, &live).await.expect("restores over the leftover");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
+        assert!(!restore_tmp_path(&live).exists());
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
