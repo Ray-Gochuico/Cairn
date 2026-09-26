@@ -167,6 +167,52 @@ function splitStatements(sql: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * v1.7.1 U3: a registry migration's schema version is its 1-based position in
+ * MIGRATION_REGISTRY (equal to its 4-digit prefix — pinned in
+ * tests/policy/migrations-policy.test.ts). Undefined for any other name, so a
+ * test's synthetic migration stamps nothing.
+ */
+function registryOrdinal(version: string): number | undefined {
+  const i = MIGRATION_REGISTRY.findIndex(([v]) => v === version);
+  return i === -1 ? undefined : i + 1;
+}
+
+/**
+ * v1.7.1 U3 (U1 chip b): the in-progress marker of an UPDATE CHAIN — a
+ * `schema_migrations` row `chain:<origin>-><target>` that the runner writes in
+ * the SAME batch as the chain's first pending migration and deletes in the
+ * batch of its last. Per-migration stamping makes a file an interrupted update
+ * left partway read like a clean schema-k file (user_version === applied); the
+ * marker keeps the schema the file held before ANY attempt of this update, so
+ * the pre-update gate (src/db/init.ts) still resumes from the origin copy
+ * (D-U1-17). It is never a registry key (keys are `NNNN_name`), and
+ * pendingMigrations counts registry names only, so it never inflates `applied`.
+ */
+export interface ChainMarker {
+  origin: number;
+  target: number;
+}
+const CHAIN_MARKER_LIKE = 'chain:%';
+const CHAIN_MARKER_RE = /^chain:(\d+)->(\d+)$/;
+
+/** READ-ONLY: the chain marker, or null (no schema_migrations table, or no marker row). */
+export async function readChainMarker(db: Database): Promise<ChainMarker | null> {
+  const tables = await db.select<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+  );
+  if ((tables[0]?.n ?? 0) === 0) return null;
+  const rows = await db.select<{ version: string }>(
+    'SELECT version FROM schema_migrations WHERE version LIKE ?',
+    [CHAIN_MARKER_LIKE],
+  );
+  for (const r of rows) {
+    const m = CHAIN_MARKER_RE.exec(r.version);
+    if (m) return { origin: Number(m[1]), target: Number(m[2]) };
+  }
+  return null;
+}
+
 export async function runMigrations(db: Database, migrations: Migration[]): Promise<void> {
   // DOWNGRADE GUARD (H3): before doing anything, refuse a database written by a
   // NEWER build. `user_version` is 0 on a fresh DB and on every pre-guard
@@ -192,9 +238,27 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
   );
   const appliedSet = new Set(applied.map((a) => a.version));
 
-  for (const m of migrations) {
-    if (appliedSet.has(m.version)) continue;
+  const pending = migrations.filter((m) => !appliedSet.has(m.version));
+  // v1.7.1 U3: the schema this run ends at — the registry ordinal of the LAST
+  // registry migration in the list passed (55 for the full chain, N for a
+  // prefix). `origin` is how many of the list's migrations this file already
+  // had: an UPDATE CHAIN (origin > 0, two or more pending) carries the marker.
+  const lastOrdinal = [...migrations]
+    .reverse()
+    .map((m) => registryOrdinal(m.version))
+    .find((o) => o !== undefined);
+  const origin = migrations.length - pending.length;
+  const existing = await readChainMarker(db);
+  // A resumed chain keeps the marker it already has (its origin is the true
+  // one); a marker for another target is stale and is replaced.
+  const markChain =
+    origin > 0 && pending.length > 1 && lastOrdinal !== undefined && existing?.target !== lastOrdinal;
+  const clearMarkers: BatchStatement = {
+    sql: 'DELETE FROM schema_migrations WHERE version LIKE ?',
+    params: [CHAIN_MARKER_LIKE],
+  };
 
+  for (const [i, m] of pending.entries()) {
     const statements: BatchStatement[] = splitStatements(m.sql).map((sql) => ({ sql }));
 
     // The audit row records that this migration ran. OR IGNORE so 0001-style
@@ -203,6 +267,14 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
       sql: 'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',
       params: [m.version],
     };
+    const batch: BatchStatement[] = [...statements, auditStmt];
+    if (i === 0 && markChain) {
+      batch.push(clearMarkers, {
+        sql: 'INSERT INTO schema_migrations (version) VALUES (?)',
+        params: [`chain:${origin}->${lastOrdinal}`],
+      });
+    }
+    if (i === pending.length - 1) batch.push(clearMarkers);
 
     // Atomicity, the right way: each migration runs through `executeBatch`,
     // which routes every statement to ONE physical connection.
@@ -229,7 +301,7 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     // it lands outside any transaction, which is correct.
     const selfManaged = statements.some((s) => SELF_MANAGED_TX_RE.test(s.sql));
 
-    await db.executeBatch([...statements, auditStmt], { transaction: !selfManaged });
+    await db.executeBatch(batch, { transaction: !selfManaged });
   }
 
   // STAMP the schema version into the db-file header so future boots (and a

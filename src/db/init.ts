@@ -6,6 +6,7 @@ import {
   loadAllMigrations,
   pendingMigrations,
   readUserVersion,
+  readChainMarker,
   MAX_SCHEMA_VERSION,
   MigrationFailedError,
   type Migration,
@@ -113,9 +114,11 @@ async function initExploreDatabase(): Promise<void> {
  * update failure (D-U1-19): the runner writes on every boot, so a read-only
  * or full file can fail it with nothing pending, and that is not an update.
  * A file too new for this build takes no copy (runMigrations throws
- * SchemaTooNewError next). A file left partway by an earlier boot
- * (0 < user_version < applied, the pre-U3 signal) resumes from the copy that
- * chain started from (D-U1-17). `skipCopy` is "Continue without a copy",
+ * SchemaTooNewError next). A file left partway by an earlier boot resumes
+ * from the copy that chain started from (D-U1-17): the runner's chain marker
+ * names the origin (v1.7.1 U3 — per-migration stamps keep user_version equal
+ * to `applied`), and a file a pre-U3 runner left partway still shows
+ * 0 < user_version < applied. `skipCopy` is "Continue without a copy",
  * consumed by initDatabase at the start of the real branch (D-U1-13).
  *
  * A PreUpdateCopyError propagates: main.tsx renders the fail-closed choice
@@ -143,7 +146,12 @@ export async function maybeTakePreUpdateCopy(
   const userVersion = await readUserVersion(db);
   if (userVersion > MAX_SCHEMA_VERSION) return none;
   if (holdUpdate) throw new UpdateHeldError();
-  const originFrom = userVersion > 0 && userVersion < applied ? userVersion : undefined;
+  // D-U1-17 × U3: the marker counts only for THIS update (its target is this
+  // build's), only for an update chain (origin > 0), and only past its origin.
+  const marker = await readChainMarker(db);
+  const markedOrigin =
+    marker !== null && marker.target === migrations.length && marker.origin > 0 && marker.origin < applied ? marker.origin : undefined;
+  const originFrom = markedOrigin ?? (userVersion > 0 && userVersion < applied ? userVersion : undefined);
   // CR-U-23a: the schema before ANY attempt of this update.
   const chainOrigin = originFrom ?? applied;
   const chainTarget = migrations.length; // CR-U-24: the schema this update moves to

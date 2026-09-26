@@ -73,7 +73,8 @@ export interface TakePreUpdateCopyArgs {
   to: number;
   now: Date;
   /** Partway chain (D-U1-17): the schema the interrupted update STARTED from
-   * (the file's user_version). Its copy is reused whatever the day or `to`. */
+   * (the runner's chain marker, or a pre-U3 file's user_version — src/db/init.ts).
+   * Its copy is reused whatever the day or `to`. */
   originFrom?: number;
 }
 export interface TakePreUpdateCopyResult { path: string; reused: boolean }
