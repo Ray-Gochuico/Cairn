@@ -10,8 +10,13 @@
 // (`git show "<tag>:src/db/migrations.ts"` and `…:src-tauri/src/db_backup.rs`),
 // and exits 1 unless both equal that tag's row in tests/db/released-schemas.ts,
 // so the upgrade harness (tests/db/upgrade-path.test.ts) always starts from
-// every schema that has really shipped. The ref is passed as ONE argv entry
-// (execFileSync, no shell), so zsh's `$t:path` modifier trap cannot bite.
+// every schema that has really shipped. It then checks the release being
+// tagged the same way, reading both pins from the working tree (CI checks the
+// tree out at that tag): its release commit must have added its own row
+// (code review CR-U3-8e), so a release that forgot it stops before it builds.
+// Non-final tags (v1.8.0-rc1) are never a previous release. The ref is passed
+// as ONE argv entry (execFileSync, no shell), so zsh's `$t:path` modifier trap
+// cannot bite.
 //
 // Pure functions + a thin CLI, so tests/scripts/released-schema-guard.test.ts
 // tests the rules without git. Zero dependencies; Node 20 (no TypeScript, no
@@ -93,6 +98,14 @@ function pinsAt(tag) {
   return { js: parseJsPin(read(JS_PIN_PATH)), rust: parseRustPin(read(RUST_PIN_PATH)) };
 }
 
+/** The two pins in the working tree: the release being tagged (CI checks the tree out at it). */
+function pinsInTree() {
+  const read = (p) => {
+    try { return readFileSync(p, 'utf8'); } catch { return ''; }
+  };
+  return { js: parseJsPin(read(JS_PIN_PATH)), rust: parseRustPin(read(RUST_PIN_PATH)) };
+}
+
 export function main(argv) {
   const arg = argv[0];
   if (!arg) {
@@ -108,7 +121,7 @@ export function main(argv) {
   const tags = sortReleaseTags(git(['tag', '-l', 'v*']).split('\n').map((t) => t.trim()).filter(Boolean));
   let targets;
   if (arg === '--all') {
-    targets = tags;
+    targets = tags.map((tag) => ({ tag, pins: pinsAt(tag) }));
     const untagged = Object.keys(recordedMap).filter((t) => !tags.includes(t));
     if (untagged.length > 0) {
       console.error(`${RELEASED_SCHEMAS_PATH} has rows for tags that do not exist: ${untagged.join(', ')}.`);
@@ -122,11 +135,14 @@ export function main(argv) {
       return 1;
     }
     console.log(`previous release of ${arg}: ${previous}`);
-    targets = [previous];
+    targets = [
+      { tag: previous, pins: pinsAt(previous) },
+      { tag: arg, pins: pinsInTree() },
+    ];
   }
   let ok = true;
-  for (const tag of targets) {
-    const verdict = checkTag({ tag, ...pinsAt(tag), recorded: recordedMap[tag] });
+  for (const { tag, pins } of targets) {
+    const verdict = checkTag({ tag, ...pins, recorded: recordedMap[tag] });
     (verdict.ok ? console.log : console.error)(verdict.message);
     ok &&= verdict.ok;
   }

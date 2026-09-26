@@ -100,8 +100,9 @@ jobs:
         run: npx tsc -p tsconfig.node.json --noEmit
 
       - name: Released-schema guard (previous tag)
-        # v1.7.1 U3: the previous release tag's two MAX_SCHEMA_VERSION pins must
-        # equal its row in tests/db/released-schemas.ts. Dry run locally:
+        # v1.7.1 U3: the previous release tag's two MAX_SCHEMA_VERSION pins, and
+        # this release's own (the checked-out tree's), must equal their rows in
+        # tests/db/released-schemas.ts. Dry run locally:
         # `node scripts/released-schema-guard.mjs vX.Y.Z` (or `--all`).
         run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"
 

@@ -4,9 +4,11 @@
  * that tag; the two agree at every tag). FROZEN, and re-derived from the real
  * tags, never hand-typed: `node scripts/released-schema-guard.mjs --all`
  * re-checks every row against `git show "<tag>:…"`, and release.yml's test gate
- * checks the previous tag's row before anything builds. One row per tag, in
- * version order, exactly `  'vX.Y.Z': N,` — the guard reads this file as text.
- * A release commit adds its own row (docs/RELEASING.md).
+ * checks the previous tag's row, and the release's own row against its
+ * checked-out pins, before anything builds. One row per tag, in version order,
+ * exactly `  'vX.Y.Z': N,` — the guard reads this file as text. A release
+ * commit adds its own row (docs/RELEASING.md); the gate refuses a release
+ * without it.
  */
 export const RELEASED_SCHEMAS: Readonly<Record<string, number>> = Object.freeze({
   'v1.0.0': 47,

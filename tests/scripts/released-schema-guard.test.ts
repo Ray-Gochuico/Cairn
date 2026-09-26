@@ -106,17 +106,22 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
   });
   afterAll(() => rmSync(repo, { recursive: true, force: true }));
 
-  it('exits 0 when the previous tag\'s two pins equal its recorded row', () => {
-    recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n");
+  it('exits 0 when the previous tag\'s two pins, and the release\'s own (the checked-out tree\'s), equal their recorded rows', () => {
+    recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.3.0': 4,\n");
     const r = guard('v0.3.0');
-    expect([r.status, r.stdout]).toEqual([0, 'previous release of v0.3.0: v0.2.0\nv0.2.0: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n']);
+    expect([r.status, r.stdout]).toEqual([
+      0,
+      'previous release of v0.3.0: v0.2.0\n' +
+        'v0.2.0: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n' +
+        'v0.3.0: src/db/migrations.ts 4, src-tauri/src/db_backup.rs 4, tests/db/released-schemas.ts 4.\n',
+    ]);
   });
 
   it('exits 1 and says why when the recorded row disagrees with the tag, or is missing', () => {
-    recorded("  'v0.1.0': 3,\n  'v0.2.0': 3,\n");
+    recorded("  'v0.1.0': 3,\n  'v0.2.0': 3,\n  'v0.3.0': 4,\n");
     const wrong = guard('v0.3.0');
     expect([wrong.status, wrong.stderr]).toEqual([1, 'v0.2.0: tests/db/released-schemas.ts records 3; the tag shipped 4.\n']);
-    recorded("  'v0.1.0': 3,\n");
+    recorded("  'v0.1.0': 3,\n  'v0.3.0': 4,\n");
     const missing = guard('v0.3.0');
     expect([missing.status, missing.stderr]).toEqual([1, "v0.2.0: no row in tests/db/released-schemas.ts. Add 'v0.2.0': 4, to it.\n"]);
   });
@@ -128,6 +133,32 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
     expect(guard('--all')).toMatchObject({ status: 1, stderr: 'v0.1.0: tests/db/released-schemas.ts records 4; the tag shipped 3.\n' });
     recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.2.1': 4,\n");
     expect(guard('--all')).toMatchObject({ status: 1, stderr: 'tests/db/released-schemas.ts has rows for tags that do not exist: v0.2.1.\n' });
+  });
+
+  // Code review CR-U3-8e: the release commit adds its OWN row (D-U3-13), and the
+  // gate refuses a release that forgot it or recorded the wrong schema, before
+  // the tag builds, not one release later. CI checks the tree out at the tag,
+  // so the tree's two pins are the tag's.
+  it('exits 1 when the release being tagged has no row of its own, or a row that differs from its checked-out pins', () => {
+    const js = path.join(repo, 'src/db/migrations.ts');
+    const rs = path.join(repo, 'src-tauri/src/db_backup.rs');
+    try {
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n");
+      expect(guard('v0.3.0')).toMatchObject({ status: 1, stderr: "v0.3.0: no row in tests/db/released-schemas.ts. Add 'v0.3.0': 4, to it.\n" });
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.3.0': 3,\n");
+      expect(guard('v0.3.0')).toMatchObject({ status: 1, stderr: 'v0.3.0: tests/db/released-schemas.ts records 3; the tag shipped 4.\n' });
+      writeFileSync(js, 'export const MAX_SCHEMA_VERSION = 5;\n');   // the release bumps the schema…
+      recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.3.0': 5,\n");
+      expect(guard('v0.3.0')).toMatchObject({
+        status: 1,
+        stderr: 'v0.3.0: the two pins disagree at that tag (src/db/migrations.ts 5, src-tauri/src/db_backup.rs 4).\n',
+      });
+      writeFileSync(rs, 'pub const MAX_SCHEMA_VERSION: i64 = 5;\n'); // …in both pins, and records it
+      expect(guard('v0.3.0')).toMatchObject({ status: 0, stderr: '' });
+    } finally {
+      writeFileSync(js, 'export const MAX_SCHEMA_VERSION = 4;\n');
+      writeFileSync(rs, 'pub const MAX_SCHEMA_VERSION: i64 = 4;\n');
+    }
   });
 
   it('exits 2 for a missing or malformed tag argument', () => {
@@ -156,7 +187,7 @@ describe('released-schema guard — the CLI on a throwaway repository (hermetic:
       process.env.GIT_INDEX_FILE = path.join(decoy, '.git', 'index');
       try {
         buildFixtureRepo(other);
-        recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n", other);
+        recorded("  'v0.1.0': 3,\n  'v0.2.0': 4,\n  'v0.3.0': 4,\n", other);
         expect(guard('v0.3.0', other).status).toBe(0);
       } finally {
         for (const [k, v] of Object.entries(saved)) {
