@@ -21,7 +21,13 @@ describe('README — updating on a Mac (v1.7.1 U4)', () => {
 
   it('sits in the Mac install section, above the Windows one', () => {
     const at = README.indexOf(MAC);
-    expect(at).toBeGreaterThan(README.indexOf('### Mac — after the download'));
-    expect(at).toBeLessThan(README.indexOf('### Windows — after the download'));
+    // Bind both heads first: indexOf's -1 for a renamed head would make the
+    // lower bound vacuous.
+    const mac = README.indexOf('### Mac — after the download');
+    const windows = README.indexOf('### Windows — after the download');
+    expect(mac).toBeGreaterThanOrEqual(0);
+    expect(windows).toBeGreaterThanOrEqual(0);
+    expect(at).toBeGreaterThan(mac);
+    expect(at).toBeLessThan(windows);
   });
 });
