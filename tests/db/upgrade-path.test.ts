@@ -105,6 +105,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
   beforeAll(async () => {
     const file = path.join(dir, `schema-${n}.db`);
     const built = await replayTo(file, n, at29);
+    at.stagedSchema = await schemaOf(built); // the staged replay at n, before any row is added (code review CR-U3-8b)
     at.userVersion = await readUserVersion(built);
     at.marker = await readChainMarker(built);
     at.applied = (await pendingMigrations(built, all)).applied;
@@ -176,13 +177,13 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     const out = path.join(dir, `seed-${n}.db`);
     await seedSchemaFile(out, n);
     const seeded = new SqliteAdapter(out);
-    const staged = new SqliteAdapter(path.join(dir, `staged-${n}.db`));
-    await runMigrations(staged, all.slice(0, n));
-    expect(await readUserVersion(seeded)).toBe(n);
-    expect((await pendingMigrations(seeded, all)).applied).toBe(n);
-    expect(await schemaOf(seeded)).toEqual(await schemaOf(staged));
-    await seeded.close();
-    await staged.close();
+    try {
+      expect(await readUserVersion(seeded)).toBe(n);
+      expect((await pendingMigrations(seeded, all)).applied).toBe(n);
+      expect(await schemaOf(seeded)).toEqual(at.stagedSchema); // the staged replay (1..29, the pre-0030 rows, 30..n), not a second prefix run
+    } finally {
+      await seeded.close();
+    }
   });
 });
 
