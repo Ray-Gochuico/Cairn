@@ -6,7 +6,7 @@ import { bootTimeout } from './boot-timeout';
  * The worded-flow default-path pin (worded-onboarding wave): married branch,
  * one account WITH the new balance field via the accounts gate, "no" gates,
  * spec-verbatim CW strings asserted along the way. Runs on the fresh-DB
- * project (:1423) per D-WF16.
+ * project (:1423, or the fresh port of the E2E_PORT_BASE pair) per D-WF16.
  */
 test('fresh profile (worded default): married branch, account with balance, no-gates → data lands, clean console', async ({ page }) => {
   const errors = collectErrors(page);

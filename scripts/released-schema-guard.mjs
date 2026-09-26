@@ -4,6 +4,13 @@
 //
 //   node scripts/released-schema-guard.mjs v1.7.1   # CI passes "${GITHUB_REF_NAME}"
 //   node scripts/released-schema-guard.mjs --all    # every release tag (the CR-U3-3 receipt)
+//   node scripts/released-schema-guard.mjs --all v1.8.0   # every release tag up to and including v1.8.0
+//
+// The bounded --all (v1.8.0 T12) is what the release gate runs, with the tag
+// being released as the bound: a hotfix tagged on an older line after a newer
+// release is checked against the tags up to it, never refused for the newer
+// tag's row, which the older line's released-schemas.ts does not carry. The
+// bound must be a final tag that exists and has its row.
 //
 // It resolves the PREVIOUS release tag (the highest vX.Y.Z below the given
 // one), reads MAX_SCHEMA_VERSION from BOTH pins at that tag
@@ -109,7 +116,7 @@ function pinsInTree() {
 export function main(argv) {
   const arg = argv[0];
   if (!arg) {
-    console.error('usage: node scripts/released-schema-guard.mjs <vX.Y.Z being released> | --all');
+    console.error('usage: node scripts/released-schema-guard.mjs <vX.Y.Z being released> | --all [vX.Y.Z, the last tag to check]');
     return 2;
   }
   let recordedText;
@@ -121,8 +128,22 @@ export function main(argv) {
   const tags = sortReleaseTags(git(['tag', '-l', 'v*']).split('\n').map((t) => t.trim()).filter(Boolean));
   let targets;
   if (arg === '--all') {
-    targets = tags.map((tag) => ({ tag, pins: pinsAt(tag) }));
-    const untagged = Object.keys(recordedMap).filter((t) => !tags.includes(t));
+    const bound = argv[1];
+    let inScope = () => true;
+    if (bound !== undefined) {
+      const top = parseReleaseTag(bound);
+      if (!top) {
+        console.error(`not a release tag: ${bound} (expected vX.Y.Z)`);
+        return 2;
+      }
+      if (!tags.includes(bound)) {
+        console.error(`${bound}: no such tag. --all ${bound} reads the tags up to it, so tag the release first.`);
+        return 1;
+      }
+      inScope = (t) => compareVersions(parseReleaseTag(t), top) <= 0;
+    }
+    targets = tags.filter(inScope).map((tag) => ({ tag, pins: pinsAt(tag) }));
+    const untagged = Object.keys(recordedMap).filter((t) => inScope(t) && !tags.includes(t));
     if (untagged.length > 0) {
       console.error(`${RELEASED_SCHEMAS_PATH} has rows for tags that do not exist: ${untagged.join(', ')}.`);
       return 1;

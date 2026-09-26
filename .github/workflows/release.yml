@@ -104,7 +104,12 @@ jobs:
         # this release's own (the checked-out tree's), must equal their rows in
         # tests/db/released-schemas.ts. Dry run locally:
         # `node scripts/released-schema-guard.mjs vX.Y.Z` (or `--all`).
+        # A non-final tag (v1.8.0-rc1) stops here: exit 2, "not a release tag", nothing builds (shipped behaviour; CR-T12-3).
         run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"
+
+      - name: Released-schema guard (every tag up to this one)
+        # Every release tag up to and including this one still matches its row in tests/db/released-schemas.ts (v1.8.0 T12, L18).
+        run: node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"
 
       - name: Upgrade path from every released schema
         # v1.7.1 U3: already inside the unit suite above; run by name so the

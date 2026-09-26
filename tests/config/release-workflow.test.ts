@@ -127,3 +127,209 @@ describe('release.yml — the test gate (v1.7.1 U3)', () => {
     expect(survivors, 'plants the pin let through').toEqual([]);
   });
 });
+
+// v1.8.0 T12 (post-release review L36): the test gate — and the released-schema
+// guard inside it — blocks a build only through each build job's `needs:` edge,
+// which was unpinned. Every job other than test-gate lists test-gate DIRECTLY
+// (build-windows is also gated through build-macos-arm64, but its own comment
+// keeps the edge explicit so it survives a refactor). Text slices, as above.
+
+/** Every top-level job under `jobs:`, in file order: its key and its text (key line to the next key, or the end). A key may be quoted or trail a comment. */
+function jobBlocks(yml: string): Array<{ name: string; text: string }> {
+  const start = yml.search(/^jobs:$/m);
+  if (start < 0) return [];
+  const body = yml.slice(start);
+  const keys = [...body.matchAll(/^ {2}["']?([\w-]+)["']?:[ \t]*(?:#.*)?$/gm)];
+  return keys.map((m, i) => ({ name: m[1], text: body.slice(m.index, i + 1 < keys.length ? keys[i + 1].index : undefined) }));
+}
+
+/** The jobs a job's LIVE `needs:` names — `needs: a`, `needs: [a, b]` or a `- a` block list; quotes and comments dropped ([] = none). */
+function needsOf(job: string): string[] {
+  const clean = (s: string) => s.replace(/#.*$/, '').trim().replace(/^(['"])(.*)\1$/, '$2');
+  const lines = job.split('\n');
+  const at = lines.findIndex((l) => /^ {4}needs:/.test(l));
+  if (at < 0) return [];
+  const value = clean(lines[at].replace(/^ {4}needs:/, ''));
+  if (value.startsWith('[')) return value.slice(1, value.lastIndexOf(']')).split(',').map(clean).filter(Boolean);
+  if (value !== '') return [value];
+  const out: string[] = [];
+  for (let i = at + 1; i < lines.length && /^ {6}(?:- |#)/.test(lines[i]); i += 1) {
+    if (/^ {6}- /.test(lines[i])) out.push(clean(lines[i].replace(/^ {6}- /, '')));
+  }
+  return out;
+}
+
+/**
+ * A job-level `if:` (four spaces in) that calls always(), failure() or cancelled(): GitHub then runs the job even
+ * when a job it needs failed, so the needs: edge no longer gates it. A plain condition keeps the implicit success().
+ * A block-scalar or multi-line condition is read through its more-indented continuation lines; comments are dropped.
+ */
+function ifBypassesNeeds(job: string): boolean {
+  const lines = job.split('\n');
+  const at = lines.findIndex((l) => /^ {4}if:/.test(l));
+  if (at < 0) return false;
+  const parts = [lines[at].replace(/^ {4}if:/, '')];
+  for (let i = at + 1; i < lines.length && /^ {6,}\S/.test(lines[i]); i += 1) parts.push(lines[i]);
+  return /\b(?:always|failure|cancelled)\s*\(\s*\)/.test(parts.map((l) => l.replace(/(?:^|\s)#.*$/, '')).join(' '));
+}
+
+/** Why some job could build, sign or publish while the test gate fails ([] = every other job needs test-gate directly). */
+function gateEdgeProblems(yml: string): string[] {
+  const jobs = jobBlocks(yml);
+  if (!jobs.some((j) => j.name === 'test-gate')) return ['the test-gate: job was not found — renamed? re-point this pin'];
+  const others = jobs.filter((j) => j.name !== 'test-gate');
+  if (others.length === 0) return ['no job besides test-gate was found — the job slicer is broken'];
+  return others.flatMap((j) => [
+    ...(needsOf(j.text).includes('test-gate') ? [] : [`${j.name}: its needs: does not list test-gate, so it can build while the gate fails`]),
+    ...(ifBypassesNeeds(j.text) ? [`${j.name}: its job-level if: calls always(), failure() or cancelled(), so it runs even when the gate fails`] : []),
+  ]);
+}
+
+describe('release.yml — every build job needs the test gate directly (v1.8.0 T12, post-release review L36)', () => {
+  it('build-macos-arm64 and build-windows each list test-gate in needs: (the scalar and the list form, read from the real file)', () => {
+    expect(gateEdgeProblems(YML)).toEqual([]);
+    const jobs = jobBlocks(YML);
+    const needs = (name: string) => needsOf(jobs.find((j) => j.name === name)?.text ?? '');
+    expect(needs('build-macos-arm64')).toEqual(['test-gate']);
+    expect(needs('build-windows')).toEqual(['test-gate', 'build-macos-arm64']);
+    expect(needs('test-gate')).toEqual([]);
+  });
+
+  it('needsOf reads the scalar, flow-list and block-list forms, quoted or trailed by a comment', () => {
+    expect(needsOf('  a:\n    needs: test-gate  # why\n    runs-on: x\n')).toEqual(['test-gate']);
+    expect(needsOf("  a:\n    needs: 'test-gate'\n")).toEqual(['test-gate']);
+    expect(needsOf('  a:\n    needs: [test-gate, build-macos-arm64]\n')).toEqual(['test-gate', 'build-macos-arm64']);
+    expect(needsOf('  a:\n    needs:\n      - test-gate  # why\n      - "build-macos-arm64"\n    runs-on: x\n')).toEqual([
+      'test-gate',
+      'build-macos-arm64',
+    ]);
+    expect(needsOf('  a:\n    runs-on: x\n    steps:\n      - name: needs\n')).toEqual([]);
+    expect(needsOf('  a:\n    # needs: test-gate\n    runs-on: x\n')).toEqual([]);
+  });
+
+  // L36's fix: plant "needs removed" (and every other way to lose the edge) in
+  // the switch-off list; the list and block forms that keep it must pass.
+  it('the pin refuses a build job whose needs: lost test-gate, and accepts the forms that keep it (planted)', () => {
+    const MAC_NEEDS = '    needs: test-gate  # do not build/sign/publish unless the gate is green\n';
+    const WIN_NEEDS = '    needs: [test-gate, build-macos-arm64]\n';
+    expect(YML.split(MAC_NEEDS).length - 1, 'the landed build-macos-arm64 needs: line was not found').toBe(1);
+    expect(YML.split(WIN_NEEDS).length - 1, 'the landed build-windows needs: line was not found').toBe(1);
+    const refused: Record<string, string> = {
+      'build-macos-arm64 needs removed': YML.replace(MAC_NEEDS, ''),
+      'build-macos-arm64 needs commented out': YML.replace(MAC_NEEDS, `    # ${MAC_NEEDS.trimStart()}`),
+      'build-macos-arm64 needs another job': YML.replace(MAC_NEEDS, '    needs: lint\n'),
+      'build-macos-arm64 needs a look-alike (test-gate-old)': YML.replace(MAC_NEEDS, '    needs: test-gate-old\n'),
+      'build-windows needs removed': YML.replace(WIN_NEEDS, ''),
+      'build-windows list drops test-gate (gated only transitively)': YML.replace(WIN_NEEDS, '    needs: [build-macos-arm64]\n'),
+      'build-windows block list without test-gate': YML.replace(WIN_NEEDS, '    needs:\n      - build-macos-arm64\n'),
+      'a new job with no needs': `${YML}\n  publish-notes:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
+      'the test-gate job renamed': YML.replace(/^ {2}test-gate:$/m, '  tests:'),
+      // Code review of L36: a job-level if: with a status function other than
+      // success() runs the job even when a job it needs failed; and a job key
+      // with a trailing comment or quotes must still be found as a job.
+      'build-macos-arm64 if: always() (runs even when the gate fails)': YML.replace(MAC_NEEDS, `${MAC_NEEDS}    if: always()\n`),
+      'build-macos-arm64 if: ${{ failure() }}': YML.replace(MAC_NEEDS, `${MAC_NEEDS}    if: \${{ failure() }}\n`),
+      'build-windows if: ${{ !cancelled() }}': YML.replace(WIN_NEEDS, `${WIN_NEEDS}    if: \${{ !cancelled() }}\n`),
+      'a new job whose key carries a comment, with no needs': `${YML}\n  publish-notes:  # release notes\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
+      'a new job with a quoted key, with no needs': `${YML}\n  "publish-notes":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
+    };
+    for (const [label, text] of Object.entries(refused)) expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+    const survivors = Object.entries(refused)
+      .filter(([, text]) => gateEdgeProblems(text).length === 0)
+      .map(([label]) => label);
+    expect(survivors, 'plants the pin let through').toEqual([]);
+    const accepted: Record<string, string> = {
+      'build-macos-arm64 as a flow list': YML.replace(MAC_NEEDS, '    needs: [test-gate]\n'),
+      'build-windows as a block list': YML.replace(WIN_NEEDS, '    needs:\n      - test-gate\n      - build-macos-arm64\n'),
+      'a job-level if: without a status function (success() still applies)': YML.replace(
+        MAC_NEEDS,
+        `${MAC_NEEDS}    if: startsWith(github.ref, 'refs/tags/')\n`,
+      ),
+      'a STEP-level if: failure() (it does not bypass the job gate)': YML.replace(
+        '      - name: Install npm deps\n        run: npm ci\n\n      - name: Extract version from tag\n',
+        '      - name: Install npm deps\n        run: npm ci\n\n      - name: Report\n        if: failure()\n        run: echo failed\n\n      - name: Extract version from tag\n',
+      ),
+    };
+    for (const [label, text] of Object.entries(accepted)) {
+      expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+      expect(gateEdgeProblems(text), label).toEqual([]);
+    }
+  });
+});
+
+// v1.8.0 T12 (post-release review L18): tag mode checks only the previous tag's
+// row and this release's, so a later edit of an intermediate row ('v1.8.0': 56
+// → 57) would drop a shipped schema from the upgrade harness with every test
+// green. The release gate also runs the guard's --all mode, which re-checks
+// every tag's row against the tag itself, BOUNDED by the tag being released
+// (fix round: a hotfix on an older line after a newer release is never refused
+// for the newer tag's row). The tag exists by then, so the bound has its tag.
+// Pinned the P5 way, like the U3 steps above: live name line, exact run line
+// with the bound, no if: / continue-on-error:, inside the test gate, after the
+// tag-mode guard.
+const ALL_TAGS_STEP = {
+  name: 'Released-schema guard (every tag up to this one)',
+  run: 'node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"',
+} as const;
+
+/** Why the test gate does NOT run the guard's --all mode as a live, blocking step after the tag-mode guard ([] = it does). */
+function allTagsGuardProblems(yml: string): string[] {
+  const job = testGateJob(yml);
+  if (job === '') return ['the test-gate: job block was not found — renamed? re-point this pin'];
+  const block = stepBlock(job, `      - name: ${ALL_TAGS_STEP.name}`);
+  if (block === '') return [`the test gate has no live "- name: ${ALL_TAGS_STEP.name}" step`];
+  const problems: string[] = [];
+  if (!block.split('\n').includes(`        run: ${ALL_TAGS_STEP.run}`)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" does not run \`${ALL_TAGS_STEP.run}\` on a live line`);
+  }
+  if (/^[ \t]*(?:continue-on-error|if)[ \t]*:/m.test(block)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" is conditional or non-blocking (if: / continue-on-error:)`);
+  }
+  const tagMode = stepBlock(job, `      - name: ${STEPS[1].name}`);
+  if (tagMode === '' || job.indexOf(block) < job.indexOf(tagMode)) {
+    problems.push(`"${ALL_TAGS_STEP.name}" does not run after "${STEPS[1].name}"`);
+  }
+  return problems;
+}
+
+describe('release.yml — the test gate re-checks every released tag with the guard (v1.8.0 T12, post-release review L18)', () => {
+  it('runs `node scripts/released-schema-guard.mjs --all "${GITHUB_REF_NAME}"` (bounded by the tag) live and blocking in the test gate, after the tag-mode guard, once in the file', () => {
+    expect(allTagsGuardProblems(YML)).toEqual([]);
+    expect(YML.split(`        run: ${ALL_TAGS_STEP.run}\n`).length - 1).toBe(1);
+  });
+
+  it('the pin refuses the --all step commented out, non-blocking, conditional, renamed, moved or re-pointed (planted)', () => {
+    const NAME_LINE = `      - name: ${ALL_TAGS_STEP.name}\n`;
+    const RUN_LINE = `        run: ${ALL_TAGS_STEP.run}\n`;
+    const start = YML.indexOf(NAME_LINE);
+    const end = YML.indexOf(RUN_LINE, start) + RUN_LINE.length;
+    expect(start, 'the landed --all step was not found').toBeGreaterThan(-1);
+    const step = YML.slice(start, end);
+    const without = YML.replace(`\n${step}`, '');
+    const planted: Record<string, string> = {
+      'step removed': without,
+      'commented out': YML.replace(step, step.replace(/^ {6}/gm, '      # ')),
+      'run line commented': YML.replace(RUN_LINE, RUN_LINE.replace('        run:', '        # run:')),
+      'name line commented (the run folds into the step above)': YML.replace(NAME_LINE, NAME_LINE.replace('      - name:', '      # - name:')),
+      'continue-on-error': YML.replace(RUN_LINE, `${RUN_LINE}        continue-on-error: true\n`),
+      'if: false': YML.replace(NAME_LINE, `${NAME_LINE}        if: false\n`),
+      '|| true': YML.replace(RUN_LINE, RUN_LINE.replace(/\n$/, ' || true\n')),
+      'tag mode instead of --all': YML.replace(RUN_LINE, '        run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"\n'),
+      'bound dropped (unbounded --all refuses a hotfix on an older line)': YML.replace(
+        RUN_LINE,
+        '        run: node scripts/released-schema-guard.mjs --all\n',
+      ),
+      renamed: YML.replace(NAME_LINE, '      - name: Released-schema guard\n'),
+      'moved into its own job': without.replace(
+        '\n  build-macos-arm64:\n',
+        `\n  all-tags:\n    runs-on: macos-14\n    steps:\n${step}\n  build-macos-arm64:\n`,
+      ),
+      'before the tag-mode guard': without.replace(`      - name: ${STEPS[1].name}\n`, `${step}\n      - name: ${STEPS[1].name}\n`),
+    };
+    for (const [label, text] of Object.entries(planted)) expect(text, `${label}: the plant did not apply`).not.toBe(YML);
+    const survivors = Object.entries(planted)
+      .filter(([, text]) => allTagsGuardProblems(text).length === 0)
+      .map(([label]) => label);
+    expect(survivors, 'plants the pin let through').toEqual([]);
+  });
+});

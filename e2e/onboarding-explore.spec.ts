@@ -3,13 +3,15 @@ import { collectErrors } from './console-guard';
 import { bootTimeout } from './boot-timeout';
 
 /**
- * W4 — Explore with sample data (fresh :1423 server, empty IndexedDB).
+ * W4 — Explore with sample data (the fresh server — :1423, or the fresh port
+ * of the E2E_PORT_BASE pair — with an empty IndexedDB).
  *
  * The filename lands this file in the `onboarding` project
  * (testMatch: /onboarding[^/]*\.spec\.ts/), which is the ONLY server whose
  * IndexedDB is unseeded — the precondition for a first-run Step 0
  * (P-W4-8; the spec's `sample-explore.spec.ts` name would have run against
- * the seeded :1422 server, where Step 0 never renders).
+ * the seeded server — :1422, or the seed port of the E2E_PORT_BASE pair —
+ * where Step 0 never renders).
  *
  * Scenario 2's persons-count-0 proof is the boot redirect itself:
  * shouldRedirectToSetup fires ONLY at personCount === 0 && !dismissed && '/',

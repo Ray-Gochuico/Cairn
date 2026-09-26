@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { defineConfig } from '@playwright/test';
+import { webServerTimeoutFor } from './e2e/boot-timeout';
 import { runLoadPolicy } from './e2e/load-guard';
 import { E2E_SERVERS, FRESH_SERVER, SEEDED_SERVER } from './e2e/servers';
 
@@ -87,7 +88,9 @@ export default defineConfig({
     url: s.url,
     reuseExistingServer: REUSE,
     env: { CAIRN_DEV_NONCE: NONCE },
-    // Cold start = vite + sql.js wasm fetch + 47 migrations + demo seed.
-    timeout: 120_000,
+    // Cold start = vite + sql.js wasm fetch + the migrations + demo seed. It
+    // follows the run's frozen load policy (v1.8.0 T12): 120 s normal, 240 s
+    // serialized — e2e/boot-timeout.ts, pinned in tests/e2e-harness.
+    timeout: webServerTimeoutFor(LOAD),
   })),
 });

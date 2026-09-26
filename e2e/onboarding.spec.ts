@@ -6,9 +6,10 @@ import { bootTimeout } from './boot-timeout';
  * T26: the real onboarding happy path on a FRESH (unseeded) browser-shim DB.
  * The seeded suite boots straight into the app shell (disclosures accepted,
  * demo data present) and can never exercise setup; this project points at the
- * :1423 server started WITHOUT VITE_SEED_DEMO, so IndexedDB is empty and boot
- * lands on the disclaimer + Setup Wizard. One end-to-end walk: accept → add a
- * person → advance the sections → finish → reach the app shell, clean console.
+ * :1423 server (or the fresh port of the E2E_PORT_BASE pair) started WITHOUT
+ * VITE_SEED_DEMO, so IndexedDB is empty and boot lands on the disclaimer +
+ * Setup Wizard. One end-to-end walk: accept → add a person → advance the
+ * sections → finish → reach the app shell, clean console.
  */
 test('fresh profile (form view): disclaimer → switch to form view → setup → app shell, clean console', async ({ page }) => {
   const errors = collectErrors(page);
