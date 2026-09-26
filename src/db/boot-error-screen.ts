@@ -125,21 +125,46 @@ function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** The existing reveal button, verbatim in behaviour: label by platform, a
- * lazy `revealBackupsDir` so this boot path has no static Tauri dependency. */
+/** The reveal button: label by platform, a lazy `revealBackupsDir` so this
+ * boot path has no static Tauri dependency. A failed reveal (no backups
+ * folder yet, the opener unavailable) says why and, when it can be resolved,
+ * where the folder is (U1-m17) — the screens no longer describe its location
+ * in their body text. */
 function makeRevealButton(): HTMLButtonElement {
   const revealBtn = makeButton(
     isWindows() ? 'Reveal backups in File Explorer' : 'Reveal backups in Finder',
   );
+  let failure: HTMLDivElement | null = null;
   revealBtn.addEventListener('click', () => {
     // Lazy-import so this boot-error path has no static Tauri dependency.
     void (async () => {
+      let mod: typeof import('@/lib/backup-restore') | null = null;
       try {
-        const { revealBackupsDir } = await import('@/lib/backup-restore');
-        await revealBackupsDir();
-      } catch {
-        // Browser/dev or opener unavailable — nothing more we can do; the
-        // folder location is described in the body text above.
+        mod = await import('@/lib/backup-restore');
+        await mod.revealBackupsDir();
+        failure?.remove();
+        failure = null;
+      } catch (err) {
+        let where: string | null = null;
+        try {
+          if (mod !== null) where = await mod.backupsDirPath();
+        } catch {
+          // The path API is unavailable too (the browser shim): reason only.
+        }
+        failure?.remove();
+        failure = document.createElement('div');
+        failure.setAttribute('data-testid', 'boot-reveal-failure');
+        const reason = makeParagraph(`Could not open the backups folder: ${messageOf(err)}`);
+        reason.setAttribute('role', 'alert');
+        reason.style.margin = '0 0 4px';
+        failure.append(reason);
+        if (where !== null) {
+          const path = makeParagraph(`Backups folder: ${where}`);
+          path.style.margin = '0 0 12px';
+          path.style.wordBreak = 'break-all';
+          failure.append(path);
+        }
+        revealBtn.after(failure);
       }
     })();
   });

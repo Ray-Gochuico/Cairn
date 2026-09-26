@@ -4,12 +4,13 @@ vi.mock('@/lib/backup-restore', () => ({
   validateBackupFile: vi.fn(),
   restoreFromBackup: vi.fn(),
   revealBackupsDir: vi.fn(),
+  backupsDirPath: vi.fn(),
 }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn(async () => undefined) }));
 import { renderBootError } from '@/db/boot-error-screen';
 import { SchemaTooNewError } from '@/db/migrations';
 import { DatabaseCorruptError } from '@/db/integrity';
-import { listBackups, validateBackupFile, restoreFromBackup, revealBackupsDir } from '@/lib/backup-restore';
+import { listBackups, validateBackupFile, restoreFromBackup, revealBackupsDir, backupsDirPath } from '@/lib/backup-restore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { MigrationFailedError } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
@@ -102,6 +103,7 @@ const mValidate = validateBackupFile as unknown as ReturnType<typeof vi.fn>;
 const mRestore = restoreFromBackup as unknown as ReturnType<typeof vi.fn>;
 const mReveal = revealBackupsDir as unknown as ReturnType<typeof vi.fn>;
 const mOpenUrl = openUrl as unknown as ReturnType<typeof vi.fn>;
+const mBackupsDir = backupsDirPath as unknown as ReturnType<typeof vi.fn>;
 
 // PR-16: the seven EXISTING tests now render screens whose hydrator calls
 // listBackups(); the bare vi.fn() would resolve undefined. One file-level hook
@@ -767,6 +769,47 @@ describe('U1-m16 — the boot notice never renders a double period', () => {
     renderBootError(root, dbInit('x'));
     expect(root.textContent).toContain('The last restore did not finish: db_restore: the selected backup IS the live database. Your data was not changed.');
     expect(root.textContent).not.toContain('..');
+  });
+});
+
+describe('U1-m17 — a failed Reveal says why and where the folder is', () => {
+  const DIRPATH = '/Users/me/Library/Application Support/com.x.cairn/backups';
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    root = document.createElement('div');
+    mReveal.mockRejectedValue(new Error('No such file or directory (os error 2)'));
+    mBackupsDir.mockResolvedValue(DIRPATH);
+  });
+  const reveal = () => [...root.querySelectorAll('button')].find((b) => /^Reveal backups/.test(b.textContent ?? ''))!;
+
+  it('shows the reason (an alert, never a <pre>) and the folder path', async () => {
+    renderBootError(root, new SchemaTooNewError(99, 55));
+    // Let the list's lazy import settle first (two CONCURRENT dynamic imports
+    // of a vi.mock'ed module can hand the second the real module).
+    await vi.waitFor(() => expect(root.textContent).toContain('No backups were found in the backups folder.'));
+    reveal().click();
+    await vi.waitFor(() => expect(root.querySelector('[data-testid="boot-reveal-failure"] [role="alert"]')?.textContent)
+      .toBe('Could not open the backups folder: No such file or directory (os error 2)'));
+    expect(root.querySelector('[data-testid="boot-reveal-failure"]')!.textContent).toContain(`Backups folder: ${DIRPATH}`);
+    expect(root.querySelector('pre')).toBeNull();               // the SchemaTooNew pin holds
+  });
+
+  it('when the path cannot be resolved either, only the reason shows', async () => {
+    mBackupsDir.mockRejectedValue(new Error('no path API'));
+    renderBootError(root, new PreUpdateCopyError('x'));
+    reveal().click();
+    await vi.waitFor(() => expect(root.querySelector('[data-testid="boot-reveal-failure"]')).not.toBeNull());
+    expect(root.querySelector('[data-testid="boot-reveal-failure"]')!.textContent).not.toContain('Backups folder:');
+  });
+
+  it('a later successful Reveal clears the line', async () => {
+    renderBootError(root, new PreUpdateCopyError('x'));
+    reveal().click();
+    await vi.waitFor(() => expect(root.querySelector('[data-testid="boot-reveal-failure"]')).not.toBeNull());
+    mReveal.mockResolvedValue(undefined);
+    reveal().click();
+    await vi.waitFor(() => expect(root.querySelector('[data-testid="boot-reveal-failure"]')).toBeNull());
   });
 });
 
