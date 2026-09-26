@@ -271,18 +271,22 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 /// "(your data is unchanged)" is dropped, and "could not be put back" used,
 /// ONLY when the `-wal` is stuck; a stuck `-shm` alone is reported calmly
 /// (see put_back_or_report, CR-U-23c).
-pub fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
-    replace_database_file_with(backup, live, &mut |from: &Path, to: &Path| std::fs::rename(from, to))
+pub async fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
+    stage_restore(backup, live).await?;
+    // The two seams are made after the last await: a `&mut dyn FnMut` held
+    // across an await would make the db_restore command's future !Send.
+    swap_staged(live, &mut |from: &Path, to: &Path| std::fs::rename(from, to), &mut |p: &Path| real_sync(p))
 }
 
-/// The testable core of `replace_database_file`: `rename` is `std::fs::rename`
-/// in production; tests fail one chosen step through it.
-fn replace_database_file_with(
+/// Test seam: the whole swap with `rename` injected, so a test can fail one
+/// chosen step through it; the flush is the production `real_sync`.
+#[cfg(test)]
+async fn replace_database_file_with(
     backup: &Path,
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
-    replace_database_file_io(backup, live, rename, &mut |p: &Path| real_sync(p))
+    replace_database_file_io(backup, live, rename, &mut |p: &Path| real_sync(p)).await
 }
 
 /// Flush a file's data to stable storage (F_FULLFSYNC on Apple via std).
@@ -317,13 +321,24 @@ thread_local! {
     static SYNCED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// `replace_database_file_with` plus a `sync` seam for the staged copy.
-fn replace_database_file_io(
+/// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
+/// copy.
+#[cfg(test)]
+async fn replace_database_file_io(
     backup: &Path,
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
     sync: &mut dyn FnMut(&Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
+    stage_restore(backup, live).await?;
+    swap_staged(live, rename, sync)
+}
+
+/// Steps 0-1 of `replace_database_file` up to the staged copy: refuse before
+/// touching anything, then stage `backup` into `<live>.restore-tmp`. Every
+/// error return leaves `live` and its sidecars untouched and no staging file
+/// behind.
+async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let tmp = restore_tmp_path(live);
     let sidecars = sidecar_paths(live);
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
@@ -365,6 +380,22 @@ fn replace_database_file_io(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
         ));
     }
+    Ok(())
+}
+
+/// The rest of `replace_database_file`, on the staged `<live>.restore-tmp`:
+/// step 1's permission fix and flush, then steps 2-4 (set the old sidecars
+/// aside, swap, clean up). Synchronous: `rename` and `sync` are the test
+/// seams.
+fn swap_staged(
+    live: &Path,
+    rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
+    sync: &mut dyn FnMut(&Path) -> std::io::Result<()>,
+) -> Result<(), String> {
+    let tmp = restore_tmp_path(live);
+    let sidecars = sidecar_paths(live);
+    let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
+
     //    `fs::copy` carries the backup's permission bits, so a read-only
     //    backup would stage a read-only copy that cannot be opened for the
     //    flush below — and would become a read-only finance.db. Make it
@@ -576,7 +607,7 @@ pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Re
     // 3. Swap the file; the old sidecars are set aside and put back if the
     //    swap fails. The live pool was closed by the JS caller before this
     //    invoke (or was never loaded, on the boot-screen path).
-    replace_database_file(&source_path, &live_path)?;
+    replace_database_file(&source_path, &live_path).await?;
 
     Ok(())
 }
@@ -936,7 +967,7 @@ mod tests {
         std::fs::write(&wal, b"stale wal").unwrap();
         std::fs::write(&shm, b"stale shm").unwrap();
 
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
 
         // The live file now matches the backup byte-for-byte...
         let backup_bytes = std::fs::read(&backup).unwrap();
@@ -959,7 +990,7 @@ mod tests {
         backup_to(&pool, &backup).await.unwrap();
         pool.close().await;
         // No live file and no sidecars at all — a fresh restore target.
-        replace_database_file(&backup, &live).expect("replace with no sidecars");
+        replace_database_file(&backup, &live).await.expect("replace with no sidecars");
         assert_eq!(count_rows(&live, "accounts").await, 2);
     }
 
@@ -995,7 +1026,7 @@ mod tests {
         perms.set_mode(0o500); // r-x------ : can traverse + read, cannot create
         std::fs::set_permissions(&live_dir, perms).unwrap();
 
-        let result = replace_database_file(&backup, &live);
+        let result = replace_database_file(&backup, &live).await;
 
         // Restore failed...
         assert!(result.is_err(), "a copy into a read-only dir must fail");
@@ -1063,7 +1094,7 @@ mod tests {
             .open(&live)
             .expect("open the live db with share_mode(0)");
 
-        let result = replace_database_file(&backup, &live);
+        let result = replace_database_file(&backup, &live).await;
 
         // The restore failed at the finalize step (the rename) — NOT earlier.
         // Don't pin the OS error code: depending on the Windows version the
@@ -1108,7 +1139,7 @@ mod tests {
         backup_to(&pool, &backup).await.unwrap();
         pool.close().await;
 
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
         assert!(
             !restore_tmp_path(&live).exists(),
             "the .restore-tmp staging file must be renamed away on success"
@@ -1213,7 +1244,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("failed to finalize the restore"), "{msg}");
         assert!(msg.contains("your data is unchanged"), "every file is back, so the claim is true: {msg}");
         assert_untouched(&live, &wal, &shm);
@@ -1222,7 +1253,7 @@ mod tests {
     #[tokio::test]
     async fn replace_database_file_success_removes_the_old_sidecars_and_their_set_aside_copies() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
         assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
         assert!(!wal.exists() && !shm.exists(), "the old sidecars are gone");
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "their set-aside copies are gone too");
@@ -1240,7 +1271,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("your data is unchanged"), "{msg}");
         assert_untouched(&live, &wal, &shm);
     }
@@ -1259,7 +1290,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(!msg.contains("your data is unchanged"), "never claim unchanged when a sidecar moved: {msg}");
         assert!(msg.contains("could not be put back"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()), "the message names where the -wal is: {msg}");
@@ -1274,7 +1305,7 @@ mod tests {
     async fn replace_database_file_refuses_when_an_earlier_restore_left_a_set_aside_sidecar() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         std::fs::write(aside(&wal), b"EARLIER-SET-ASIDE-WAL").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert!(msg.contains("your data is unchanged"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()), "{msg}");
         assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"EARLIER-SET-ASIDE-WAL", "never overwritten");
@@ -1292,7 +1323,7 @@ mod tests {
     async fn replace_database_file_refusal_names_the_leftover_and_the_next_step() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         std::fs::write(aside(&wal), b"EARLIER").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert_eq!(
             msg,
             format!(
@@ -1303,7 +1334,7 @@ mod tests {
         // CR-U-25: a leftover -shm set-aside never refuses; with both present
         // only the -wal is named (the singular form is the only form).
         std::fs::write(aside(&shm), b"EARLIER-SHM").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert_eq!(
             msg,
             format!(
@@ -1322,7 +1353,7 @@ mod tests {
         let (_dir, backup, live, _wal, shm) = live_with_sidecars().await;
         std::fs::remove_file(&shm).unwrap();
         std::fs::write(aside(&shm), b"STALE-INDEX").unwrap();
-        replace_database_file(&backup, &live).expect("a stale -shm set-aside never blocks");
+        replace_database_file(&backup, &live).await.expect("a stale -shm set-aside never blocks");
         assert!(!aside(&shm).exists(), "the stale -shm set-aside is removed");
     }
 
@@ -1338,10 +1369,10 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let first = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let first = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(first.contains("The index file"), "{first}");
         assert!(aside(&shm).exists(), "the stuck -shm set-aside is still there");
-        replace_database_file(&backup, &live).expect("the leftover -shm set-aside does not block the next restore");
+        replace_database_file(&backup, &live).await.expect("the leftover -shm set-aside does not block the next restore");
         assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
         assert!(!wal.exists() && !shm.exists());
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "no set-aside file is left behind");
@@ -1362,7 +1393,7 @@ mod tests {
             events.borrow_mut().push(format!("sync {}", p.display()));
             real_sync(p)
         };
-        replace_database_file_io(&backup, &live, &mut rename, &mut sync).expect("replace");
+        replace_database_file_io(&backup, &live, &mut rename, &mut sync).await.expect("replace");
         let ev = events.borrow();
         let synced = ev.iter().position(|e| e == &format!("sync {}", tmp.display())).expect("the staged copy is synced");
         let swapped = ev
@@ -1380,7 +1411,7 @@ mod tests {
         let mut sync = |_p: &Path| -> std::io::Result<()> {
             Err(std::io::Error::other("simulated: the flush failed"))
         };
-        let msg = replace_database_file_io(&backup, &live, &mut rename, &mut sync).unwrap_err();
+        let msg = replace_database_file_io(&backup, &live, &mut rename, &mut sync).await.unwrap_err();
         assert!(msg.contains("failed to stage the backup (your data is unchanged)"), "{msg}");
         assert_untouched(&live, &wal, &shm);
     }
@@ -1393,7 +1424,7 @@ mod tests {
         let tmp = restore_tmp_path(&live);
         std::fs::copy(&backup, &tmp).unwrap();
         let before = std::fs::read(&tmp).unwrap();
-        let msg = replace_database_file(&tmp, &live).unwrap_err();
+        let msg = replace_database_file(&tmp, &live).await.unwrap_err();
         assert_eq!(
             msg,
             "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
@@ -1419,7 +1450,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("(your data is unchanged)"), "{msg}");
         assert!(!msg.contains("could not be put back"), "{msg}");
         assert!(!aside(&wal).exists() && !aside(&shm).exists());
@@ -1444,7 +1475,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(!msg.contains("could not be put back"), "no data-loss alarm for the index: {msg}");
         assert!(msg.contains("(your data is unchanged)"), "{msg}");
         assert!(
@@ -1467,7 +1498,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("could not be put back"), "{msg}");
         assert!(!msg.contains("your data is unchanged"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()) && msg.contains(&aside(&shm).display().to_string()), "{msg}");
@@ -1483,7 +1514,7 @@ mod tests {
         ro.set_readonly(true); // mode 0444 on unix; the Read-only attribute on Windows
         std::fs::set_permissions(&backup, ro).unwrap();
         let backup_before = std::fs::read(&backup).unwrap();
-        replace_database_file(&backup, &live).expect("a read-only backup restores");
+        replace_database_file(&backup, &live).await.expect("a read-only backup restores");
         // NIT (b): the BACKUP itself is untouched — still read-only, same bytes.
         assert!(std::fs::metadata(&backup).unwrap().permissions().readonly(), "the backup keeps its read-only mode");
         assert_eq!(std::fs::read(&backup).unwrap(), backup_before, "the backup's bytes are untouched");
@@ -1501,7 +1532,7 @@ mod tests {
     async fn replace_database_file_production_path_syncs_the_staged_copy() {
         let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
         SYNCED.with(|s| s.borrow_mut().clear());
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
         let synced = SYNCED.with(|s| s.borrow().clone());
         assert_eq!(synced, vec![restore_tmp_path(&live)], "the public entry point flushes the staged copy");
     }
