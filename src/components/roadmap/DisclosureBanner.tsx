@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { DisclosureChangeNote } from '@/legal/DisclosureViewer';
 import {
   Sheet,
   SheetContent,
@@ -39,6 +40,10 @@ export function DisclosureBanner() {
             <SheetTitle>About the Roadmap</SheetTitle>
             <SheetDescription className="sr-only">Full roadmap disclosure</SheetDescription>
           </SheetHeader>
+          {/* A-7(5) (v1.7.1): the shared what-changed note, collapsed, between the
+              header and the body (the Settings viewer's order); nothing for an
+              entry without a diff. */}
+          <DisclosureChangeNote document={DISCLOSURES.roadmap} />
           {/*
            * Render the disclosure body as Markdown so **bold** and other
            * inline formatting render correctly, matching DisclosureModal.

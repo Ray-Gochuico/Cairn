@@ -16,6 +16,7 @@ import { answeredKey } from '@/lib/trivia/answered-key';
 import { QuestionFormat, Topic } from '@/types/enums';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 import Learn from '@/pages/Learn';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 const sql = (name: string) =>
   readFileSync(resolve(__dirname, `../../src/db/migrations/${name}.sql`), 'utf-8');
@@ -75,7 +76,7 @@ async function bootDb() {
 async function seedLearningAccepted(db: SqliteAdapter) {
   await db.execute(
     `INSERT INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
-     VALUES (1, 'learning', '1.0', '2026-05-28T00:00:00Z')`,
+     VALUES (1, 'learning', '${DISCLOSURE_VERSIONS.learning}', '2026-05-28T00:00:00Z')`,
   );
   await useHouseholdStore.getState().load();
   await useAcceptancesStore.getState().load();
@@ -164,7 +165,7 @@ describe('Learn page (one-at-a-time stepper, Wave 8)', () => {
     await useAcceptancesStore.getState().load();
     await db.execute(
       `INSERT INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
-       VALUES (1, 'learning', '1.0', '2026-05-28T00:00:00Z')`,
+       VALUES (1, 'learning', '${DISCLOSURE_VERSIONS.learning}', '2026-05-28T00:00:00Z')`,
     );
     await useAcceptancesStore.getState().load();
     // Freeze the store pre-load: learningState null, load stubbed to hang.

@@ -92,7 +92,7 @@ const signedPct = (fraction: number, digits: number): string =>
  * replayed against today's portfolio on the Backtest's exact real return
  * basis. Accumulation shock, not drawdown (D-W1-2 — the Backtest tool owns
  * retire-into-a-bad-year, cross-linked below). Gates in-card on the SAME
- * `backtest` disclosure id as the Backtest page (v1.4 covers all three surfaces);
+ * `backtest` disclosure id as the Backtest page (the backtest disclosure covers all three surfaces);
  * the page and the card grid are never blocked (DP-7).
  */
 export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) {
@@ -374,7 +374,9 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
               testId="stress-test-chart"
               data={chartSeries.map((y) => ({ year: y.year, balance: y.balance }))}
               xKey="year"
-              series={[{ dataKey: 'balance', label: 'Portfolio (real $)', hero: true }]}
+              /* v1.7.1 A-5a (CP5-1): the series name is the caption's pinned
+                 short register (TODAY_SUFFIX), never a retyped mark. */
+              series={[{ dataKey: 'balance', label: `Portfolio ${TODAY_SUFFIX}`, hero: true }]}
               /* DP-15: the outpaced state replaces the Deepest-year-end row and
                  omits the recovery row, so there is nothing for these markers
                  to annotate — and both would sit on the window's first year

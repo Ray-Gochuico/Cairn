@@ -66,6 +66,7 @@ import {
 import { historyFan } from '@/lib/history-fan';
 import { fanCaption } from '@/lib/calculators/history-fan-copy';
 import type { AppSettings } from '@/types/schema';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 /** The landed demo scenario: pv 1,000 · 1,200/yr · 7% APY (years knob = 10). */
 const SEEDED_PV = 1_000;
@@ -182,7 +183,7 @@ describe('CompoundInterestCard — History view', () => {
     );
     // CH-3 drift-guard: the caption paraphrases DISCLOSURES.backtest — a future
     // body edit bumps the version, trips this pin, and forces a conscious review.
-    expect(DISCLOSURES.backtest.version).toBe('1.5');
+    expect(DISCLOSURES.backtest.version).toBe(DISCLOSURE_VERSIONS.backtest);
     // A holds rate without a criterion would be invented meaning.
     expect(screen.queryByTestId('compound-holds')).toBeNull();
     expect(screen.queryByText(/not a probability/)).toBeNull();

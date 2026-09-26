@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { DisclosureChangeNote } from '@/legal/DisclosureViewer';
 import {
   Sheet,
   SheetContent,
@@ -33,6 +34,10 @@ export function InterviewDisclosureSheet() {
             <SheetTitle>{DISCLOSURES.interview.title}</SheetTitle>
             <SheetDescription className="sr-only">Full interview disclosure</SheetDescription>
           </SheetHeader>
+          {/* A-7(5) (v1.7.1): the shared what-changed note, collapsed, between the
+              header and the body (the Settings viewer's order); nothing for an
+              entry without a diff. */}
+          <DisclosureChangeNote document={DISCLOSURES.interview} />
           <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground mt-3">
             <ReactMarkdown>{DISCLOSURES.interview.body}</ReactMarkdown>
           </div>

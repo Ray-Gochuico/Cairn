@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useChartSource, useGatedReturnSource } from '@/lib/calculators/use-chart-source';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 beforeEach(() => {
@@ -97,7 +98,7 @@ describe('useGatedReturnSource (D-UB10 deferred gate + restart-safe demotion)', 
     const { result } = renderHook(() => useGatedReturnSource('path-to-fi'));
     act(() => result.current.requestHistory());
     expect(result.current.source).toBe('ASSUMED');
-    expect(result.current.gateDocument?.version).toBe('1.5');
+    expect(result.current.gateDocument?.version).toBe(DISCLOSURE_VERSIONS.backtest);
   });
   it('selectAssumed returns to the assumed view and persists it', () => {
     accept();

@@ -27,13 +27,14 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
 import { makeHousehold } from '../factories';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 // Roadmap document is still on v1.0; app_wide bumped to v1.1 in
 // 2026-05-27 to add UCC § 2-316 / US-only / governing-law clauses,
 // then to v1.2 to replace the [PLACEHOLDER] string in the governing-
 // law clause with "the State of New York", then to v1.3 to add the
 // "What this app does NOT model" section.
-const ACCEPTED_VERSION = '1.0';
+const ACCEPTED_VERSION = DISCLOSURE_VERSIONS.roadmap; // A-7(7): the one literal table
 
 
 // The roadmap gate reads the acceptances projection (single source of truth,

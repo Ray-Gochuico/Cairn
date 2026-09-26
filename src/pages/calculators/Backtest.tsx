@@ -20,6 +20,7 @@ import { BacktestDisclosureCallout } from '@/components/backtest/BacktestDisclos
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { writeLastBacktestRun } from '@/lib/backtest/last-run';
 import { useCalcScope, useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 
 /**
  * Wave 18 C9 — the today's-dollars promotion is a COMPONENT chip (rendered
@@ -41,6 +42,7 @@ export default function Backtest() {
   const scope = useCalcScope();
   const gate = useDisclosureGate('backtest');
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
+  const household = useHouseholdStore((s) => s.household);
   const real = useRealState();
 
   // W16: the scenario prefills read accounts + snapshots; a cold deep-link to
@@ -120,6 +122,20 @@ export default function Backtest() {
   // button can disable + read "Running…" during the loop.
   const [runError, setRunError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+
+  // A-7(2) (v1.7.1): wait for the household before deciding the gate. On a
+  // cold deep link AppDisclaimerGate renders its children while the household
+  // is still null (its first-run branch), before the acceptances projection
+  // has hydrated, so the gate above reads an empty map and this page mounted
+  // the page-blocking modal with no box, then grew the box when a prior row
+  // landed. Once the household is set, AppDisclaimerGate has already held its
+  // children until the projection's first resolution, so the decision below
+  // is the hydrated one. The household never returns to null after it loads;
+  // a transient acceptances re-load does not hide the page (the boot-loop
+  // gotcha). The skeleton is the route's own Suspense fallback, so a deep link
+  // reads skeleton, then the page or its modal. This is a load wait, not an
+  // empty state, so the Roadmap's EmptyState idiom does not apply here.
+  if (!household) return <PageLoadingSpinner />;
 
   if (gate.state === 'needs-acceptance') {
     return (

@@ -32,7 +32,7 @@ import {
   evaluateTraditionalIra,
 } from '@/domain/roadmap/rules/iraBranch';
 import { formatCurrency } from '@/lib/format';
-import { reimbursementStatusLine } from '@/components/dialogs/TransactionEditDialog';
+import { reimbursementMarker, reimbursementStatusLine } from '@/lib/reimbursement-status';
 import { HoldingsRepo } from '@/domain/holdings';
 import { HousingPaymentsRepo } from '@/domain/housing-payments';
 import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
@@ -634,6 +634,26 @@ describe('seedSampleProfile', () => {
     expect(harborCab).toBeDefined();
     expect(reimbursementStatusLine(skyline!)).toBe('Reimbursed $132.40 on Jun 25, 2026.');
     expect(reimbursementStatusLine(harborCab!)).toBe('Awaiting reimbursement.');
+  });
+
+  it('v1.7.1 R10: the SEEDED rows carry the list marker — only the two anchors, and both sit in Spending\'s latest 10 by date', async () => {
+    // The explore e2e pins these two markers on /spending's Recent
+    // transactions (latest 10, date-descending — Spending.tsx). Pin the
+    // premise here at two reference days, one of them the clamp case (every
+    // current-month row on the 1st).
+    for (const todayISO of ['2026-07-08', '2026-07-01']) {
+      const fresh = await freshDb();
+      await seedSampleProfile(fresh, { todayISO });
+      const rows = await new TransactionsRepo(fresh).list();
+      const marked = rows
+        .filter((t) => reimbursementMarker(t) != null)
+        .map((t) => [t.merchant, reimbursementMarker(t)]);
+      expect(marked).toEqual([['Harbor Cab Co', 'Awaiting'], ['Skyline Bistro', 'Reimbursed']]);
+      const latest10 = [...rows].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map((t) => t.merchant);
+      expect(latest10).toContain('Skyline Bistro');
+      expect(latest10).toContain('Harbor Cab Co');
+      await fresh.close();
+    }
   });
 
   it('W4: real-spending months are deterministic — $5,911.12 per complete month, $179.01 partial', async () => {

@@ -43,6 +43,16 @@ describe('W5.1 529 — projected-at-18 is a PINNED future-dollar figure (F8)', (
     expect(container.textContent).not.toContain('$33,845');
   });
 
+  // v1.7.1 A-5a (CP5-2): the suffix moved onto FUTURE_SUFFIX through ONE template
+  // literal, so the row's DOM is byte-identical, not merely text-equal (the
+  // textContent pin above cannot tell one text node from two).
+  it('CP5-2 (v1.7.1 A-5a): the at-18 suffix renders as ONE text node', () => {
+    render(card());
+    const suffix = screen.getByTestId('plan529-at-18').querySelector('span')!;
+    expect(suffix.childNodes).toHaveLength(1);
+    expect(suffix.textContent).toBe('at 18 (future $)');
+  });
+
   it('sweep: pinned-future + invariant rows; no unregistered $', () => {
     expectBasisDiscipline(card(), { figures: PLANS_529_BASIS_FIGURES, charts: [] });
   });

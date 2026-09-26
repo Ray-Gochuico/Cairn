@@ -12,6 +12,7 @@ import { answerKey, type InterviewAnswer } from '@/types/interview';
 import { AccountType, PropertyType } from '@/types/enums';
 import { makeAccount, makeHousehold, makeVehicle, makeProperty } from '../../factories';
 import { fixtureCtx, snap } from '../../lib/interview/fixture';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 
 const CATS = [
   { id: 2, name: 'Vehicles', parentCategoryId: null, type: 'NEED' },
@@ -274,7 +275,7 @@ describe('the strip gate (R4 D-R4-7 / D-R4-P6) — the bar\'s modal semantics on
     render(<InterviewThreads ctx={signalCtx()} />);
     fireEvent.click(screen.getByRole('button', { name: 'No plans' }));
     expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.2')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.interview}`)).toBeInTheDocument();
     expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     expect(screen.getByRole('checkbox', { name: DISCLOSURES.interview.acceptanceCheckboxLabel })).toBeInTheDocument();
     expect(saveAnswer).not.toHaveBeenCalled();

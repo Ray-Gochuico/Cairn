@@ -635,6 +635,16 @@ describe("W5.1 — FI + Coast FI are PINNED today's-dollar figures (spec F10 cla
     expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation), 29y to retirement');
   });
 
+  // v1.7.1 A-5a (4) / C3 chip (c): the FI registry pinned whole, beside its sweep.
+  it('registry shape: WHATIF_FI_BASIS_FIGURES — two PINNED today targets, two invariant progress rows', () => {
+    expect(WHATIF_FI_BASIS_FIGURES).toEqual([
+      { testId: 'whatif-fi-number-target', cls: 'pinned', pinnedBasis: 'today' },
+      { testId: 'whatif-fi-number-progress', cls: 'invariant' },
+      { testId: 'whatif-coastfi-number-target', cls: 'pinned', pinnedBasis: 'today' },
+      { testId: 'whatif-coastfi-number-progress', cls: 'invariant' },
+    ]);
+  });
+
   it('sweep: pinned targets + invariant progress rows; no unregistered $ on the cards', () => {
     expectBasisDiscipline(
       <MemoryRouter>

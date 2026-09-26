@@ -53,6 +53,12 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Type check (node project — configs, scripts, e2e)
+        # v1.7.1 I-(a): gate.sh's tsc-node leg. tsconfig.json covers src/
+        # only; this project covers vite/vitest/playwright configs,
+        # scripts/dev-servers.ts and e2e/**.
+        run: npx tsc -p tsconfig.node.json --noEmit
+
   rust-check:
     name: cargo check (src-tauri)
     runs-on: ubuntu-latest

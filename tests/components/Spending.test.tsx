@@ -43,6 +43,8 @@ import { HousingPaymentsRepo } from '@/domain/housing-payments';
 import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
 import Spending from '@/pages/Spending';
 import { formatDate } from '@/lib/format';
+import { parseCsv } from '@/lib/import/parse-csv';
+import { validateTransactionRow } from '@/lib/import/validators/transaction-validator';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PersonsRepo } from '@/domain/persons';
@@ -1000,6 +1002,108 @@ describe('Spending page', () => {
     await waitFor(() => expect(screen.getByText(/bad\.csv/)).toBeInTheDocument());
     // The good file still opens the CSV modal.
     expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
+  });
+
+  describe('v1.7.1 R10 — reimbursement state in Recent transactions; the CSV round trip (chip A-10a)', () => {
+    const mk = (over: Partial<Omit<Transaction, 'id'>>): Omit<Transaction, 'id'> => ({
+      householdId: 1, date: '2026-03-05', merchant: 'X', merchantRaw: null, amount: 10,
+      categoryId: 37, sourceAccountId: 1, propertyId: null, vehicleId: null,
+      personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null, ...over,
+    });
+    async function primeAccount() {
+      await db.execute(
+        `INSERT INTO accounts
+          (id, household_id, owner_person_id, beneficiary_dependent_id, name,
+           institution, type, crypto_wallet_address, auto_fetch_enabled,
+           excluded_from_net_worth, allow_margin, state_of_plan)
+         VALUES (1, 1, NULL, NULL, 'Chase Checking', NULL, 'ACCOUNT_CASH', NULL, 0, 0, 0, NULL)`,
+      );
+    }
+
+    it('each recent row states its saved reimbursement state under its amount; the merchant cells keep their exact names (CR-R10-3)', async () => {
+      await useCategoriesStore.getState().load();
+      await primeAccount();
+      await useTransactionsStore.getState().createMany([
+        mk({ merchant: 'SKYLINE BISTRO', date: '2026-03-04', amount: 132.4,
+          reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 132.4 }),
+        mk({ merchant: 'HARBOR CAB', date: '2026-03-03', amount: 46, reimbursable: true }),
+        mk({ merchant: 'AMAZON', date: '2026-03-02' }),
+      ]);
+      renderPage();
+      const table = await screen.findByRole('table');
+      await within(table).findByText('SKYLINE BISTRO');
+      const rowOf = (merchant: string) =>
+        within(table).getByRole('cell', { name: merchant, exact: true }).closest('tr') as HTMLElement;
+      expect(within(rowOf('SKYLINE BISTRO')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Reimbursed$/);
+      expect(within(rowOf('HARBOR CAB')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Awaiting$/);
+      expect(within(rowOf('AMAZON')).queryByTestId('reimbursement-marker')).toBeNull();
+      // No column added; Date · Merchant · Category · Amount · Edit.
+      expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
+        ['Date', 'Merchant', 'Category', 'Amount', 'Edit'],
+      );
+      expect(within(rowOf('SKYLINE BISTRO')).getAllByRole('cell').map((c) => c.textContent)).toEqual(
+        [formatDate('2026-03-04'), 'SKYLINE BISTRO', 'Shopping', '$132.40 Reimbursed', ''],
+      );
+      expect(within(rowOf('HARBOR CAB')).getAllByRole('cell')[3]).toHaveAccessibleName('$46.00 Awaiting');
+      expect(within(rowOf('AMAZON')).getAllByRole('cell')[3]).toHaveAccessibleName('$10.00');
+    });
+
+    it('the CSV export round-trips every reimbursement shape the editor stores through the importer (CR-R10-2)', async () => {
+      await useCategoriesStore.getState().load();
+      await primeAccount();
+      const shapes = [
+        mk({ merchant: 'PLAIN', date: '2026-03-01' }),
+        mk({ merchant: 'AWAITING', date: '2026-03-02', reimbursable: true }),
+        mk({ merchant: 'SETTLED', date: '2026-03-03', amount: 132.4,
+          reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 132.4 }),
+        mk({ merchant: 'PARTIAL', date: '2026-03-04', amount: 200,
+          reimbursable: true, reimbursedAt: '2026-03-21', reimbursedAmount: 150 }),
+        mk({ merchant: 'NO AMOUNT', date: '2026-03-05', reimbursable: true, reimbursedAt: '2026-03-22' }),
+        // The pre-R10 unchecked-but-reimbursed shape. R10's editor no longer
+        // writes it (D-R10-3); the importer's coercion re-reads it as
+        // reimbursed, which is why an uncheck must clear both fields.
+        mk({ merchant: 'LEGACY', date: '2026-03-06', amount: 80,
+          reimbursable: false, reimbursedAt: '2026-03-23', reimbursedAmount: 80 }),
+      ];
+      await useTransactionsStore.getState().createMany(shapes);
+
+      let capturedCsv = '';
+      const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+        void (b as Blob).text().then((t) => { capturedCsv = t; });
+        return 'blob:mock';
+      });
+      const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+      renderPage();
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /export csv/i }));
+      await waitFor(() => expect(capturedCsv).not.toBe(''));
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+
+      const parsed = parseCsv(capturedCsv);
+      expect(parsed.errors).toEqual([]);
+      // The export writes the STORED flag verbatim — never a derived one.
+      expect(parsed.rows.find((r) => r.merchant === 'LEGACY')).toMatchObject({
+        reimbursable: 'false', reimbursed_at: '2026-03-23', reimbursed_amount: '80',
+      });
+      const back = new Map(
+        parsed.rows.map((raw, i) => {
+          const r = validateTransactionRow(raw, i, {
+            accounts: [{ id: 1, name: 'Chase Checking' }],
+            categories: useCategoriesStore.getState().categories.map((c) => ({ id: c.id!, name: c.name })),
+          });
+          expect(r.errors).toEqual([]);
+          return [r.resolved.merchant, r.resolved] as const;
+        }),
+      );
+      for (const s of shapes.filter((x) => x.merchant !== 'LEGACY')) {
+        expect(back.get(s.merchant)).toMatchObject({
+          reimbursable: s.reimbursable, reimbursedAt: s.reimbursedAt, reimbursedAmount: s.reimbursedAmount,
+        });
+      }
+      expect(back.get('LEGACY')).toMatchObject({ reimbursable: true, reimbursedAt: '2026-03-23', reimbursedAmount: 80 });
+    });
   });
 
   describe('Wave A: person-view honoring (D2/D9/D12)', () => {

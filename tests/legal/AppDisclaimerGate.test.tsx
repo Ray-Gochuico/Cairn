@@ -9,6 +9,7 @@ import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { setDatabase } from '@/db/db';
 import { makeHousehold } from '../factories';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 // Minimal non-null household — the gate's `if (!household) return children`
 // guard needs a household, but disclosure acceptance is read from the
@@ -310,5 +311,129 @@ describe('AppDisclaimerGate', () => {
     expect(screen.queryByText(/what changed since you last accepted/i)).toBeNull();
     expect(screen.queryByText(/Version 1\.5 adds two new bullets/i)).toBeNull();
     expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+  });
+});
+
+/* A-7(1) (v1.7.1): the fail-closed (load-error) re-prompt lost its only
+   orientation line when R3 hid the what-changed box for an unprovable prior
+   (D-R3-2). It now carries CX-D7-1 as chrome under the version line: outside
+   the box, outside the versioned body. Pinned both ways: present on every
+   fail-closed shape, absent on the ordinary version-bump re-prompt. The
+   literal is copy (legal-adjacent), so it is typed out here, never imported. */
+describe('A-7(1): the fail-closed re-prompt says why the disclaimer is back', () => {
+  const NOTE =
+    'We couldn’t confirm which disclosures you’ve accepted, so this disclaimer is shown here for you to read and accept.';
+  const seedHousehold = () =>
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+  const seedErrored = (acceptedVersions: Record<string, string>) =>
+    useAcceptancesStore.setState({
+      acceptedVersions,
+      status: 'error',
+      isLoading: false,
+      error: 'x',
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+  const boxOf = () => screen.queryByText('What changed since you last accepted:')?.parentElement ?? null;
+  const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  // Self-contained (plan review PR-1): this describe sits OUTSIDE the file's
+  // `describe('AppDisclaimerGate')`, so that beforeEach does not run here. Both
+  // stores get a no-op load, so no `it` inherits an earlier test's mock or
+  // reaches the real projection read (which throws without a DB and fails
+  // closed to status 'error', rendering the note). `seedAcceptances` (which sets
+  // no load) then keeps this no-op.
+  beforeEach(() => {
+    useHouseholdStore.setState({
+      household: null,
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'ready',
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+  });
+
+  it('empty cache: the note, byte-exact, inside the dialog, under the version line and above the body, with no box', () => {
+    seedHousehold();
+    seedErrored({});
+    renderGate();
+    const note = screen.getByTestId('disclosure-modal-orientation');
+    expect(note.textContent).toBe(NOTE);
+    expect(screen.getByRole('dialog').contains(note)).toBe(true);
+    const body = screen.getByTestId('disclosure-modal-body');
+    expect(body.contains(note)).toBe(false);
+    expect(follows(screen.getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`), note)).toBe(true);
+    expect(follows(note, body)).toBe(true);
+    expect(boxOf()).toBeNull();
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+  });
+
+  it('a cached EARLIER acceptance: the box AND the note, and the note sits above the box, never inside it', () => {
+    seedHousehold();
+    seedErrored({ app_wide: '1.4' });
+    renderGate();
+    const note = screen.getByTestId('disclosure-modal-orientation');
+    const box = boxOf();
+    expect(box).not.toBeNull();
+    expect(box!.contains(note)).toBe(false);
+    expect(follows(note, box!)).toBe(true);
+    expect(note.textContent).toBe(NOTE);
+  });
+
+  it('a cached CURRENT acceptance (fail-closed by construction): the note, and no box', () => {
+    seedHousehold();
+    seedErrored({ app_wide: DISCLOSURE_VERSIONS.app_wide });
+    renderGate();
+    expect(screen.getByTestId('disclosure-modal-orientation').textContent).toBe(NOTE);
+    expect(boxOf()).toBeNull();
+  });
+
+  it('the version-bump re-prompt (a completed load, stale acceptance) carries NO note: its box orients it', () => {
+    seedHousehold();
+    seedAcceptances({ app_wide: '1.4' });
+    renderGate();
+    expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
+    expect(screen.queryByTestId('disclosure-modal-orientation')).toBeNull();
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  // CR-D7-5 (D7 review): the note is part of the dialog's accessible
+  // description on the fail-closed path (so it is announced on open), while
+  // DialogDescription itself keeps its exact `Version x.y` text (e2e pins it)
+  // and never contains the note.
+  it('CR-D7-5: on the fail-closed path the accessible description is the version line plus the note, and the note sits outside DialogDescription', () => {
+    seedHousehold();
+    seedErrored({});
+    renderGate();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAccessibleDescription(`Version ${DISCLOSURE_VERSIONS.app_wide} ${NOTE}`);
+    const description = screen.getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+    expect(description.textContent).toBe(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+    expect(description.contains(screen.getByTestId('disclosure-modal-orientation'))).toBe(false);
+  });
+
+  it('CR-D7-5: the version-bump re-prompt keeps the version line as its whole accessible description', () => {
+    seedHousehold();
+    seedAcceptances({ app_wide: '1.4' });
+    renderGate();
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+  });
+
+  it('registry rule: every document past 1.0 ships its own diffFromPrevious (so the gate\'s deleted default strings stay unreachable and every re-prompt box has its copy)', () => {
+    const bumped = Object.entries(DISCLOSURES).filter(([, d]) => d.version !== '1.0');
+    expect(bumped.length).toBeGreaterThan(0);
+    for (const [id, d] of bumped) {
+      expect((d as { diffFromPrevious?: string }).diffFromPrevious, id).toBeTruthy();
+    }
   });
 });

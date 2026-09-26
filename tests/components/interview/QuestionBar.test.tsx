@@ -7,6 +7,7 @@ import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { useInterviewBarStore } from '@/lib/interview/bar-store';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { fixtureCtx } from '../../lib/interview/fixture';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -93,7 +94,7 @@ describe('QuestionBar', () => {
       useAcceptancesStore.setState({ acceptedVersions: { interview: '1.1' } } as never);
       openGate();
       expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
-      expect(screen.getByText('Version 1.2')).toBeInTheDocument();
+      expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.interview}`)).toBeInTheDocument();
       expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
       // Identity, not copy: the box carries THIS document's diff (the interview
       // 1.2 text is pinned in tests/legal/disclosures.test.ts, not duplicated).

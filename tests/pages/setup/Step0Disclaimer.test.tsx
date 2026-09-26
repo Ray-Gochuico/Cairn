@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Step0Disclaimer from '@/pages/setup/Step0Disclaimer';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 import * as exploreTransitions from '@/lib/explore-transitions';
 import type { Person } from '@/types/schema';
 
@@ -21,7 +23,7 @@ describe('Step0Disclaimer', () => {
   it('renders the app_wide disclaimer modal', () => {
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
-    expect(screen.getByText(/version 1\.5/i)).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`)).toBeInTheDocument();
   });
 
   it('T23: shows the branded Welcome-to-Cairn frame above the disclaimer', () => {
@@ -48,7 +50,7 @@ describe('Step0Disclaimer', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /continue to setup/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.5');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', DISCLOSURE_VERSIONS.app_wide);
     });
   });
 
@@ -190,5 +192,42 @@ describe('Step0Disclaimer', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('db down')).not.toBeInTheDocument();
     warn.mockRestore();
+  });
+});
+
+/* A-7(3) (v1.7.1): Step 0 passes the app_wide registry entry itself; the
+   first-run copy that dropped `diffFromPrevious` is gone. The what-changed box
+   is the modal's decision alone (R3, D-R3-2: only over a recorded EARLIER
+   acceptance of this id). The fresh-household and post-reset-shape no-box
+   pins live in SetupWizard.test.tsx, on the wizard's routes. */
+describe('Step0Disclaimer presents the registry document itself (A-7(3))', () => {
+  const BOX = 'What changed since you last accepted:';
+  beforeEach(() => {
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+    localStorage.clear();
+  });
+  afterEach(() => {
+    useAcceptancesStore.setState({ acceptedVersions: {}, status: 'ready', isLoading: false, error: null });
+  });
+
+  it('with a recorded EARLIER app_wide acceptance the modal rule shows the box and the registry diff (Step 0 no longer strips it)', () => {
+    useAcceptancesStore.setState({ acceptedVersions: { app_wide: '1.4' }, status: 'ready', isLoading: false, error: null });
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    expect(screen.getByText(BOX)).toBeInTheDocument();
+    expect(screen.getByText(/Version 1\.5 adds two new bullets/)).toBeInTheDocument();
+  });
+
+  it('the explore action records the version of the document Step 0 presents', async () => {
+    useAcceptancesStore.setState({ acceptedVersions: {}, status: 'ready', isLoading: false, error: null });
+    const acceptDisclaimer = vi.fn().mockResolvedValue(undefined);
+    useHouseholdStore.setState({ acceptDisclaimer } as any);
+    const enter = vi.spyOn(exploreTransitions, 'enterExploreMode').mockResolvedValue(undefined);
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+    await waitFor(() => expect(enter).toHaveBeenCalled());
+    expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', DISCLOSURE_VERSIONS.app_wide);
+    enter.mockRestore();
   });
 });

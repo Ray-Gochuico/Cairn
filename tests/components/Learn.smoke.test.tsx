@@ -10,6 +10,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useLearningStore } from '@/stores/learning-state-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import Learn from '@/pages/Learn';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 // Loose live-bank smoke (panel Testing H3): NO load-bank mock here — Learn renders
 // against the REAL reviewed bank-v1.json. We only assert it renders without
@@ -60,7 +61,7 @@ describe('Learn page — live bank smoke', () => {
   it('renders the live 4-set without throwing for a seeded, accepted user', async () => {
     await db.execute(
       `INSERT INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
-       VALUES (1, 'learning', '1.0', '2026-05-28T00:00:00Z')`,
+       VALUES (1, 'learning', '${DISCLOSURE_VERSIONS.learning}', '2026-05-28T00:00:00Z')`,
     );
     await useHouseholdStore.getState().load();
     await useAcceptancesStore.getState().load();
