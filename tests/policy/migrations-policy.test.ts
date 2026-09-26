@@ -267,8 +267,6 @@ describe('released-migration immutability (v1.7.1 U3)', () => {
           'These migrations are in a released build, so upgraded files already ran the old SQL.',
           'Put the change in a NEW migration (append a row to the registry and bump',
           'MAX_SCHEMA_VERSION in both pins); the released SQL stays as it shipped.',
-          'A row this release commit appended to freeze a newly released migration reads the same way when its',
-          'hash is wrong: remove that row, and the frozen-row check below prints the row to paste (v1.8.0 T12).',
           '',
         ].join('\n'),
       );
