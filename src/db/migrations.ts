@@ -11,9 +11,11 @@ export interface Migration {
  * DERIVATION: the COUNT of registered migrations (see `loadAllMigrations`).
  * Every migration adds exactly one forward step, so the count is a monotonic
  * schema-version number that bumps automatically when a migration is appended.
- * After the runner applies migrations it stamps this into `PRAGMA user_version`
- * (a SQLite integer that lives in the db file header), giving us a cheap,
- * file-local "what schema is this?" marker that survives a file copy/restore.
+ * The runner stamps `PRAGMA user_version` (a SQLite integer that lives in the
+ * db file header) inside each migration's own batch — that migration's
+ * registry ordinal, v1.7.1 U3 — and a full run ends at this number, giving us
+ * a cheap, file-local "what schema is this?" marker that survives a file
+ * copy/restore.
  *
  * PARITY: `src-tauri/src/db_backup.rs::MAX_SCHEMA_VERSION` MUST equal this — the
  * Rust restore guard refuses a backup whose stamped `user_version` exceeds it.
@@ -114,9 +116,10 @@ export interface PendingMigrations {
  * runMigrations: sqlite_master check → schema_migrations names). Used by
  * init.ts to decide whether to take the pre-update copy BEFORE runMigrations
  * runs (v1.7.1 U1, CR-U-5). Never creates the table, never stamps anything.
- * Keyed on names, not user_version, because the runner stamps the constant
- * MAX_SCHEMA_VERSION even for a subset (see the trailing PRAGMA below) —
- * `applied` is the count of REGISTRY versions present, so a foreign row
+ * Keyed on names, not user_version: names are what the runner itself skips
+ * on, and a file a pre-U3 runner touched carries the constant
+ * MAX_SCHEMA_VERSION even after a subset. `applied` is the count of REGISTRY
+ * versions present, so a foreign row (a chain marker, a newer build's name)
  * never inflates it and `applied + pending.length === migrations.length`.
  */
 export async function pendingMigrations(
@@ -257,6 +260,7 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     sql: 'DELETE FROM schema_migrations WHERE version LIKE ?',
     params: [CHAIN_MARKER_LIKE],
   };
+  let stamp = currentVersion;
 
   for (const [i, m] of pending.entries()) {
     const statements: BatchStatement[] = splitStatements(m.sql).map((sql) => ({ sql }));
@@ -276,6 +280,19 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     }
     if (i === pending.length - 1) batch.push(clearMarkers);
 
+    // v1.7.1 U3: STAMP this migration's schema version INSIDE its own batch, so
+    // the header write commits or rolls back with the migration (user_version
+    // lives in page 1 of the file). A crash mid-chain therefore leaves the
+    // number of the last migration that committed, and an older build's
+    // downgrade guard refuses the file. Never lowers the stamp (a re-run gap
+    // migration on a newer file keeps it). `PRAGMA user_version = N` takes no
+    // bind parameter; N is a registry position, never user input.
+    const ordinal = registryOrdinal(m.version);
+    if (ordinal !== undefined) {
+      stamp = Math.max(stamp, ordinal);
+      batch.push({ sql: `PRAGMA user_version = ${stamp}` });
+    }
+
     // Atomicity, the right way: each migration runs through `executeBatch`,
     // which routes every statement to ONE physical connection.
     //
@@ -288,29 +305,34 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     // schema with no schema_migrations row, then re-run next boot and fail on
     // the now-existing CREATE TABLE. A single-connection test adapter was
     // structurally blind to this. `executeBatch` closes the gap: the whole
-    // batch (body + audit row) commits or rolls back together on one
-    // connection, in both prod and test.
+    // batch (body + audit row + marker + stamp) commits or rolls back together
+    // on one connection, in both prod and test.
     //
     // SELF-MANAGED migrations (currently 0033, which toggles PRAGMA
     // foreign_keys outside any tx and carries its own BEGIN/COMMIT) run with
     // `transaction: false`: one connection, but no runner-added wrap, so the
     // migration's own transaction/PRAGMA statements run exactly as written.
     // SQLite forbids nested BEGINs and ignores PRAGMA foreign_keys inside a
-    // transaction, so wrapping them would break both. The audit row is
-    // appended to the batch; 0033's COMMIT has fired by the time it runs, so
-    // it lands outside any transaction, which is correct.
+    // transaction, so wrapping them would break both. The audit row and the
+    // stamp are appended to the batch; 0033's COMMIT has fired by the time they
+    // run, so they land outside any transaction — acceptable for a migration
+    // every released file already has (tests/db/upgrade-path.test.ts pins how
+    // "recorded" and "applied" disagree for it).
     const selfManaged = statements.some((s) => SELF_MANAGED_TX_RE.test(s.sql));
 
     await db.executeBatch(batch, { transaction: !selfManaged });
   }
 
-  // STAMP the schema version into the db-file header so future boots (and a
-  // restore's pre-flight) can tell what schema this file is. `PRAGMA
-  // user_version = N` does not accept a bind parameter and N is a build-time
-  // constant (never user input), so interpolation is safe here. Runs outside
-  // executeBatch: it's a single idempotent header write, and on the self-managed
-  // (0033) path the batch's own COMMIT has already fired.
-  await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION}`);
+  // TRAILING STAMP: the schema this run ends at, so future boots (and a
+  // restore's pre-flight) can tell what schema this file is. Unconditional —
+  // it is the one header write a boot with nothing pending makes (a pre-guard
+  // file at 0 is healed here; U1's "nothing pending" boot-failure path, PR-1,
+  // relies on it). v1.7.1 U3: the registry ordinal of the last migration in
+  // the list passed (never the constant, never lower than the stamp so far);
+  // a list with no registry migration stamps nothing.
+  if (lastOrdinal !== undefined) {
+    await db.execute(`PRAGMA user_version = ${Math.max(stamp, lastOrdinal)}`);
+  }
 }
 
 /**

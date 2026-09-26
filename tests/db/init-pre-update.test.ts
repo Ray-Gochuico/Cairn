@@ -186,7 +186,7 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
     await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError' });
     expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 53, to: all.length, now: expect.any(Date), originFrom: undefined });
     expect((await pendingMigrations(db, all)).applied).toBe(54);   // 0054 committed on its own (migrations.ts:162)
-    expect(await readUserVersion(db)).toBe(53);                     // the stamp (:171) never ran
+    expect(await readUserVersion(db)).toBe(54);                     // U3: 0054's own batch stamped 54; the chain marker keeps the origin, 53
     await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', preUpdateCopyPath: COPY });
     expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: all.length, now: expect.any(Date), originFrom: 53 });
   });

@@ -7,10 +7,10 @@ import { loadAllMigrations, runMigrations } from '@/db/migrations';
 /**
  * Write a finance.db exactly as the build that shipped schema `n` would have
  * left it: the first n registry migrations applied, n audit rows, and
- * user_version = n. The runner stamps the CONSTANT MAX_SCHEMA_VERSION even for
- * a subset (migrations.ts, the trailing PRAGMA), so the stamp is corrected
- * here — U3's per-migration stamping makes that line unnecessary. Closing the
- * adapter checkpoints and removes the WAL, so the file is self-contained.
+ * user_version = n — the runner's own stamp (v1.7.1 U3 stamps each
+ * migration's registry ordinal and ends at the last one passed; U1 chip b
+ * deleted the re-stamp this helper needed before). Closing the adapter
+ * checkpoints and removes the WAL, so the file is self-contained.
  * Refuses anything but a tmp folder or an isolated `*.smoke` profile folder
  * (CR-U-6; an allowlist, see assertSeedTargetAllowed).
  */
@@ -22,7 +22,6 @@ export async function seedSchemaFile(outPath: string, n: number): Promise<void> 
   try {
     const all = await loadAllMigrations();
     await runMigrations(db, all.slice(0, n));
-    await db.execute(`PRAGMA user_version = ${n}`); // what the n-build stamped; U3 deletes this line
   } finally {
     await db.close();
   }
