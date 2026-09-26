@@ -6,6 +6,8 @@ import { runMigrations } from '@/db/migrations';
 import { PriceCache } from '@/market/price-cache';
 import type { YahooClient } from '@/market/yahoo-client';
 import { localTodayISO } from '@/lib/dates';
+import { buildPositions, type PriceCacheRow } from '@/lib/positions';
+import type { Holding } from '@/types/schema';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -116,6 +118,80 @@ describe('PriceCache', () => {
       process.env.TZ = 'Pacific/Auckland';
       vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
       expect(await keysAfterTwoReads()).toEqual(['2026-01-01']);
+    });
+  });
+
+  describe('v1.8.0 A-2′ (D-A2-4): today\'s write removes the ticker\'s rows keyed AFTER today\'s local key', () => {
+    // A fetch keyed by the old UTC day after UTC midnight (west of UTC, before the
+    // upgrade) or before a zone change can leave a row keyed after today's local key.
+    // Positions reads the highest key as "Last price" and the next one down as the
+    // "Since last refresh" baseline, so that older fetch would sort above today's.
+    // Seed: VTI $100 two local days back's evening row, VTI $99 under the old UTC key
+    // (fetched 01:00Z), BND $50 under the same key; today's fetch is VTI $101, 10 shares.
+    const ORIGINAL_TZ = process.env.TZ;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = ORIGINAL_TZ;
+    });
+
+    async function refreshThenRead(seed: Array<[string, string, number, string]>) {
+      for (const row of seed) {
+        await db.execute('INSERT INTO price_cache (ticker, date, price, fetched_at) VALUES (?, ?, ?, ?)', row);
+      }
+      quoteFn.mockResolvedValueOnce({
+        ticker: 'VTI', price: 101, changePct: 0, currency: 'USD', fetchedAt: new Date().toISOString(),
+      });
+      expect(await new PriceCache(db, mockYahoo).currentPrice('VTI')).toBe(101);
+      // The Investments page's own SELECT (loadPriceRows), then the Positions reader.
+      const rows = await db.select<PriceCacheRow>(
+        `SELECT ticker, date, price, fetched_at FROM price_cache
+         WHERE ticker IN (?, ?) ORDER BY ticker ASC, date ASC`,
+        ['BND', 'VTI'],
+      );
+      const holding = { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, targetAllocationPct: null, costBasis: null } as Holding;
+      const [vti] = buildPositions([{ id: 1, name: 'Brokerage' }], [holding], new Map(), rows).accounts[0].rows;
+      return {
+        keys: rows.map((r) => `${r.ticker} ${r.date}`),
+        vti: [vti.lastPrice, vti.lastPriceDate, vti.currentValue, vti.sinceRefreshValue],
+      };
+    }
+    const upgradeSeed: Array<[string, string, number, string]> = [
+      ['VTI', '2025-12-30', 100, '2025-12-30 20:00:00'],
+      ['VTI', '2026-01-01', 99, '2026-01-01 01:00:00'],
+      ['BND', '2026-01-01', 50, '2026-01-01 01:00:00'],
+    ];
+
+    it('Los Angeles, Dec 31 19:00 PST: the VTI row keyed 2026-01-01 is gone; Last price is today\'s $101 and Since last refresh +$10 (other tickers untouched)', async () => {
+      // Kept, the old row would read Last price $99 and Since last refresh (99 − 101) × 10 = −$20.
+      process.env.TZ = 'America/Los_Angeles';
+      vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+      const { keys, vti } = await refreshThenRead(upgradeSeed);
+      expect(keys).toEqual(['BND 2026-01-01', 'VTI 2025-12-30', 'VTI 2025-12-31']);
+      expect(vti).toEqual([101, '2025-12-31', 1010, 10]);
+    });
+
+    it('Etc/GMT+12, Dec 31 15:00 (UTC day Jan 1): the same — the VTI row keyed 2026-01-01 is gone', async () => {
+      process.env.TZ = 'Etc/GMT+12';
+      vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+      const { keys, vti } = await refreshThenRead(upgradeSeed);
+      expect(keys).toEqual(['BND 2026-01-01', 'VTI 2025-12-30', 'VTI 2025-12-31']);
+      expect(vti).toEqual([101, '2025-12-31', 1010, 10]);
+    });
+
+    it('Pacific/Auckland, Jan 1 09:00 NZDT: rows keyed on or before today stay — the old UTC key (Dec 31) is the baseline, +$20', async () => {
+      // East of UTC the old UTC key is never after the local day, so nothing is removed.
+      process.env.TZ = 'Pacific/Auckland';
+      vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+      const { keys, vti } = await refreshThenRead([
+        ['VTI', '2025-12-30', 100, '2025-12-30 20:00:00'],
+        ['VTI', '2025-12-31', 99, '2025-12-31 18:00:00'],
+      ]);
+      expect(keys).toEqual(['VTI 2025-12-30', 'VTI 2025-12-31', 'VTI 2026-01-01']);
+      expect(vti).toEqual([101, '2026-01-01', 1010, 20]);
     });
   });
 
