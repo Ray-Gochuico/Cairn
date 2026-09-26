@@ -42,6 +42,8 @@ vi.mock('recharts', () => ({
   ),
 }));
 
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expectBasisDiscipline } from '../../helpers/basis-discipline';
@@ -377,5 +379,103 @@ describe('W5 basis-audit render sweep (D-T5 guarantee 5)', () => {
       </MemoryRouter>,
       { figures: RETIREMENT_AGE_BASIS_FIGURES, charts: [] },
     );
+  });
+});
+
+/* ── v1.7.1 A-5a (4), B1 review MINOR 10: REGISTRY-SHAPE pins. By the frozen
+      W2 contract an ABSENT rowsTestId means caption-only, and a figure moved
+      from 'pinned' to 'invariant' drops its mark clause — both edits leave
+      every sweep above GREEN while it checks less. Each registration is pinned
+      whole, beside the sweeps that read it, so any change to what a sweep
+      checks is a review-visible diff of this file. ──────────────────────── */
+
+describe('W5 basis registrations — shape pins (A-5a; a sweep cannot be downgraded in silence)', () => {
+  it('inventory: the /calculators registrations live in exactly these four card modules', () => {
+    const ROOT = path.resolve(__dirname, '..', '..', '..');
+    const dir = path.join(ROOT, 'src/pages/calculators');
+    const registering = readdirSync(dir)
+      .filter((f) => /\.tsx?$/.test(f))
+      .filter((f) => /Registered(?:Figure|Chart)\[\]/.test(readFileSync(path.join(dir, f), 'utf8')))
+      .sort();
+    expect(registering).toEqual([
+      'CompoundInterestCard.tsx',
+      'EarliestRetirementCard.tsx',
+      'PathToFiCard.tsx',
+      'StressTestCard.tsx',
+    ]);
+  });
+
+  it('CompoundInterestCard: figures + the Assumed and History chart registrations, whole', () => {
+    expect(COMPOUND_BASIS_FIGURES).toEqual([
+      { testId: 'compound-headline', cls: 'convertible' },
+      { testId: 'compound-total-contributed', cls: 'convertible' },
+      { testId: 'compound-total-interest', cls: 'convertible' },
+      { testId: 'compound-final-balance', cls: 'convertible' },
+      { testId: 'compound-starting-provenance', cls: 'invariant' },
+    ]);
+    expect(COMPOUND_BASIS_CHARTS).toEqual([
+      { chartTestId: 'compound-chart', captionTestId: 'compound-chart-caption', cls: 'convertible', rowsTestId: 'rc-composed-chart' },
+    ]);
+    expect(COMPOUND_HISTORY_BASIS_CHARTS).toEqual([
+      {
+        chartTestId: 'compound-history-chart',
+        captionTestId: 'compound-history-chart-caption',
+        cls: 'pinned',
+        pinnedBasis: 'today',
+        rowsTestId: 'rc-composed-chart',
+      },
+    ]);
+  });
+
+  it('PathToFiCard: figures + the Assumed and History chart registrations, whole', () => {
+    expect(PATH_TO_FI_BASIS_FIGURES).toEqual([
+      { testId: 'ptf-target-fv', cls: 'pinned', pinnedBasis: 'today' },
+      { testId: 'ptf-monthly-expenses', cls: 'invariant' },
+      { testId: 'ptf-joint-portfolio', cls: 'invariant' },
+      { testId: 'ptf-unattributed-contribution', cls: 'invariant' },
+      { testId: 'ptf-gap', cls: 'pinned', pinnedBasis: 'today' },
+      { testId: 'ptf-gap-value', cls: 'invariant' },
+    ]);
+    expect(PATH_TO_FI_BASIS_CHARTS).toEqual([
+      { chartTestId: 'path-to-fi-chart', captionTestId: 'path-to-fi-chart-caption', cls: 'convertible', rowsTestId: 'rc-composed-chart' },
+    ]);
+    expect(PATH_TO_FI_HISTORY_BASIS_CHARTS).toEqual([
+      {
+        chartTestId: 'path-to-fi-history-chart',
+        captionTestId: 'path-to-fi-history-chart-caption',
+        cls: 'pinned',
+        pinnedBasis: 'today',
+        rowsTestId: 'rc-composed-chart',
+      },
+    ]);
+  });
+
+  it('StressTestCard: figures (the three CP-18 mark pointers included) + the replay chart registration, whole', () => {
+    expect(STRESS_TEST_BASIS_FIGURES).toEqual([
+      { testId: 'stress-test-meaning', cls: 'invariant' },
+      { testId: 'stress-test-trough', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' },
+      { testId: 'stress-test-window-end', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' },
+      { testId: 'stress-recovery', cls: 'invariant' },
+      { testId: 'stress-test-baseline', cls: 'pinned', pinnedBasis: 'today', markTestId: 'stress-test-basis-line' },
+      { testId: 'stress-test-scope-exclusions', cls: 'invariant' },
+    ]);
+    expect(STRESS_TEST_BASIS_CHARTS).toEqual([
+      {
+        chartTestId: 'stress-test-chart',
+        captionTestId: 'stress-test-chart-caption',
+        cls: 'pinned',
+        pinnedBasis: 'today',
+        rowsTestId: 'rc-composed-chart',
+      },
+    ]);
+  });
+
+  it('EarliestRetirementCard: figures (no chart registration), whole', () => {
+    expect(RETIREMENT_AGE_BASIS_FIGURES).toEqual([
+      { testId: 'retirement-age-criterion', cls: 'pinned', pinnedBasis: 'today' },
+      { testId: 'retirement-age-probes', cls: 'pinned', pinnedBasis: 'today', markTestId: 'retirement-age-criterion' },
+      { testId: 'retirement-age-contributions', cls: 'invariant' },
+      { testId: 'retirement-age-scope-exclusions', cls: 'invariant' },
+    ]);
   });
 });
