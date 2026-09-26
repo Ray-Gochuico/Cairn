@@ -91,4 +91,15 @@ describe('webServerTimeoutFor (v1.8.0 T12, I-(b)) — the cold-start budget foll
       expect(p.timeoutMs).toBeLessThan(webServerTimeoutFor(p));
     }
   });
+
+  // T12 code review (CR-T12-5): both waits read the policy's BUDGET through one
+  // reader, not its arm. A budget that matches neither default (90 s) tells that
+  // apart from the rejected `high ? 240 s : 120 s` design, which answers 120 s
+  // (or 240 s) here and passed every other arm.
+  it('follows the budget itself, not the arm: a 90 s budget gives a 45 s boot wait and a 180 s cold start', () => {
+    expect(bootTimeoutFor({ timeoutMs: 90_000 } as never)).toBe(45_000); //       round(90 000 × 0.5)
+    expect(webServerTimeoutFor({ timeoutMs: 90_000 } as never)).toBe(180_000); // round(90 000 × 2)
+    expect(webServerTimeoutFor({ timeoutMs: 90_000, high: true } as never)).toBe(180_000);
+    expect(bootTimeoutFor({ timeoutMs: 90_000, high: true } as never)).toBe(45_000);
+  });
 });
