@@ -9,6 +9,21 @@
  * exactly `  'vX.Y.Z': N,` — the guard reads this file as text. A release
  * commit adds its own row (docs/RELEASING.md); the gate refuses a release
  * without it.
+ *
+ * v1.8.0 T12 (post-release review L16/L41) — the release commit, step by step.
+ * docs/RELEASING.md has the whole procedure, but docs/ is not in a clone, so
+ * the steps the tests enforce are also here:
+ *   1. this release's row, last, where N is MAX_SCHEMA_VERSION in
+ *      src/db/migrations.ts and in src-tauri/src/db_backup.rs (the two agree);
+ *   2. schema-bumping releases only: the new migration's row appended to
+ *      SHIPPED_MIGRATIONS in tests/policy/migrations-policy.test.ts (once step 1
+ *      lands, its frozen-row check fails and prints the row to paste), and, when
+ *      the migration creates a new table, a row for that table in seedAtSchema
+ *      (tests/db/upgrade-path-seed.ts), or tests/db/upgrade-path.test.ts's
+ *      "every user table holds a row" check fails.
+ * Before committing, run `node scripts/released-schema-guard.mjs vX.Y.Z` and the
+ * four files of release.yml's "Upgrade path from every released schema" step;
+ * `--all` passes only once the tag exists (the release gate runs it there).
  */
 export const RELEASED_SCHEMAS: Readonly<Record<string, number>> = Object.freeze({
   'v1.0.0': 47,

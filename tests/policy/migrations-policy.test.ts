@@ -206,6 +206,42 @@ function movedShippedMigrations(migrations: ReadonlyArray<{ version: string; sql
   ).map(([key]) => key);
 }
 
+/**
+ * v1.8.0 T12 (post-release review L16/L41): the registry migrations that
+ * tests/db/released-schemas.ts records as released (ordinals up to
+ * `lastReleased`) but that the frozen table has no row for yet — the state
+ * right after a schema-bumping release commit adds its released-schemas row —
+ * each with the sha256 of its normalized SQL, ready to paste ([] = every
+ * released migration has its frozen row). A row that IS in the table but hashes
+ * differently stays a shipped-SQL change: the table cannot tell that apart from
+ * a wrong first freeze, so it never prints a hash for one.
+ */
+function unfrozenReleasedRows(
+  migrations: ReadonlyArray<{ version: string; sql: string }>,
+  frozen: ReadonlyArray<readonly [key: string, sha256: string]>,
+  lastReleased: number,
+): Array<{ key: string; hash: string }> {
+  return migrations
+    .slice(frozen.length, lastReleased)
+    .map((m) => ({ key: m.version, hash: sha256(normalizeShippedSql(m.sql)) }));
+}
+
+/** The failure text for unfrozenReleasedRows: the count mismatch, then per migration the instruction and its row. */
+function freezeMessage(unfrozen: ReadonlyArray<{ key: string; hash: string }>, frozenCount: number, lastReleased: number): string {
+  return [
+    '',
+    `tests/db/released-schemas.ts records schema ${lastReleased} as released, and SHIPPED_MIGRATIONS holds ${frozenCount} rows.`,
+    '',
+    ...unfrozen.flatMap(({ key, hash }) => [
+      `${key}: freeze this newly released migration. Append its row (the key and the sha256 of its normalized SQL) to SHIPPED_MIGRATIONS:`,
+      `  ['${key}', '${hash}'],`,
+    ]),
+    '',
+    'The release commit carries these rows with its released-schemas row (docs/RELEASING.md; tests/db/released-schemas.ts).',
+    '',
+  ].join('\n');
+}
+
 describe('released-migration immutability (v1.7.1 U3)', () => {
   it('the frozen table covers exactly the released ordinals (1..LAST_RELEASED_SCHEMA)', () => {
     expect(SHIPPED_MIGRATIONS).toHaveLength(LAST_RELEASED_SCHEMA);
@@ -227,11 +263,37 @@ describe('released-migration immutability (v1.7.1 U3)', () => {
           'These migrations are in a released build, so upgraded files already ran the old SQL.',
           'Put the change in a NEW migration (append a row to the registry and bump',
           'MAX_SCHEMA_VERSION in both pins); the released SQL stays as it shipped.',
+          'A row this release commit appended to freeze a newly released migration reads the same way when its',
+          'hash is wrong: remove that row, and the frozen-row check below prints the row to paste (v1.8.0 T12).',
           '',
         ].join('\n'),
       );
     }
     expect(moved).toEqual([]);
+  });
+
+  // v1.8.0 T12 (post-release review L16/L41): a schema-bumping release commit
+  // adds its released-schemas row, and the length pin above then fails with a
+  // bare count. This check fails in the same run and prints the row to paste.
+  it('every migration tests/db/released-schemas.ts records as released has its frozen row; a missing one prints the row to paste', async () => {
+    const unfrozen = unfrozenReleasedRows(await loadAllMigrations(), SHIPPED_MIGRATIONS, LAST_RELEASED_SCHEMA);
+    if (unfrozen.length > 0) throw new Error(freezeMessage(unfrozen, SHIPPED_MIGRATIONS.length, LAST_RELEASED_SCHEMA));
+    expect(unfrozen).toEqual([]);
+  });
+
+  it('the freeze message is real: a table missing its last row reports that migration, its frozen sha256 and "freeze this newly released migration" (planted)', async () => {
+    const migrations = await loadAllMigrations();
+    const [lastKey, lastHash] = SHIPPED_MIGRATIONS[SHIPPED_MIGRATIONS.length - 1];
+    const frozen = SHIPPED_MIGRATIONS.slice(0, -1);
+    const unfrozen = unfrozenReleasedRows(migrations, frozen, SHIPPED_MIGRATIONS.length);
+    expect(unfrozen).toEqual([{ key: lastKey, hash: lastHash }]);
+    const message = freezeMessage(unfrozen, frozen.length, SHIPPED_MIGRATIONS.length);
+    expect(message).toContain(`${lastKey}: freeze this newly released migration.`);
+    expect(message).toContain(`  ['${lastKey}', '${lastHash}'],`);
+    expect(message).toContain('docs/RELEASING.md');
+    expect(message).not.toContain('Put the change in a NEW migration');
+    expect(unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS, SHIPPED_MIGRATIONS.length)).toEqual([]);
+    expect(unfrozenReleasedRows(migrations, SHIPPED_MIGRATIONS, SHIPPED_MIGRATIONS.length - 1)).toEqual([]);
   });
 
   it('every registry key\'s 4-digit prefix is its 1-based registry position (the ordinal the runner stamps)', async () => {
