@@ -11,6 +11,7 @@ import {
   withoutTrailingPeriod,
   clearPostUpdateNotice,
   clearUpdateHold,
+  peekPostUpdateNote,
   peekPostUpdateNotice,
   setSkipOnce,
   setUpdateHold,
@@ -103,6 +104,17 @@ describe('U1-m16 — a period-terminated reason never renders a double period', 
     expect(withoutTrailingPeriod('db_restore: the selected backup IS the live database.')).toBe('db_restore: the selected backup IS the live database');
     expect(withoutTrailingPeriod('disk full during restore')).toBe('disk full during restore');
     expect(withoutTrailingPeriod('a..')).toBe('a.');
+  });
+});
+
+describe('U1F-m10 — the post-update note knows whether its copy is from before the update', () => {
+  it('stash defaults to a true pre-update copy; a partway copy is recorded as such; clear drops both', () => {
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-53-to-55-20260925-101500.db');
+    expect(peekPostUpdateNote()).toEqual({ copyPath: '/x/backups/cairn-pre-update-53-to-55-20260925-101500.db', fromBeforeUpdate: true });
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-54-to-55-20260925-101500.db', false);
+    expect(peekPostUpdateNote()).toEqual({ copyPath: '/x/backups/cairn-pre-update-54-to-55-20260925-101500.db', fromBeforeUpdate: false });
+    clearPostUpdateNotice();
+    expect(peekPostUpdateNote()).toBeNull();
   });
 });
 

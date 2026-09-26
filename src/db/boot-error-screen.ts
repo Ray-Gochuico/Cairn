@@ -217,6 +217,10 @@ interface RestoreSectionOptions {
    * from the failed-migration screen, for the copy its error names when that
    * copy is from before the update; every other screen and row: none. */
   holdFor?: (entry: BackupEntry) => boolean;
+  /** U1F-m10: the row whose copy is known NOT to be from before the update
+   * (the failed-migration screen's named partway copy) is labelled for what
+   * it is; every other pre-update row keeps 'Before update'. */
+  notBeforeUpdate?: (entry: BackupEntry) => boolean;
 }
 
 /** Shared by every row of one restore section. */
@@ -234,6 +238,7 @@ interface RestoreContext {
   /** Disarm callbacks of the currently armed rows (at most one, CR-U-9). */
   armed: Set<() => void>;
   holdFor: (entry: BackupEntry) => boolean;
+  notBeforeUpdate: (entry: BackupEntry) => boolean;
 }
 
 /**
@@ -283,6 +288,7 @@ function appendRestoreSection(container: HTMLElement, opts: RestoreSectionOption
     now: opts.now,
     armed: new Set(),
     holdFor: opts.holdFor ?? (() => false),
+    notBeforeUpdate: opts.notBeforeUpdate ?? (() => false),
   };
   void hydrateRestoreList(list, ctx);
 }
@@ -336,6 +342,8 @@ async function hydrateRestoreList(list: HTMLUListElement, ctx: RestoreContext): 
 function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement {
   const when = entry.takenAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const preUpdate = entry.kind === 'pre-update';
+  // U1F-m10: never call a copy 'from before the update' unless it is one.
+  const partway = preUpdate && ctx.notBeforeUpdate(entry);
 
   const row = document.createElement('li');
   row.setAttribute('data-testid', 'boot-restore-row');
@@ -348,13 +356,19 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
 
   const label = document.createElement('span');
   label.style.marginRight = '8px';
-  label.textContent = preUpdate ? `Before update — ${when}` : when;
+  label.textContent = partway
+    ? `Saved before this attempt — ${when}`
+    : preUpdate
+      ? `Before update — ${when}`
+      : when;
 
   // The accessible name names the backup (mirrors DataSection, CR-U1-28);
   // the visible label stays the short 'Restore'.
-  const restoreName = preUpdate
-    ? `Restore the copy from before the update, ${when}`
-    : `Restore backup from ${when}`;
+  const restoreName = partway
+    ? `Restore the copy saved before this attempt, ${when}`
+    : preUpdate
+      ? `Restore the copy from before the update, ${when}`
+      : `Restore backup from ${when}`;
   const restoreBtn = makeButton('Restore');
   restoreBtn.style.marginBottom = '0';
   restoreBtn.setAttribute('aria-label', restoreName);
@@ -425,9 +439,11 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
           cancelBtn.addEventListener('click', disarm);
           restoreBtn.after(cancelBtn);
           cancel = cancelBtn;
-          const subject = preUpdate
-            ? `the copy from before the update, ${when}`
-            : `the backup from ${when}`;
+          const subject = partway
+            ? `the copy saved before this attempt, ${when}`
+            : preUpdate
+              ? `the copy from before the update, ${when}`
+              : `the backup from ${when}`;
           ctx.status.textContent =
             `Ready to restore ${subject}. Confirm restore replaces your current data; Cancel keeps it.`;
         } catch (err) {
@@ -619,6 +635,8 @@ export function renderBootError(
       now,
       // CR-U-18: only this screen holds, and only for the named true copy.
       holdFor: (entry) => fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
+      // U1F-m10: the named copy is labelled honestly when it is a partway one.
+      notBeforeUpdate: (entry) => !fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
     });
     root.replaceChildren(container);
     return;

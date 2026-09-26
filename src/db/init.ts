@@ -223,7 +223,8 @@ async function initRealDatabase(gateOpts: { skipCopy: boolean; holdUpdate: boole
     if (!gate.updating) throw e;
     throw new MigrationFailedError(e, gate.copyPath, gate.copyIsFromBeforeUpdate);
   }
-  if (gate.copyPath !== null) stashPostUpdateNotice(gate.copyPath);
+  // U1F-m10: the note says whether its copy is from before the update.
+  if (gate.copyPath !== null) stashPostUpdateNotice(gate.copyPath, gate.copyIsFromBeforeUpdate);
 
   // DEV-ONLY: populate demo data for browser smoke of the Investments donuts.
   // Triple-guarded so the entire branch dead-code-eliminates from the Tauri

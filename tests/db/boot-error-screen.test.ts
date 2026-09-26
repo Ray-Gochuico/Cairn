@@ -748,6 +748,24 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(root.querySelector('pre')?.textContent).not.toContain('Cairn could not finish updating your data');
   });
 
+  it('U1F-m10: the named PARTWAY copy\'s row, accessible name and announcement say what it is; other rows are unchanged', async () => {
+    const r = document.createElement('div');
+    document.body.append(r);
+    renderBootError(r, new MigrationFailedError(new Error('x'), PRE.path, false), { now });
+    await vi.waitFor(() => expect(rows(r)).toHaveLength(1));
+    const row = rows(r)[0];
+    expect(row.querySelector('span')?.textContent).toBe(`Saved before this attempt — ${whenOf(PRE.takenAt)}`);
+    const btn = row.querySelector('button')!;
+    expect(btn.getAttribute('aria-label')).toBe(`Restore the copy saved before this attempt, ${whenOf(PRE.takenAt)}`);
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    expect(r.querySelector('[data-testid="boot-restore-status"]')!.textContent).toBe(
+      `Ready to restore the copy saved before this attempt, ${whenOf(PRE.takenAt)}. Confirm restore replaces your current data; Cancel keeps it.`,
+    );
+    expect(r.textContent).not.toContain('Before update —');
+    r.remove();
+  });
+
   it('without a copy: says so', () => {
     renderBootError(root, new MigrationFailedError(new Error('x'), null));
     expect(root.textContent).toContain('The update stopped partway. No copy was saved before it started.');

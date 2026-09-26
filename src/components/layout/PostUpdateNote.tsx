@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { clearPostUpdateNotice, peekPostUpdateNotice } from '@/lib/boot-notices';
+import { clearPostUpdateNotice, peekPostUpdateNote } from '@/lib/boot-notices';
 
 /**
  * v1.7.1 U1 (CR-U-4): the one-time calm note after a boot that migrated the
@@ -12,8 +12,8 @@ import { clearPostUpdateNotice, peekPostUpdateNotice } from '@/lib/boot-notices'
  * survive into a later launch.
  */
 export function PostUpdateNote() {
-  const [copyPath, setCopyPath] = useState<string | null>(() => peekPostUpdateNotice());
-  if (copyPath === null) return null;
+  const [note, setNote] = useState(() => peekPostUpdateNote());
+  if (note === null) return null;
   return (
     <div
       role="note"
@@ -22,7 +22,10 @@ export function PostUpdateNote() {
     >
       <p className="min-w-0">
         <span className="font-medium">Cairn updated your data for this version.</span>{' '}
-        A copy from before the update is in Settings → Data.
+        {note.fromBeforeUpdate
+          ? 'A copy from before the update is in Settings → Data.'
+          : // U1F-m10: a partway retry's copy is not from before the update.
+            'The copy in Settings → Data was saved after an earlier attempt had changed part of your data, so it is not from before the update.'}
       </p>
       <Button
         variant="outline"
@@ -30,7 +33,7 @@ export function PostUpdateNote() {
         className="shrink-0"
         onClick={() => {
           clearPostUpdateNotice();
-          setCopyPath(null);
+          setNote(null);
           // U1-m22: the button unmounts under focus; hand focus to the page's
           // main landmark (PageShell's <main id="main" tabIndex={-1}>).
           document.getElementById('main')?.focus();

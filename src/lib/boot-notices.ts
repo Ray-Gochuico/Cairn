@@ -60,8 +60,24 @@ export function withoutTrailingPeriod(reason: string): string {
 export function stashRestoreFailureNotice(reason: string): void { write(RESTORE_FAILURE_NOTICE_KEY, reason); }
 export function takeRestoreFailureNotice(): string | null { return take(RESTORE_FAILURE_NOTICE_KEY); }
 
-export function stashPostUpdateNotice(copyPath: string): void { write(PRE_UPDATE_NOTICE_KEY, copyPath); }
+/** U1F-m10: a copy of a file an earlier attempt had changed partway is
+ * recorded with this prefix, so the note never calls it "from before the
+ * update" (an absolute path can never start with it). */
+const PARTWAY_NOTE_PREFIX = 'partway:';
+
+export function stashPostUpdateNotice(copyPath: string, fromBeforeUpdate = true): void {
+  write(PRE_UPDATE_NOTICE_KEY, fromBeforeUpdate ? copyPath : PARTWAY_NOTE_PREFIX + copyPath);
+}
 export function peekPostUpdateNotice(): string | null { return peek(PRE_UPDATE_NOTICE_KEY); }
+/** The pending post-update note, parsed: its copy's path and whether that
+ * copy holds the data from before the update. */
+export function peekPostUpdateNote(): { copyPath: string; fromBeforeUpdate: boolean } | null {
+  const v = peekPostUpdateNotice();
+  if (v === null) return null;
+  return v.startsWith(PARTWAY_NOTE_PREFIX)
+    ? { copyPath: v.slice(PARTWAY_NOTE_PREFIX.length), fromBeforeUpdate: false }
+    : { copyPath: v, fromBeforeUpdate: true };
+}
 export function clearPostUpdateNotice(): void { clear(PRE_UPDATE_NOTICE_KEY); }
 
 export function setSkipOnce(): void { write(PRE_UPDATE_SKIP_ONCE_KEY, '1'); }

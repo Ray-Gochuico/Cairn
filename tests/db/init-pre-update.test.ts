@@ -15,7 +15,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { initDatabase, maybeTakePreUpdateCopy } from '@/db/init';
 import { MAX_SCHEMA_VERSION, loadAllMigrations, pendingMigrations, readUserVersion, runMigrations, type Migration } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
-import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNotice, setSkipOnce, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
+import { PRE_UPDATE_NOTICE_KEY, peekPostUpdateNote, peekPostUpdateNotice, setSkipOnce, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
 import { DatabaseInitError } from '@/db/boot-errors';
 
@@ -189,6 +189,17 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
     expect(await readUserVersion(db)).toBe(53);                     // the stamp (:171) never ran
     await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', preUpdateCopyPath: COPY });
     expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: all.length, now: expect.any(Date), originFrom: 53 });
+  });
+
+  it('U1F-m10: a partway retry that SUCCEEDS stashes the note as not-from-before-the-update', async () => {
+    await atSchema53();
+    await db.execute('ALTER TABLE tickers ADD COLUMN regular_market_change REAL'); // 0055 will collide
+    await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError' });
+    await db.execute('ALTER TABLE tickers DROP COLUMN regular_market_change');     // the cause is gone
+    const partwayCopy = '/x/backups/cairn-pre-update-54-to-55-20260925-101500.db';
+    takePreUpdateCopy.mockResolvedValue({ path: partwayCopy, reused: false });
+    await initDatabase();
+    expect(peekPostUpdateNote()).toEqual({ copyPath: partwayCopy, fromBeforeUpdate: false });
   });
 
   it('U1-m9: the copy is "from before the update" only when its `from` is the chain origin; a partway file with no origin copy gets an honest flag', async () => {

@@ -44,6 +44,17 @@ describe('PostUpdateNote (CR-U-4, one-time)', () => {
     expect(document.activeElement).toBe(document.getElementById('main'));
   });
 
+  it('U1F-m10: after a partway retry the note never calls its copy "from before the update"', () => {
+    stashPostUpdateNotice('/x/backups/cairn-pre-update-54-to-55-20260925-101500.db', false);
+    render(<PostUpdateNote />);
+    const note = screen.getByRole('note', { name: 'Update notice' });
+    expect(note).toHaveTextContent('Cairn updated your data for this version.');
+    expect(note).toHaveTextContent(
+      'The copy in Settings → Data was saved after an earlier attempt had changed part of your data, so it is not from before the update.',
+    );
+    expect(note).not.toHaveTextContent('A copy from before the update');
+  });
+
   it('has exactly one control', () => {
     stashPostUpdateNotice(COPY);
     render(<PostUpdateNote />);
