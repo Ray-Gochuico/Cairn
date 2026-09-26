@@ -15,7 +15,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { MigrationFailedError } from '@/db/migrations';
 import { PreUpdateCopyError } from '@/lib/pre-update-copy';
 import { EXPLORE_FLAG_KEY, ExploreBootError } from '@/lib/explore-mode';
-import { PRE_UPDATE_HOLD_KEY, RESTORE_FAILURE_NOTICE_KEY, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
+import { PRE_UPDATE_HOLD_KEY, RESTORE_FAILURE_NOTICE_KEY, clearUpdateHold, setUpdateHold, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { RELEASES_URL } from '@/lib/releases-url';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -183,9 +183,10 @@ describe('v1.7.1 U2 — the restore section on every DB screen', () => {
     pastGuard();
     restoreBtn.click();
     await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
-    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload, onRestored: undefined }); // CR-U-23g: exact
-    // CR-U-18: the corrupt screen restores WITHOUT the one-boot hold.
-    expect((mRestore.mock.calls[0][1] as { onRestored?: unknown }).onRestored).toBeUndefined();
+    expect(mRestore).toHaveBeenCalledWith(PRE.path, { tolerateNotLoaded: true, reload, onRestored: clearUpdateHold }); // CR-U-23g: exact
+    // CR-U-18: the corrupt screen restores WITHOUT the one-boot hold, and
+    // clears one still pending (v1.7.2, L4).
+    expect((mRestore.mock.calls[0][1] as { onRestored?: unknown }).onRestored).toBe(clearUpdateHold);
   });
 
   it('Cancel puts the row back and never restores', async () => {
@@ -589,9 +590,11 @@ describe('CR-U-14 — the update hold (U1-m8)', () => {
     expect(takeUpdateHold()).toBe(true);
   });
 
-  it('a boot-screen restore of a MANUAL backup sets no hold', async () => {
+  it('a boot-screen restore of a MANUAL backup sets no hold, and clears one still pending (v1.7.2, L4)', async () => {
     const opts = await confirmRow(1);
-    expect(opts.onRestored).toBeUndefined();
+    expect(opts.onRestored).toBe(clearUpdateHold);
+    setUpdateHold();
+    opts.onRestored!();
     expect(takeUpdateHold()).toBe(false);
   });
 
@@ -696,24 +699,24 @@ describe('CR-U-18 — the hold is scoped to the failed-migration screen and its 
   ] as const) {
     it(`${label} screen: restoring the Before-update copy sets NO hold (the app boots normally after)`, async () => {
       const opts = await confirm(err, 0);
-      expect(opts.onRestored).toBeUndefined();
+      expect(opts.onRestored).toBe(clearUpdateHold); // v1.7.2 (L4): clears a pending hold
       expect(takeUpdateHold()).toBe(false);
     });
   }
 
   it('failed-migration screen: only the copy the error NAMES holds — another pre-update copy does not', async () => {
     const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path), 1); // OLDER_PRE
-    expect(opts.onRestored).toBeUndefined();
+    expect(opts.onRestored).toBe(clearUpdateHold);
   });
 
   it('failed-migration screen: the named copy holds when it is from before the update', async () => {
     const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path), 0);
-    expect(typeof opts.onRestored).toBe('function');
+    expect(opts.onRestored).toBe(setUpdateHold);
   });
 
   it('a PARTWAY copy (copyIsFromBeforeUpdate false) never holds, even when the error names it', async () => {
     const opts = await confirm(new MigrationFailedError(new Error('x'), PRE.path, false), 0);
-    expect(opts.onRestored).toBeUndefined();
+    expect(opts.onRestored).toBe(clearUpdateHold);
   });
 });
 
