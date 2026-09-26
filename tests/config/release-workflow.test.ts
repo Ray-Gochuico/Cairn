@@ -134,12 +134,12 @@ describe('release.yml — the test gate (v1.7.1 U3)', () => {
 // (build-windows is also gated through build-macos-arm64, but its own comment
 // keeps the edge explicit so it survives a refactor). Text slices, as above.
 
-/** Every top-level job under `jobs:`, in file order: its key and its text (key line to the next key, or the end). */
+/** Every top-level job under `jobs:`, in file order: its key and its text (key line to the next key, or the end). A key may be quoted or trail a comment. */
 function jobBlocks(yml: string): Array<{ name: string; text: string }> {
   const start = yml.search(/^jobs:$/m);
   if (start < 0) return [];
   const body = yml.slice(start);
-  const keys = [...body.matchAll(/^ {2}([\w-]+):$/gm)];
+  const keys = [...body.matchAll(/^ {2}["']?([\w-]+)["']?:[ \t]*(?:#.*)?$/gm)];
   return keys.map((m, i) => ({ name: m[1], text: body.slice(m.index, i + 1 < keys.length ? keys[i + 1].index : undefined) }));
 }
 
@@ -159,15 +159,30 @@ function needsOf(job: string): string[] {
   return out;
 }
 
+/**
+ * A job-level `if:` (four spaces in) that calls always(), failure() or cancelled(): GitHub then runs the job even
+ * when a job it needs failed, so the needs: edge no longer gates it. A plain condition keeps the implicit success().
+ * A block-scalar or multi-line condition is read through its more-indented continuation lines; comments are dropped.
+ */
+function ifBypassesNeeds(job: string): boolean {
+  const lines = job.split('\n');
+  const at = lines.findIndex((l) => /^ {4}if:/.test(l));
+  if (at < 0) return false;
+  const parts = [lines[at].replace(/^ {4}if:/, '')];
+  for (let i = at + 1; i < lines.length && /^ {6,}\S/.test(lines[i]); i += 1) parts.push(lines[i]);
+  return /\b(?:always|failure|cancelled)\s*\(\s*\)/.test(parts.map((l) => l.replace(/(?:^|\s)#.*$/, '')).join(' '));
+}
+
 /** Why some job could build, sign or publish while the test gate fails ([] = every other job needs test-gate directly). */
 function gateEdgeProblems(yml: string): string[] {
   const jobs = jobBlocks(yml);
   if (!jobs.some((j) => j.name === 'test-gate')) return ['the test-gate: job was not found — renamed? re-point this pin'];
   const others = jobs.filter((j) => j.name !== 'test-gate');
   if (others.length === 0) return ['no job besides test-gate was found — the job slicer is broken'];
-  return others
-    .filter((j) => !needsOf(j.text).includes('test-gate'))
-    .map((j) => `${j.name}: its needs: does not list test-gate, so it can build while the gate fails`);
+  return others.flatMap((j) => [
+    ...(needsOf(j.text).includes('test-gate') ? [] : [`${j.name}: its needs: does not list test-gate, so it can build while the gate fails`]),
+    ...(ifBypassesNeeds(j.text) ? [`${j.name}: its job-level if: calls always(), failure() or cancelled(), so it runs even when the gate fails`] : []),
+  ]);
 }
 
 describe('release.yml — every build job needs the test gate directly (v1.8.0 T12, post-release review L36)', () => {
@@ -209,6 +224,14 @@ describe('release.yml — every build job needs the test gate directly (v1.8.0 T
       'build-windows block list without test-gate': YML.replace(WIN_NEEDS, '    needs:\n      - build-macos-arm64\n'),
       'a new job with no needs': `${YML}\n  publish-notes:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
       'the test-gate job renamed': YML.replace(/^ {2}test-gate:$/m, '  tests:'),
+      // Code review of L36: a job-level if: with a status function other than
+      // success() runs the job even when a job it needs failed; and a job key
+      // with a trailing comment or quotes must still be found as a job.
+      'build-macos-arm64 if: always() (runs even when the gate fails)': YML.replace(MAC_NEEDS, `${MAC_NEEDS}    if: always()\n`),
+      'build-macos-arm64 if: ${{ failure() }}': YML.replace(MAC_NEEDS, `${MAC_NEEDS}    if: \${{ failure() }}\n`),
+      'build-windows if: ${{ !cancelled() }}': YML.replace(WIN_NEEDS, `${WIN_NEEDS}    if: \${{ !cancelled() }}\n`),
+      'a new job whose key carries a comment, with no needs': `${YML}\n  publish-notes:  # release notes\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
+      'a new job with a quoted key, with no needs': `${YML}\n  "publish-notes":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo notes\n`,
     };
     for (const [label, text] of Object.entries(refused)) expect(text, `${label}: the plant did not apply`).not.toBe(YML);
     const survivors = Object.entries(refused)
@@ -218,6 +241,14 @@ describe('release.yml — every build job needs the test gate directly (v1.8.0 T
     const accepted: Record<string, string> = {
       'build-macos-arm64 as a flow list': YML.replace(MAC_NEEDS, '    needs: [test-gate]\n'),
       'build-windows as a block list': YML.replace(WIN_NEEDS, '    needs:\n      - test-gate\n      - build-macos-arm64\n'),
+      'a job-level if: without a status function (success() still applies)': YML.replace(
+        MAC_NEEDS,
+        `${MAC_NEEDS}    if: startsWith(github.ref, 'refs/tags/')\n`,
+      ),
+      'a STEP-level if: failure() (it does not bypass the job gate)': YML.replace(
+        '      - name: Install npm deps\n        run: npm ci\n\n      - name: Extract version from tag\n',
+        '      - name: Install npm deps\n        run: npm ci\n\n      - name: Report\n        if: failure()\n        run: echo failed\n\n      - name: Extract version from tag\n',
+      ),
     };
     for (const [label, text] of Object.entries(accepted)) {
       expect(text, `${label}: the plant did not apply`).not.toBe(YML);
