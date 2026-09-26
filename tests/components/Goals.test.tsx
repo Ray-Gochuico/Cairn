@@ -325,10 +325,12 @@ describe('Goals page', () => {
     expect(bar).toHaveAttribute('aria-valuenow', '25');
   });
 
-  it('B3 review: the percent label is floored at zero like its bar — an imported negative balance reads "0%", never a U+2212 percent beside the Intl-hyphen dollar', () => {
+  it('B3 review: the percent label is floored at zero like its bar — an imported negative balance reads "0%" beside "−$500" (v1.7.1 M1: the dollar carries the true minus)', () => {
     // The CSV snapshot importer accepts a negative total_value (finiteness only), so
     // currentSaved can be −500 on a $10,000 goal: percentComplete = −0.05, which the
-    // unfloored label rendered "−5%" on the same row as formatCurrency's "-$500".
+    // unfloored label rendered "−5%" (B3 floored it at 0%). Since v1.7.1 M1 the dollar
+    // itself prints U+2212, so the row pins its exact text instead of "no U+2212
+    // anywhere": the percent is still floored, the money reads its true minus.
     primeStores({
       goals: [
         {
@@ -350,7 +352,7 @@ describe('Goals page', () => {
     );
     const row = screen.getByTestId('goal-current-saved').closest('div') as HTMLElement;
     expect((row.lastElementChild as HTMLElement).textContent).toBe('0%');
-    expect(row.textContent).not.toContain('−');
+    expect(row.textContent).toBe('−$500 saved0%'); // v1.7.1 M1: re-targeted from not.toContain('−')
     const bar = screen.getByRole('progressbar', { name: /underwater progress/i });
     expect(bar).toHaveAttribute('aria-valuenow', '0');
   });

@@ -39,7 +39,7 @@ describe('GrowthCard — horizon chips', () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
     await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
     expect(screen.getByTestId('growth-context')).toHaveTextContent('Now $95,000');
-    expect(screen.getByText(/-\$5,000|−\$5,000/)).toBeInTheDocument();
+    expect(screen.getByText('−$5,000')).toBeInTheDocument(); // v1.7.1 M1: exact — the either-glyph regex retires
     expect(screen.getByText('Past 3 months')).toBeInTheDocument();
     // Baseline date renders humanized (Wave 11 T4), not raw ISO.
     expect(screen.getByTestId('growth-context')).toHaveTextContent(/on Jun 1, 2026/);
@@ -50,7 +50,7 @@ describe('GrowthCard — horizon chips', () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
     await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
     const headline = screen.getByTestId('growth-headline');
-    expect(headline).toHaveTextContent(/-\$5,000|−\$5,000/);
+    expect(headline).toHaveTextContent('−$5,000'); // v1.7.1 M1: exact
     expect(headline).toHaveTextContent('(-5.0%)');
     expect(headline).toHaveClass('text-3xl');
     const context = screen.getByTestId('growth-context');

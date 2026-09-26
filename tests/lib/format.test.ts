@@ -7,6 +7,7 @@ import {
   formatDate,
   formatMonth,
   formatCurrencyCents,
+  formatCurrency,
   withTrueMinus,
 } from '@/lib/format';
 import { pctFromFraction } from '@/lib/calculators/scenario-assumptions';
@@ -74,6 +75,27 @@ describe('formatCurrencyCents', () => {
   });
   it('pads whole dollars to two decimals', () => {
     expect(formatCurrencyCents(40)).toBe('$40.00');
+  });
+});
+
+describe('formatCurrency (v1.7.1 M1 — one true minus for money)', () => {
+  const LEGACY_WHOLE = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  it('a negative leads with U+2212, never the ASCII hyphen; non-negatives are byte-identical', () => {
+    expect(formatCurrency(-500)).toBe('−$500');
+    expect(formatCurrency(-1_234_567.89)).toBe('−$1,234,568');
+    expect(formatCurrency(-500).charCodeAt(0)).toBe(0x2212);
+    expect(formatCurrency(500)).toBe('$500');
+    expect(formatCurrency(0)).toBe('$0');
+    expect(formatCurrency(-0.4)).toBe('−$0'); // D-M1-2: glyph-only (CR-M1-4); the unsigned-zero question rides B-19
+  });
+  it('value invariance (CR-M1-4): the ONLY change from the Intl output is the leading hyphen → U+2212', () => {
+    for (const v of MONEY_SWEEP) {
+      expect(formatCurrency(v)).toBe(LEGACY_WHOLE.format(v).replace(/^-/, '−'));
+      expect(formatCurrency(v)).not.toContain('-');
+    }
+  });
+  it('one glyph, two helpers: every negative reads the same through formatCurrency and formatSignedCurrency', () => {
+    for (const v of MONEY_SWEEP.filter((x) => x < 0)) expect(formatCurrency(v)).toBe(formatSignedCurrency(v));
   });
 });
 

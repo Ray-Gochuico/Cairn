@@ -1,5 +1,6 @@
 export const formatCurrency = (n: number): string =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  // v1.7.1 M1: a negative reads "−$500" (U+2212), never Intl's "-$500".
+  withTrueMinus(new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n));
 
 /** The TRUE MINUS (U+2212). The ASCII hyphen-minus is never a sign in rendered copy. */
 export const TRUE_MINUS = '−';
