@@ -596,7 +596,8 @@ export function renderBootError(
     container.append(
       makeHeading('Cairn put back your data from before the update'),
       makeParagraph(
-        'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page.',
+        // CR-U-27 ⚑: the hold is one boot — say that reopening runs the update.
+        'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page. Opening this version again runs the update.',
       ),
       makeReleasesButton(),
       retry,

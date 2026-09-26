@@ -596,8 +596,9 @@ describe('CR-U-14 — the update hold (U1-m8)', () => {
   it('the hold screen: heading, body, and exactly Open the releases page / Try the update again / Reveal, in that order', async () => {
     renderBootError(root, new UpdateHeldError());
     expect(root.querySelector('h1')?.textContent).toBe('Cairn put back your data from before the update');
-    expect(root.textContent).toContain(
-      'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page.',
+    // CR-U-27 ⚑: byte-exact, with the relaunch clause.
+    expect(root.querySelectorAll('p')[0].textContent).toBe(
+      'The update was not run, so your data is the way it was before the update. To keep using Cairn now, install the previous version from the releases page. Opening this version again runs the update.',
     );
     expect(buttons(root)).toEqual(['Open the releases page', 'Try the update again', 'Reveal backups in Finder']);
     expect(root.querySelector('pre')).toBeNull();
