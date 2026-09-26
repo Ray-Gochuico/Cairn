@@ -31,7 +31,8 @@ import type { Account, GrowthScenario, Person } from '@/types/schema';
 // adds the SERIES contract (which years are plotted) at the same boundary;
 // the B2 review adds the VALUES plotted (`data-balances`) — the sweep's rows
 // hook pins cross-basis identity only, so a basis-independent re-inflation of
-// the plotted balances is caught here or nowhere.
+// the plotted balances is caught here or nowhere. v1.7.1 A-5a adds the SERIES
+// NAMES (`data-series-labels`) — the tooltip's label, which jsdom never draws.
 // No other test in this file reads the chart's internals.
 vi.mock('@/components/charts/InlineChart', () => ({
   InlineChart: ({
@@ -40,18 +41,21 @@ vi.mock('@/components/charts/InlineChart', () => ({
     labelTestId,
     markers,
     data,
+    series,
   }: {
     testId?: string;
     label?: string;
     labelTestId?: string;
     markers?: Array<{ x: number | string; y: number; color: string }>;
     data?: Array<{ [key: string]: number | string }>;
+    series?: Array<{ dataKey: string; label: string }>;
   }) => (
     <div
       data-testid={testId}
       data-markers={JSON.stringify(markers ?? [])}
       data-years={JSON.stringify((data ?? []).map((p) => p.year))}
       data-balances={JSON.stringify((data ?? []).map((p) => p.balance))}
+      data-series-labels={JSON.stringify((series ?? []).map((s) => s.label))}
     >
       {label != null && <div data-testid={labelTestId}>{label}</div>}
     </div>
@@ -68,6 +72,10 @@ function chartYears(): number[] {
 
 function chartBalances(): number[] {
   return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-balances')!);
+}
+
+function chartSeriesLabels(): string[] {
+  return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-series-labels')!);
 }
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -824,6 +832,13 @@ describe('B2 — boundary leg + registration (no figure moves)', () => {
   it("CR-B2-1: the chart caption names the pinned basis in the house short register — Window replay (today's $)", () => {
     renderCard(); // default 1929 state renders the chart
     expect(screen.getByTestId('stress-test-chart-caption')).toHaveTextContent("Window replay (today's $)");
+  });
+
+  it("CP5-1 (v1.7.1 A-5a): the replay series is named in the SAME pinned short register as its caption — Portfolio (today's $), in both page bases", () => {
+    renderCard(); // default 1929 state renders the chart
+    expect(chartSeriesLabels()).toEqual(["Portfolio (today's $)"]);
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(chartSeriesLabels()).toEqual(["Portfolio (today's $)"]); // pinned today, never page-flipped
   });
 
   it('NOMINAL ANTI-PIN: the baseline compounds the REAL rate — the nominal-rate figures never render', () => {

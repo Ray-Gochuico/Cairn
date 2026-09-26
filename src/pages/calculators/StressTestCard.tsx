@@ -374,7 +374,9 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
               testId="stress-test-chart"
               data={chartSeries.map((y) => ({ year: y.year, balance: y.balance }))}
               xKey="year"
-              series={[{ dataKey: 'balance', label: 'Portfolio (real $)', hero: true }]}
+              /* v1.7.1 A-5a (CP5-1): the series name is the caption's pinned
+                 short register (TODAY_SUFFIX), never a retyped mark. */
+              series={[{ dataKey: 'balance', label: `Portfolio ${TODAY_SUFFIX}`, hero: true }]}
               /* DP-15: the outpaced state replaces the Deepest-year-end row and
                  omits the recovery row, so there is nothing for these markers
                  to annotate — and both would sit on the window's first year
