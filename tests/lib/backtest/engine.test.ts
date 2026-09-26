@@ -19,7 +19,7 @@ function seed(initialPortfolio: number): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: initialPortfolio },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '1871-01',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [],
       standardDeduction: { federal: 0, state: 0, city: 0 } },
@@ -51,7 +51,7 @@ function prodSeed(initialPortfolio: number): RealState {
     initialInvestmentsByAccount: { 1: initialPortfolio },
     // A real 4.5% HYSA — would over-credit cash in a real-dollar replay if cashRate isn't 0 (BT-2).
     cashAccountsWithBalances: [{ account: { id: 2, type: 'SAVINGS', apyRate: 0.045 } as never, balance: 50_000 }],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: 0.045, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0, defaultCashApy: 0.045, defaultDrawdownTaxRate: null },
     startISO: '1871-01',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [],
       standardDeduction: { federal: 0, state: 0, city: 0 } },

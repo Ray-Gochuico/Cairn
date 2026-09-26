@@ -130,7 +130,6 @@ function buildStressFixture(): RealState {
     cashAccountsWithBalances: [],
     defaults: {
       inflation: 0.025,
-      returnRate: 0.07,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },

@@ -74,7 +74,6 @@ function realStateFactory(overrides: RealStateFactoryOverrides = {}): RealState 
     // `applyGapAllocation`).
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },
@@ -267,8 +266,8 @@ describe('engine decomposition — withdrawnFromInvestments', () => {
     payload.expensePeriods = factoryExpensePeriods(5_000);
     const states = projectScenario(real, payload, { startISO: '2026-05', months: 6 });
 
-    // Every stepped month should withdraw ~$5k from investments (no growth
-    // since defaultReturnRate is 0).
+    // Every stepped month should withdraw ~$5k from investments (zero salary,
+    // no surplus; returns come from the Returns lever, never from RealState).
     for (let i = 1; i < states.length; i++) {
       expect(states[i].withdrawnFromInvestments).toBeGreaterThan(0);
       // Should be roughly the expense amount (cash starts at 0 each step

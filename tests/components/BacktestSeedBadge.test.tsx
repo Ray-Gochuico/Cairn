@@ -45,7 +45,7 @@ vi.mock('@/components/whatif/useRealState', () => ({
     accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0, initialInvestmentsByAccount: {},
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-01',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [], standardDeduction: { federal: 0, state: 0, city: 0 } },
     housingPayments: [], vehicleLeases: [],

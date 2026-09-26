@@ -54,7 +54,6 @@ function realStateFactory(overrides: AutoInvestFactoryOverrides = {}): RealState
     // confirms the cash branch reports the correct magnitude.
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       autoInvestSalarySurplus: false,
     },
@@ -141,7 +140,6 @@ describe('currentMonthlySalarySurplus', () => {
     const realOff = realStateFactory({
       defaults: {
         inflation: 0,
-        returnRate: 0,
         defaultCashApy: null,
         autoInvestSalarySurplus: false,
       },
@@ -149,7 +147,6 @@ describe('currentMonthlySalarySurplus', () => {
     const realOn = realStateFactory({
       defaults: {
         inflation: 0,
-        returnRate: 0,
         defaultCashApy: null,
         autoInvestSalarySurplus: true,
       },

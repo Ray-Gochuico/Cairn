@@ -26,7 +26,7 @@ vi.mock('@/components/whatif/useRealState', () => ({
     accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0,
     initialInvestmentsByAccount: {},
-    defaults: { inflation: 0.025, returnRate: 0.07 },
+    defaults: { inflation: 0.025 },
     taxBrackets: { federal: [], state: [], city: null, ltcg: [], standardDeduction: { federal: 0, state: 0, city: 0 } },
     housingPayments: [], vehicleLeases: [],
     // expenseBasis: DELIBERATELY ABSENT — that is the whole point of this file.

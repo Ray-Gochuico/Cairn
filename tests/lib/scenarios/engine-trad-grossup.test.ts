@@ -53,7 +53,7 @@ function tradOnlyReal(opts: { tradBalance: number }): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: opts.tradBalance },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: { inflation: 0, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal: federal2026Single,

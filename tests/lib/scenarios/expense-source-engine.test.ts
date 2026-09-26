@@ -15,7 +15,7 @@ function realWithBasis(basis: { latestMonth: number; rolling12m: number }): Real
     accounts: [], holdings: [], loans: [], loanPayments: [], household, persons,
     accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 1_000_000, initialInvestmentsByAccount: {}, cashAccountsWithBalances: [],
-    defaults: { inflation: 0.03, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0.03, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-05',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [], standardDeduction: { federal: 0, state: 0, city: 0 } },
     housingPayments: [], vehicleLeases: [],

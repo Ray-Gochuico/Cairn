@@ -44,7 +44,7 @@ function buildReal(opts: { brokerage: number; trad: number; roth: number }): Rea
       3: opts.roth,
     },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: { inflation: 0, defaultCashApy: null },
     startISO: '2026-01',
     taxBrackets: {
       federal: [{ min: 0, max: null, rate: 0 }],

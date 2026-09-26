@@ -3,7 +3,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
-import { emptyLeverPayload } from '@/lib/scenarios';
+import { emptyLeverPayload, projectScenario } from '@/lib/scenarios';
 import { defaultScenarioColor, BASELINE_COLOR } from '@/lib/whatif/scenario-colors';
 
 const resetStore = () => {
@@ -224,7 +224,7 @@ const sampleRealState = (): RealState => ({
   accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 },
-  defaults: { inflation: 0.025, returnRate: 0.07 },
+  defaults: { inflation: 0.025 },
   startISO: '2026-05',
   taxBrackets: { federal: [], state: [], city: null, standardDeduction: { federal: 0, state: 0, city: 0 } },
 });
@@ -442,6 +442,27 @@ describe('useScenariosStore.projectedScenarios — RealState fingerprint (NEW-W7
   it('a RealState with NO expenseBasis fingerprints without throwing (back-compat contract)', () => {
     const legacy = sampleRealState(); // sampleRealState omits expenseBasis by design
     expect(() => useScenariosStore.getState().projectedScenarios(legacy)).not.toThrow();
+  });
+
+  // v1.8.0 A-3a (CR-A3-7): defaults.returnRate left the fingerprint with the field.
+  // It was never an engine input (the premise pin below), so it never changed a
+  // projection: a key that no longer carries it cannot serve a stale one. The
+  // cache itself is a module-level Map — never persisted — so an upgrade starts
+  // with it empty and no pre-upgrade key survives to be compared.
+  it('A-3a: a stray legacy defaults.returnRate is not a cache-key input — the same cached states come back', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const real = sampleRealState();
+    const a = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    const stray = { ...real, defaults: { ...real.defaults, returnRate: 0.12 } } as RealState;
+    expect(useScenariosStore.getState().projectedScenarios(stray).get(baselineId)).toBe(a);
+  });
+
+  it('A-3a premise (CR-A3-7): the engine never read defaults.returnRate — a stray one changes no projected state', () => {
+    const real = sampleRealState();
+    const horizon = { startISO: real.startISO, months: 360 };
+    const at = (returnRate: number) =>
+      projectScenario({ ...real, defaults: { ...real.defaults, returnRate } } as RealState, emptyLeverPayload(), horizon);
+    expect(at(0.12)).toEqual(at(0.02));
   });
 
   it('still returns cached references when RealState is unchanged', () => {

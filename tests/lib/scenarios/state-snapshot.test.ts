@@ -147,6 +147,14 @@ describe('captureRealState — tax brackets', () => {
   });
 });
 
+describe('captureRealState — the dead defaults.returnRate is gone (v1.8.0 A-3a)', () => {
+  it("RealState.defaults carries no return rate — no engine input ever read it (returns come from each scenario's Returns lever)", () => {
+    const s = captureRealState(inputs);
+    expect(s.defaults).not.toHaveProperty('returnRate');
+    expect(Object.keys(s.defaults).sort()).toEqual(['defaultCashApy', 'defaultDrawdownTaxRate', 'inflation']);
+  });
+});
+
 describe('captureRealState — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
   it('does not expose autoInvestSalarySurplus on RealState.defaults', () => {
     const s = captureRealState(inputs);

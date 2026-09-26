@@ -91,7 +91,7 @@ function engineReal() {
     persons: [{ id: 1, householdId: 1, name: 'P1', dateOfBirth: '1990-01-01', targetRetirementAge: 65, annualSalaryPretax: 0 }],
     accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 3_000_000, initialInvestmentsByAccount: {}, cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-05',
     taxBrackets: { federal: [], state: [], city: null, ltcg: [], standardDeduction: { federal: 0, state: 0, city: 0 } },
     housingPayments: h.rent > 0

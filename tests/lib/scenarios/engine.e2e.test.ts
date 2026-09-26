@@ -67,7 +67,6 @@ const realState: RealState = {
   // assertions keep their original intent.
   defaults: {
     inflation: 0.025,
-    returnRate: 0.07,
     defaultCashApy: null,
     autoInvestSalarySurplus: true,
   },
@@ -164,7 +163,6 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     loans: [],
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },
@@ -313,7 +311,6 @@ describe('projectScenario — contribution allocation routing', () => {
     initialCash: 50_000, // ample buffer; contribution remainders flow here
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },
@@ -408,7 +405,6 @@ describe('projectScenario — cash APY growth', () => {
     cashAccountsWithBalances: [], // overridden per-test with APY
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       autoInvestSalarySurplus: true,
     },

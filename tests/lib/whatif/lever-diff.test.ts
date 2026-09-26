@@ -326,7 +326,7 @@ describe('engine-effective mirrors — C1 cash rate + retirement age', () => {
     initialCash: 0,
     initialInvestmentsByAccount: {},
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    defaults: { inflation: 0, defaultCashApy: null, defaultDrawdownTaxRate: null },
     startISO: '2026-05',
     taxBrackets: ZERO_TAX,
     ...over,

@@ -60,7 +60,6 @@ function tradOnlyReal(opts: {
     cashAccountsWithBalances: [],
     defaults: {
       inflation: 0,
-      returnRate: 0,
       defaultCashApy: null,
       defaultDrawdownTaxRate: opts.defaultDrawdownTaxRate,
     },
