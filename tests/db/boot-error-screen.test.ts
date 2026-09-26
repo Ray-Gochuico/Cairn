@@ -515,6 +515,13 @@ describe('CR-U-12 — the restore section only for a DATABASE failure (U1-m33)',
     expect(sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBe('disk full during restore'); // left for Settings
   });
 
+  it('CR-U-23h: a STRING cause (a plain-string load rejection) never shows the tag\'s own header in the pane', () => {
+    renderBootError(root, new DatabaseInitError('db string'));
+    const pane = root.querySelector('pre')!.textContent!;
+    expect(pane.startsWith('db string\n\n')).toBe(true);
+    expect(pane).not.toContain('DatabaseInitError: db string');
+  });
+
   it('a DatabaseInitError gets the generic heading, its CAUSE in the pre, and the restore section', async () => {
     const cause = new Error('finance.db is locked');
     renderBootError(root, new DatabaseInitError(cause));

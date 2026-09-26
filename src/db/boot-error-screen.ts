@@ -517,6 +517,15 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
   return row;
 }
 
+/** A wrapper error's own stack without its first `{name}: {message}` line:
+ * on V8 (WebView2) that header repeats the heading or the message just shown
+ * (U1F-m18, CR-U-23h). JavaScriptCore stacks carry no header; unchanged. */
+function ownStackWithoutHeader(e: Error): string {
+  const stack = e.stack ?? '';
+  const header = `${e.name}: ${e.message}`;
+  return stack.startsWith(header) ? stack.slice(header.length).replace(/^\n/, '') : stack;
+}
+
 /** The file's basename, for either path separator. */
 function basename(p: string): string {
   return p.slice(Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\')) + 1);
@@ -649,16 +658,8 @@ export function renderBootError(
     // The cause's stack points at the failing migration; fall back to ours.
     const cause = (e as { cause?: unknown }).cause;
     // U1F-m18: a non-Error cause (Tauri rejects with a plain string) falls
-    // back to this error's own stack, whose V8 header line repeats the
-    // heading ('MigrationFailedError: Cairn could not finish …') — drop it.
-    const ownStack = (e as Error).stack ?? '';
-    const ownHeader = `${name}: ${message}`;
-    const stack =
-      cause instanceof Error && cause.stack
-        ? cause.stack
-        : ownStack.startsWith(ownHeader)
-          ? ownStack.slice(ownHeader.length).replace(/^\n/, '')
-          : ownStack;
+    // back to this error's own stack, without its header line.
+    const stack = cause instanceof Error && cause.stack ? cause.stack : ownStackWithoutHeader(e as Error);
     // U1-m18: the cause's own message — `message` repeats the heading.
     const causeMessage = cause === undefined ? message : messageOf(cause);
     container.append(
@@ -695,7 +696,9 @@ export function renderBootError(
     const pre = makePre(
       cause instanceof Error
         ? cause.message + '\n\n' + cause.stack
-        : message + '\n\n' + (e as Error).stack,
+        : // CR-U-23h: a string cause (a plain-string load rejection) — the
+          // same header strip as the failed-migration pane (U1F-m18).
+          message + '\n\n' + ownStackWithoutHeader(e as Error),
     );
     pre.style.fontSize = '';
     // CR-U-13 (U1-m15): transient failures land here (a lock, a full disk),
