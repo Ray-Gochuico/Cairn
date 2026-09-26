@@ -12,6 +12,17 @@ interface Props {
 }
 
 /**
+ * A-7(1) (v1.7.1), copy contract CX-D7-1 (flagged for Ray: legal-adjacent).
+ * The fail-closed re-prompt's one orientation line. On a load error the modal
+ * shows no what-changed box when no earlier acceptance is cached (R3, D-R3-2),
+ * so this line is the only thing that says why the disclaimer is back. It is
+ * chrome under the version line: outside the box, outside the versioned body,
+ * so no disclosure version moves.
+ */
+const FAIL_CLOSED_ORIENTATION =
+  'We couldn’t confirm which disclosures you’ve accepted, so this disclaimer is shown here for you to read and accept.';
+
+/**
  * Top-level gate for the app-wide disclaimer. Wraps the router so a
  * modal renders before the rest of the app on a version mismatch.
  *
@@ -133,8 +144,9 @@ export function AppDisclaimerGate({ children }: Props) {
   // `acceptedVersions`, so a stale-but-current cached value from a prior
   // successful load could otherwise make the gate read `ready` and render
   // un-consented children on this errored boot. Handling error here closes
-  // that structurally (the modal renders the generic re-accept copy since we
-  // can't trust appWideAccepted on this path).
+  // that structurally. On this path the modal carries the one-line
+  // orientation note (A-7(1), FAIL_CLOSED_ORIENTATION) instead of a
+  // what-changed box, since no earlier acceptance can be proven.
   if (effectiveStatus !== 'error' && appWideAccepted === null) {
     // Genuine first run (load succeeded, no app_wide row): let the Setup
     // Wizard own the initial acceptance.
@@ -158,23 +170,15 @@ export function AppDisclaimerGate({ children }: Props) {
       : { id: 'app_wide' as const, ...DISCLOSURES.app_wide };
 
   // Version-bump re-prompt OR fail-closed error re-prompt: block until acceptance.
+  // A-7(1) (v1.7.1): the registry entry is passed as is. The old default
+  // "what changed" strings behind `baseDocument.diffFromPrevious ?? …` were
+  // dead (app_wide has shipped its own diff at every bump, and a missing prior
+  // hides the box under D-R3-2); the fail-closed path is oriented by its note.
   return (
     <DisclosureModal
-      document={{
-        ...baseDocument,
-        // Surface a default "what changed" affordance even if disclosures.ts
-        // doesn't ship one — the user explicitly opted into v_old and is
-        // now being asked to opt into v_new, so SOMETHING to read is
-        // better than re-presenting an identical document. On the error
-        // path appWideAccepted may be null — render the generic re-accept
-        // copy in that case.
-        diffFromPrevious:
-          baseDocument.diffFromPrevious ??
-          (appWideAccepted
-            ? `You previously accepted version ${appWideAccepted}. The current version is ${DISCLOSURES.app_wide.version}; please review and re-accept.`
-            : `Please review and accept the current disclaimer (version ${DISCLOSURES.app_wide.version}) to continue.`),
-      }}
+      document={baseDocument}
       continueLabel="Accept and continue"
+      orientationNote={effectiveStatus === 'error' ? FAIL_CLOSED_ORIENTATION : undefined}
       onAccept={async (version) => {
         await acceptDisclaimer('app_wide', version);
       }}

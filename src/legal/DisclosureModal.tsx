@@ -46,6 +46,14 @@ interface Props {
    * untouched.
    */
   secondaryAction?: SecondaryAction;
+  /**
+   * A-7(1) (v1.7.1): an optional one-line orientation note, rendered as chrome
+   * under the version line — OUTSIDE the what-changed box and OUTSIDE the
+   * versioned body, neither of which it touches. Only AppDisclaimerGate passes
+   * it, on its fail-closed (load-error) re-prompt: the one path where nothing
+   * on screen said why the disclaimer is back. A plain string, never markdown.
+   */
+  orientationNote?: string;
 }
 
 /**
@@ -94,6 +102,7 @@ export function DisclosureModal({
   heroHeader,
   dismissOnEscape = true,
   secondaryAction,
+  orientationNote,
 }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -212,6 +221,11 @@ export function DisclosureModal({
           <DialogDescription className="text-xs text-muted-foreground">
             Version {document.version}
           </DialogDescription>
+          {orientationNote && (
+            <p data-testid="disclosure-modal-orientation" className="mt-2 text-xs text-muted-foreground">
+              {orientationNote}
+            </p>
+          )}
         </div>
 
         {showDiff && (
