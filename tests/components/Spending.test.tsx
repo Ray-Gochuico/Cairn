@@ -642,6 +642,25 @@ describe('Spending page', () => {
     expect(screen.getByText('Gross minus spending')).toBeInTheDocument();
   });
 
+  it('M1 (D-M1-7): "Gross minus spending" below zero leads with one true minus — "−$200.00", the sign before the symbol', async () => {
+    // Same fixture and real-clock idiom as the wave-9 F12 test above (grandfathered allowlist file).
+    await useCategoriesStore.getState().load();
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    expect(await screen.findByText('Gross income (est.)')).toBeInTheDocument();
+    const card = screen.getByText('Gross minus spending').closest('[data-testid="metric-card"]') as HTMLElement;
+    expect(within(card).getByTestId('metric-card-value').textContent).toBe('−$200.00');
+  });
+
   it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({
