@@ -461,6 +461,22 @@ describe('CR-U-10 — while a restore is in flight, every button on the screen i
     expect(mRestore).toHaveBeenCalledTimes(1);
   });
 
+  it('CR-U-23f: once a restore starts, the live region no longer says the row is armed (or to select it once more)', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    const status = root.querySelector('[data-testid="boot-restore-status"]')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    clickWith(btn, 2);                                           // dropped (inside 1500 ms): the notice
+    expect(status.textContent).toBe('Confirm restore is ready — select it once more to replace your data.');
+    pastGuard();
+    clickWith(btn, 1);                                           // the restore starts and never settles
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1));
+    expect(status.textContent).toBe('');
+  });
+
   it('the "Restore did not start" path re-enables every button on the screen', async () => {
     mRestore.mockRejectedValue(new Error('close failed'));
     renderBootError(root, new MigrationFailedError(new Error('x'), PRE.path), { now });

@@ -488,6 +488,8 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
       if (ctx.now() - armedAt < ARM_GUARD_MS) return;
       ctx.state.restoring = true;
       setButtonsDisabled(ctx.screen, true);
+      // CR-U-23f: the row is no longer armed — say nothing stale meanwhile.
+      ctx.status.textContent = '';
       try {
         const { restoreFromBackup } = await import('@/lib/backup-restore');
         // Boot path: the pool may never have been loaded (the generic screen),
