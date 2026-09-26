@@ -205,7 +205,7 @@ describe('Spending page', () => {
     await waitFor(() => {
       expect(screen.getAllByText('$6,846.84').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('-$2,450.00')).toBeInTheDocument();
+    expect(screen.getByText('−$2,450.00')).toBeInTheDocument(); // v1.7.1 M1: re-targeted — the credit's true minus
   });
 
   it('(hero) renders the glance hero with range tabs on a seeded-transactions page', async () => {

@@ -4,6 +4,18 @@ export const formatCurrency = (n: number): string =>
 /** The TRUE MINUS (U+2212). The ASCII hyphen-minus is never a sign in rendered copy. */
 export const TRUE_MINUS = '−';
 
+/**
+ * The leading-glyph rule, shared (v1.7.1 M1). Intl's en-US currency output and
+ * Number#toFixed put a sign only in the FIRST character, and it is the ASCII
+ * hyphen-minus; this swaps exactly that character for TRUE_MINUS. Every other
+ * character is untouched, so no figure's digits, grouping or rounding move —
+ * only the glyph. Post-processed rather than `signDisplay`, for the reason
+ * formatPercent gives below (older WebViews throw on NumberFormat v3 options).
+ */
+export function withTrueMinus(s: string): string {
+  return s.startsWith('-') ? TRUE_MINUS + s.slice(1) : s;
+}
+
 const PERCENT_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'percent',
   maximumFractionDigits: 1,
@@ -91,8 +103,9 @@ export function formatMonth(isoMonth: string): string {
 
 /**
  * Transaction-grain money: exact cents WITH thousands separators
- * ($6,846.84). formatCurrency (whole dollars) stays the default for
- * aggregates; this exists so no surface ever hand-rolls `toFixed(2)`.
+ * ($6,846.84; a credit reads −$2,450.00 — v1.7.1 M1). formatCurrency (whole
+ * dollars) stays the default for aggregates; this exists so no surface ever
+ * hand-rolls `toFixed(2)`.
  */
 const CENTS_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -100,17 +113,21 @@ const CENTS_FORMATTER = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-export const formatCurrencyCents = (n: number): string => CENTS_FORMATTER.format(n);
+export const formatCurrencyCents = (n: number): string => withTrueMinus(CENTS_FORMATTER.format(n));
 
 export function formatCompactCurrency(v: number): string {
+  // v1.7.1 M1: the sign leads the symbol and is the TRUE MINUS ("−$80k"; the
+  // pre-M1 body put the sign after the symbol). The magnitude is formatted exactly as before —
+  // Number#toFixed is sign-symmetric — so only the glyph and its position move.
+  const sign = v < 0 ? TRUE_MINUS : '';
   const abs = Math.abs(v);
   if (abs >= 1_000_000) {
-    const m = v / 1_000_000;
-    return '$' + (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+    const m = abs / 1_000_000;
+    return sign + '$' + (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
   }
   if (abs >= 1_000) {
-    const k = v / 1_000;
-    return '$' + (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)) + 'k';
+    const k = abs / 1_000;
+    return sign + '$' + (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)) + 'k';
   }
-  return '$' + v.toFixed(0);
+  return sign + '$' + abs.toFixed(0);
 }
