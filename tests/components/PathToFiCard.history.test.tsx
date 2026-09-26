@@ -76,6 +76,7 @@ import {
 import { historyFan } from '@/lib/history-fan';
 import { fanCaption, holdsLineKeep } from '@/lib/calculators/history-fan-copy';
 import type { Account, Person } from '@/types/schema';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
 
@@ -364,7 +365,7 @@ describe('PathToFiCard — History fan rendering (D-UB8, CH-3, CH-9)', () => {
     );
     // CH-3 drift-guard: the caption paraphrases DISCLOSURES.backtest — a future
     // body edit bumps the version, trips this pin, and forces a conscious review.
-    expect(DISCLOSURES.backtest.version).toBe('1.5');
+    expect(DISCLOSURES.backtest.version).toBe(DISCLOSURE_VERSIONS.backtest);
   });
 
   it('STOP holds line is byte-exact (CH-2 worked literal)', () => {
@@ -461,9 +462,10 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    // Literal, not DISCLOSURES.backtest.version (constraint 3): every consent
-    // literal in a card test is a drift guard that must trip on the next bump.
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    // Literal (from the one table, tests/helpers/disclosure-versions.ts), not
+    // DISCLOSURES.backtest.version (constraint 3): every consent literal in a
+    // card test is a drift guard that must trip on the next bump.
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByTestId('disclosure-modal-body')).toBeNull();
@@ -506,7 +508,7 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
   });
@@ -521,7 +523,7 @@ describe('PathToFiCard — gate (D-UB10)', () => {
     renderCard();
     clickHistory();
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     expect(screen.getByTestId('path-to-fi-chart')).toBeInTheDocument(); // still Assumed
   });

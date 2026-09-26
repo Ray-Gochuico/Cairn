@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
@@ -46,6 +46,14 @@ interface Props {
    * untouched.
    */
   secondaryAction?: SecondaryAction;
+  /**
+   * A-7(1) (v1.7.1): an optional one-line orientation note, rendered as chrome
+   * under the version line — OUTSIDE the what-changed box and OUTSIDE the
+   * versioned body, neither of which it touches. Only AppDisclaimerGate passes
+   * it, on its fail-closed (load-error) re-prompt: the one path where nothing
+   * on screen said why the disclaimer is back. A plain string, never markdown.
+   */
+  orientationNote?: string;
 }
 
 /**
@@ -94,6 +102,7 @@ export function DisclosureModal({
   heroHeader,
   dismissOnEscape = true,
   secondaryAction,
+  orientationNote,
 }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -113,9 +122,10 @@ export function DisclosureModal({
   // prior; the same version (the AppDisclaimerGate fail-closed path with a
   // cached current version) means nothing changed since. Every gate
   // (app_wide, roadmap, learning, backtest, interview) inherits the rule with
-  // no consumer edit; Step0Disclaimer's first-run diff drop is now redundant
-  // (left as is). ⚑ R3-F2 override: `Boolean(document.diffFromPrevious)`
-  // plus a first-time heading (CR-R3-3b in the R3 plan).
+  // no consumer edit; Step0Disclaimer passes the registry entry itself and
+  // relies on this rule alone (A-7(3), v1.7.1). ⚑ R3-F2 override:
+  // `Boolean(document.diffFromPrevious)` plus a first-time heading (CR-R3-3b
+  // in the R3 plan).
   const priorAcceptedVersion = useAcceptancesStore(
     (s) => s.acceptedVersions[document.id] ?? null,
   );
@@ -123,6 +133,19 @@ export function DisclosureModal({
     Boolean(document.diffFromPrevious) &&
     priorAcceptedVersion !== null &&
     priorAcceptedVersion !== document.version;
+
+  // CR-D7-5 (D7 review): the orientation note joins the dialog's accessible
+  // description, so assistive tech announces it with the version line when
+  // the dialog opens. DialogDescription keeps Radix's own id and its exact
+  // `Version x.y` text (e2e and unit pins read it), so the modal takes that id
+  // from the mounted element (the state setter is its callback ref; Radix
+  // mounts the portal content a render late) and names both ids, only while a
+  // note shows. Overriding the description's id instead would trip Radix's
+  // Missing-Description warning.
+  const [descriptionEl, setDescriptionEl] = useState<HTMLParagraphElement | null>(null);
+  const orientationId = useId();
+  const describedBy =
+    orientationNote && descriptionEl?.id ? `${descriptionEl.id} ${orientationId}` : null;
 
   const [error, setError] = useState<string | null>(null);
   /**
@@ -191,6 +214,9 @@ export function DisclosureModal({
         // the inferred value inconsistently. Setting it explicitly closes
         // the gap with no behavior change for modern AT.
         aria-modal="true"
+        // CR-D7-5: only while a note shows. Otherwise Radix wires
+        // DialogDescription itself; an explicit undefined here would drop it.
+        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
         // Hide the shadcn-default close ("X") button: it's the last child
         // of <DialogContent>. Composition is keyboard-friendly + the
         // explicit Cancel/Continue buttons remain the only acceptance
@@ -209,9 +235,14 @@ export function DisclosureModal({
         {heroHeader}
         <div className="px-6 py-4 border-b">
           <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription ref={setDescriptionEl} className="text-xs text-muted-foreground">
             Version {document.version}
           </DialogDescription>
+          {orientationNote && (
+            <p id={orientationId} data-testid="disclosure-modal-orientation" className="mt-2 text-xs text-muted-foreground">
+              {orientationNote}
+            </p>
+          )}
         </div>
 
         {showDiff && (

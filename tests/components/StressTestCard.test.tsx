@@ -5,7 +5,8 @@
  * Priming block copied from PathToFiCard.test.tsx (the house fixture):
  * pinned date 2026-05-14, Alice dob 1990-01-01. Default bar: portfolio
  * $100k (snapshot), $12k/yr contributions (12 × $1,000/mo), Moderate 6%,
- * SWR 4%, inflation 3%. Acceptance seeded at backtest '1.5' so most tests
+ * SWR 4%, inflation 3%. Acceptance seeded at the current backtest version
+ * (DISCLOSURE_VERSIONS, tests/helpers/disclosure-versions.ts) so most tests
  * render ungated.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -25,6 +26,7 @@ import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-
 import { DISCLOSURES } from '@/legal/disclosures';
 import { CALCULATORS_PAGE_ID, __resetDollarBasisForTests, useDollarBasisStore } from '@/lib/calculators/dollar-basis';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 // DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
 // the chart's marker CONTRACT is pinned at the prop boundary. The smoke fix
@@ -296,7 +298,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(PINNED_DATE);
   primeStores();
-  seedAcceptance('backtest', '1.5');
+  seedAcceptance('backtest', DISCLOSURE_VERSIONS.backtest);
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -336,7 +338,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByTestId('stress-window-picker')).toBeInTheDocument();
-    expect(accept).toHaveBeenCalledWith('backtest', '1.5');
+    expect(accept).toHaveBeenCalledWith('backtest', DISCLOSURE_VERSIONS.backtest);
   });
 
   it('the button mounts DisclosureModal (v1.5 + diff box); Escape cancels without accepting', () => {
@@ -344,7 +346,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
     expect(screen.getByTestId('disclosure-modal-body')).toBeInTheDocument();
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByTestId('disclosure-modal-body')).not.toBeInTheDocument();
@@ -353,7 +355,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
   });
 
   it('accepted at exactly 1.5 → the chips render', () => {
-    renderCard(); // default seed: '1.5'
+    renderCard(); // default seed: the current backtest version (DISCLOSURE_VERSIONS)
     expect(screen.getByTestId('stress-window-picker')).toBeInTheDocument();
   });
 
@@ -362,7 +364,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     renderCard();
     expect(screen.queryByTestId('stress-window-picker')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     // A prior acceptance is recorded → the re-prompt box renders (Task 3 keeps this true).
     expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
   });
@@ -371,7 +373,7 @@ describe('gate (in-card, never page-blocking — DP-7)', () => {
     seedAcceptance('app_wide', DISCLOSURES.app_wide.version); // another document accepted; backtest never
     renderCard();
     fireEvent.click(screen.getByRole('button', { name: 'Read and accept the Backtest disclosure' }));
-    expect(screen.getByText('Version 1.5')).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`)).toBeInTheDocument();
     expect(screen.queryByText('What changed since you last accepted:')).toBeNull();
     // CR-R3-1 as a literal, not DISCLOSURES.backtest.acceptanceCheckboxLabel
     // (constraint 3): the label is consent copy, so this pin has to trip on the

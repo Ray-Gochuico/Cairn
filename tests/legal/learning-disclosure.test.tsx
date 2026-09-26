@@ -11,6 +11,7 @@ import { DisclosureModal } from '@/legal/DisclosureModal';
 import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 const loadInitial = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -22,7 +23,7 @@ const loadLearning = () =>
 describe('learning disclosure (table-driven gate, MF-1)', () => {
   it('is registered with version 1.0', () => {
     expect(DISCLOSURES.learning).toBeDefined();
-    expect(DISCLOSURES.learning.version).toBe('1.0');
+    expect(DISCLOSURES.learning.version).toBe(DISCLOSURE_VERSIONS.learning);
     expect(DISCLOSURES.learning.body.length).toBeGreaterThan(50);
   });
 

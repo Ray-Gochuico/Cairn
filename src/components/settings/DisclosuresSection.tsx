@@ -10,7 +10,7 @@ import { DISCLOSURES, type DisclosureId } from '@/legal/disclosures';
  * The app repeatedly points users at "Settings → Disclosures" — the WhatIf
  * projection footnote and the backtest disclosure body both say "see Settings →
  * Disclosures for the full assumption set" — but that section did not exist.
- * This is its home: a READ-ONLY view of the four consented disclosure
+ * This is its home: a READ-ONLY view of the five consented disclosure
  * documents, each rendered verbatim (same react-markdown path the acceptance
  * modal uses) with its version, so a user can re-read exactly what they agreed
  * to at any time.
