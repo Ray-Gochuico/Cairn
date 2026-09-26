@@ -73,7 +73,12 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
       <DollarBasisToggle pageId={WHATIF_PAGE_ID} scopeNote={null} />
 
       <div className="flex items-center gap-1" role="group" aria-label="Projection detail level">
-        <Label className="text-sm">
+        {/* A-11(8) (v1.7.1): the label box takes the options' size="sm"
+            height (h-8) and centres its text, so label and options share one
+            row box — a 21.5 px label centred against 32 px options sat 5 px
+            inside their top and bottom edges (B2 smoke). Text baselines stay
+            within 0.25 px (measured). */}
+        <Label className="inline-flex h-8 items-center text-sm">
           <TermTooltip term="Projection detail level">Detail</TermTooltip>:
         </Label>
         {levels.map(({ value, label, glossaryTerm }) => (
