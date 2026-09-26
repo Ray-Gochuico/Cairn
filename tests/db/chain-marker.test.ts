@@ -54,12 +54,52 @@ describe('the update-chain marker (runner side)', () => {
     expect(await markerRows()).toEqual([]);
   });
 
-  it('writes no marker for a fresh file (applied 0), a one-migration chain, or a boot with nothing pending', async () => {
+  /**
+   * Every chain-marker INSERT the runner sends while `run` executes, batched or
+   * not. A finished chain clears its markers, so the table alone cannot show
+   * whether one was ever written (code review CR-U3-8a): each "no marker" arm
+   * below watches the statements instead.
+   */
+  async function markerInserts(run: () => Promise<unknown>): Promise<string[]> {
+    const seen: string[] = [];
+    const note = (sql: string, params: unknown[] = []) => {
+      if (!/^\s*INSERT\b/i.test(sql)) return;
+      for (const p of params) if (typeof p === 'string' && p.startsWith('chain:')) seen.push(p);
+      if (sql.includes("'chain:")) seen.push(sql);
+    };
+    const realBatch = db.executeBatch.bind(db);
+    const realExecute = db.execute.bind(db);
+    db.executeBatch = async (statements, options) => {
+      for (const st of statements) note(st.sql, st.params);
+      return realBatch(statements, options);
+    };
+    db.execute = async (sql, params) => {
+      note(sql, params);
+      return realExecute(sql, params);
+    };
+    try {
+      await run();
+    } finally {
+      db.executeBatch = realBatch;
+      db.execute = realExecute;
+    }
+    return seen;
+  }
+
+  it('a fresh file (applied 0) never writes a marker, not even mid-chain', async () => {
+    expect(await markerInserts(() => runMigrations(db, all.slice(0, 54)))).toEqual([]);
+    expect(await markerRows()).toEqual([]);
+  });
+
+  it('a one-migration chain never writes a marker (it commits or it does not — nothing to resume)', async () => {
     await runMigrations(db, all.slice(0, 54));
+    expect(await markerInserts(() => runMigrations(db, all))).toEqual([]);
     expect(await markerRows()).toEqual([]);
-    await runMigrations(db, all);   // one pending: it commits or it does not — nothing to resume
-    expect(await markerRows()).toEqual([]);
-    await runMigrations(db, all);   // nothing pending
+  });
+
+  it('a boot with nothing pending never writes a marker', async () => {
+    await runMigrations(db, all);
+    expect(await markerInserts(() => runMigrations(db, all))).toEqual([]);
     expect(await markerRows()).toEqual([]);
   });
 
