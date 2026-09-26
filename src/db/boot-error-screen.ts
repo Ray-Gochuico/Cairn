@@ -219,7 +219,8 @@ interface RestoreSectionOptions {
   now: () => number;
   /** CR-U-18: which row's restore sets the one-boot update hold. Passed ONLY
    * from the failed-migration screen, for the copy its error names when that
-   * copy is from before the update; every other screen and row: none. */
+   * copy is from before the update; every other screen and row sets none and
+   * clears a hold still pending (v1.7.2, L4). */
   holdFor?: (entry: BackupEntry) => boolean;
   /** U1F-m10: the row whose copy is known NOT to be from before the update
    * (the failed-migration screen's named partway copy) is labelled for what
@@ -498,11 +499,13 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         // way out once the swap has been attempted.
         // CR-U-14/18: putting back THE copy a failed update names (when it is
         // from before the update) holds that update for the next boot — set
-        // only once the swap succeeded. Nothing else holds.
+        // only once the swap succeeded. Nothing else holds: every other
+        // restore clears a hold still pending from an earlier restore, which
+        // CR-U-26 keeps across a boot that fails before the gate (v1.7.2, L4).
         await restoreFromBackup(entry.path, {
           tolerateNotLoaded: true,
           reload: ctx.reload,
-          onRestored: ctx.holdFor(entry) ? setUpdateHold : undefined,
+          onRestored: ctx.holdFor(entry) ? setUpdateHold : clearUpdateHold,
         });
       } catch (err) {
         // The only path that re-enables the screen (CR-U-10).

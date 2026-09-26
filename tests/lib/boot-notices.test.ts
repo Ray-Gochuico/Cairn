@@ -147,3 +147,18 @@ describe('CR-U-23c — a stuck -shm (the rebuildable index) is not data loss', (
   });
 });
 
+describe('v1.7.2 (L37) — the db_restore command hands restore_checked the chosen file, then the live file', () => {
+  // cargo tests drive restore_checked directly; the command itself takes an
+  // AppHandle, which no test constructs, so its one call is pinned as text.
+  const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
+  it('restore_checked takes (source, live), and db_restore passes them in that order, once', () => {
+    expect(rust).toContain('async fn restore_checked(source: &Path, live: &Path) -> Result<(), String> {');
+    const start = rust.indexOf('pub async fn db_restore(');
+    expect(start).toBeGreaterThan(-1);
+    const body = rust.slice(start, rust.indexOf('\n}\n', start));
+    expect(body).toContain('let live_path = resolve_sqlite_path(&app, &db)?;');
+    expect(body.match(/restore_checked\(/g)).toHaveLength(1);
+    expect(body).toContain('restore_checked(Path::new(&source), &live_path).await');
+  });
+});
+

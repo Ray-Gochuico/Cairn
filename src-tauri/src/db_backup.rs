@@ -39,7 +39,8 @@
 //! 3. `db_restore` re-validates (defence in depth) and then
 //!    `replace_database_file` performs an ATOMIC swap that always leaves a valid
 //!    `finance.db` (full ordering + crash analysis on that function): it stages
-//!    the backup into a sibling temp file, sets the OLD `-wal`/`-shm` sidecars
+//!    the backup into a sibling temp file THROUGH SQLite (`VACUUM INTO`, so a
+//!    `-wal` beside the backup is read too — v1.7.2), sets the OLD `-wal`/`-shm` sidecars
 //!    ASIDE (renamed, put back if the swap fails, deleted only after it
 //!    succeeds — v1.7.1 CR-U-15), then `rename`s the temp file over `finance.db`.
 //!    The live file is NEVER the copy target, so the in-copy truncation window a
@@ -68,10 +69,9 @@
 //! enforced in `src/lib/backup-restore.ts`.
 
 use serde::Serialize;
-use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{ConnectOptions, Connection, Pool, Row, Sqlite};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
@@ -152,18 +152,20 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
         reason: Some(reason),
     };
 
-    let path_str = match path.to_str() {
-        Some(s) => s,
-        None => return reject("Backup path is not valid UTF-8.".to_string()),
-    };
+    if path.to_str().is_none() {
+        return reject("Backup path is not valid UTF-8.".to_string());
+    }
 
     // Read-only connection: never create, never write. `immutable=true` is
-    // avoided so quick_check can still read the file normally; read_only is
-    // enough to guarantee we don't mutate the candidate.
-    let opts = match SqliteConnectOptions::from_str(&format!("sqlite:{path_str}")) {
-        Ok(o) => o.read_only(true).create_if_missing(false),
-        Err(e) => return reject(format!("Could not open backup: {e}")),
-    };
+    // avoided so quick_check can still read the file normally (a `-wal`
+    // beside it included); read_only is enough to guarantee we don't mutate
+    // the candidate's data. Opened BY FILENAME (v1.7.2, L8): a `sqlite:` URL
+    // would split the name at a '?' and percent-decode '%XX', so the file
+    // checked could differ from the file restored.
+    let opts = SqliteConnectOptions::new()
+        .filename(path)
+        .read_only(true)
+        .create_if_missing(false);
     let mut conn = match opts.connect().await {
         Ok(c) => c,
         Err(e) => {
@@ -251,12 +253,17 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///      folder, then restore again (never 'try again': that button re-runs the
 ///      boot). A leftover `-shm` set-aside is the rebuildable index — no data
 ///      — so it never refuses: it is removed best-effort (CR-U-25).
-///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`),
-///      make it owner-writable (a read-only backup stages a read-only copy)
-///      and flush it to stable storage (`sync_all`). A failure here leaves
-///      `live` and its sidecars untouched (the temp file is removed). `live`
-///      is never the copy target, so the in-copy truncation window of a plain
-///      `fs::copy(backup, live)` does not exist.
+///   1. Stage `backup` → a temp file in the SAME directory
+///      (`<live>.restore-tmp`) THROUGH SQLite (v1.7.2, L1): `backup` is opened
+///      read-only by filename and copied with `VACUUM INTO`, so committed
+///      frames in a `-wal` beside a WAL-mode backup reach the staged file,
+///      which is one self-contained rollback-mode file. VALIDATE the staged
+///      file (the checks `validate_backup_file` runs) — it is the file step 3
+///      puts in place (CR-172-1). Make it
+///      owner-writable and flush it to stable storage (`sync_all`). A
+///      failure here leaves `live` and its sidecars untouched (the temp file
+///      is removed). `live` is never the copy target, so the in-copy
+///      truncation window of a plain `fs::copy(backup, live)` does not exist.
 ///   2. RENAME the old `-wal` / `-shm` aside to `<sidecar>.restore-old` (a
 ///      missing sidecar is skipped). They must not sit next to the restored
 ///      file — a stale WAL would be replayed over it on reopen — but they are
@@ -271,18 +278,22 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 /// "(your data is unchanged)" is dropped, and "could not be put back" used,
 /// ONLY when the `-wal` is stuck; a stuck `-shm` alone is reported calmly
 /// (see put_back_or_report, CR-U-23c).
-pub fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
-    replace_database_file_with(backup, live, &mut |from: &Path, to: &Path| std::fs::rename(from, to))
+pub async fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
+    stage_restore(backup, live).await?;
+    // The two seams are made after the last await: a `&mut dyn FnMut` held
+    // across an await would make the db_restore command's future !Send.
+    swap_staged(live, &mut |from: &Path, to: &Path| std::fs::rename(from, to), &mut |p: &Path| real_sync(p))
 }
 
-/// The testable core of `replace_database_file`: `rename` is `std::fs::rename`
-/// in production; tests fail one chosen step through it.
-fn replace_database_file_with(
+/// Test seam: the whole swap with `rename` injected, so a test can fail one
+/// chosen step through it; the flush is the production `real_sync`.
+#[cfg(test)]
+async fn replace_database_file_with(
     backup: &Path,
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
-    replace_database_file_io(backup, live, rename, &mut |p: &Path| real_sync(p))
+    replace_database_file_io(backup, live, rename, &mut |p: &Path| real_sync(p)).await
 }
 
 /// Flush a file's data to stable storage (F_FULLFSYNC on Apple via std).
@@ -315,22 +326,38 @@ thread_local! {
     /// CR-U-22: every path the production `real_sync` flushed, so a test can
     /// see that the public entry point syncs the staged copy.
     static SYNCED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// v1.7.2 (CR-172-4): a test changes the staged file here, between the
+    /// staging copy and its validation, to prove that what is swapped in is
+    /// what was validated.
+    static AFTER_STAGE: std::cell::RefCell<Option<fn(&Path)>> = const { std::cell::RefCell::new(None) };
 }
 
-/// `replace_database_file_with` plus a `sync` seam for the staged copy.
-fn replace_database_file_io(
+/// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
+/// copy.
+#[cfg(test)]
+async fn replace_database_file_io(
     backup: &Path,
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
     sync: &mut dyn FnMut(&Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
+    stage_restore(backup, live).await?;
+    swap_staged(live, rename, sync)
+}
+
+/// Steps 0-1 of `replace_database_file` up to the staged copy: refuse before
+/// touching anything, then stage `backup` into `<live>.restore-tmp`. Every
+/// error return leaves `live` and its sidecars untouched; a staging file it
+/// created is removed when the removal succeeds, which is not guaranteed (a
+/// leftover is removed again before the next restore stages).
+async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let tmp = restore_tmp_path(live);
     let sidecars = sidecar_paths(live);
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
 
     // 0a. Never restore FROM this module's own staging file (U1F-m9): step 1
-    //     would truncate it while copying it onto itself, and an empty file
-    //     would be swapped in.
+    //     removes a leftover staging file before staging, so restoring FROM
+    //     it would delete the file chosen.
     if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
         if src == staging {
             return Err(
@@ -357,18 +384,80 @@ fn replace_database_file_io(
         let _ = std::fs::remove_file(shm_aside);
     }
 
-    // 1. Stage the restore in a sibling temp file. A mid-copy failure here
-    //    cannot corrupt `live` because `live` is never the copy target.
-    if let Err(e) = std::fs::copy(backup, &tmp) {
+    // 1. Stage the restore in a sibling temp file, THROUGH SQLite (v1.7.2,
+    //    L1): `std::fs::copy` took the main file alone, so a backup with a
+    //    `-wal` beside it (a raw copy of a data folder taken while Cairn was
+    //    open) restored older than the file the validator had checked, or
+    //    empty. A failure here cannot corrupt `live`: it is never the copy
+    //    target. VACUUM INTO refuses a non-empty target, so a staging file an
+    //    interrupted restore left is removed first (`fs::copy` overwrote it;
+    //    step 0a refuses to restore FROM it).
+    let _ = std::fs::remove_file(&tmp);
+    if let Err(e) = stage_through_sqlite(backup, &tmp).await {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
         ));
     }
-    //    `fs::copy` carries the backup's permission bits, so a read-only
-    //    backup would stage a read-only copy that cannot be opened for the
-    //    flush below — and would become a read-only finance.db. Make it
-    //    owner-writable first (CR-U-22).
+    #[cfg(test)]
+    AFTER_STAGE.with(|hook| {
+        if let Some(f) = *hook.borrow() {
+            f(&tmp)
+        }
+    });
+    //    Then validate what was staged — the file step 3 puts in place, not
+    //    the source it came from (CR-172-1): quick_check, schema_migrations,
+    //    user_version <= MAX_SCHEMA_VERSION. A refusal removes the staging
+    //    file; `live` and its sidecars have not been touched.
+    let staged = validate_backup_file(&tmp).await;
+    if !staged.ok {
+        let _ = std::fs::remove_file(&tmp);
+        let e = staged.reason.unwrap_or_default();
+        return Err(format!(
+            "db_restore: failed to stage the backup (your data is unchanged): {e}"
+        ));
+    }
+    Ok(())
+}
+
+/// Step 1's copy (v1.7.2, L1; CR-172-1): open `backup` read-only BY FILENAME
+/// (no URL parsing, L8) and `VACUUM INTO` `tmp` (`backup_to`). SQLite reads
+/// a `-wal` beside a WAL-mode source; the output is one self-contained
+/// rollback-mode file, created fresh, so no mode bits or file flags come
+/// with it. The source is only read: its main file and `-wal` are never
+/// written.
+async fn stage_through_sqlite(backup: &Path, tmp: &Path) -> Result<(), String> {
+    let opts = SqliteConnectOptions::new()
+        .filename(backup)
+        .read_only(true)
+        .create_if_missing(false);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts)
+        .await
+        .map_err(|e| e.to_string())?;
+    let staged = backup_to(&pool, tmp).await;
+    pool.close().await;
+    staged
+}
+
+/// The rest of `replace_database_file`, on the staged `<live>.restore-tmp`:
+/// step 1's permission fix and flush, then steps 2-4 (set the old sidecars
+/// aside, swap, clean up). Synchronous: `rename` and `sync` are the test
+/// seams.
+fn swap_staged(
+    live: &Path,
+    rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
+    sync: &mut dyn FnMut(&Path) -> std::io::Result<()>,
+) -> Result<(), String> {
+    let tmp = restore_tmp_path(live);
+    let sidecars = sidecar_paths(live);
+    let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
+
+    //    SQLite creates the staged file with its default mode less the
+    //    process umask, so an unusual umask could still stage a read-only
+    //    copy that cannot be opened for the flush below — and would become a
+    //    read-only finance.db. Make it owner-writable first (CR-U-22).
     if let Err(e) = make_owner_writable(&tmp) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
@@ -544,30 +633,34 @@ pub async fn db_validate_backup(path: String) -> Result<BackupValidation, String
 /// CONTRACT: the JS caller MUST have already closed the live pool
 /// (`Database.close()` → `plugin:sql|close`) and awaited it before invoking
 /// this — see the module-level safety note and `src/lib/backup-restore.ts`.
-/// This command re-validates `source` (defence in depth) and, only if valid,
-/// replaces the live database file, setting its WAL sidecars aside until the
-/// swap has succeeded (CR-U-15). On success the JS
-/// side reloads the webview to re-init on the restored database. Returns an
-/// error (and leaves the live DB untouched) if validation fails.
+/// The command resolves the live file path the plugin uses and hands both
+/// paths to `restore_checked`, which re-validates `source` (defence in
+/// depth) and, only if valid, replaces the live database file, setting its
+/// WAL sidecars aside until the swap has succeeded (CR-U-15). On success the
+/// JS side reloads the webview to re-init on the restored database. Returns
+/// an error (and leaves the live DB untouched) if validation fails.
 #[tauri::command]
 pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Result<(), String> {
-    let source_path = PathBuf::from(&source);
+    let live_path = resolve_sqlite_path(&app, &db)?;
+    restore_checked(Path::new(&source), &live_path).await
+}
 
+/// The testable core of `db_restore` (v1.7.2, L37): everything the command
+/// does once the live path is known, so both guards are pinned by
+/// `cargo test` without an `AppHandle` (the house split, as
+/// `sample_reset_guarded`).
+async fn restore_checked(source: &Path, live: &Path) -> Result<(), String> {
     // 1. Re-validate BEFORE touching anything destructive (the UI validated
     //    too, but the file could have changed between pre-flight and confirm).
-    let validation = validate_backup_file(&source_path).await;
+    let validation = validate_backup_file(source).await;
     if !validation.ok {
         return Err(validation
             .reason
             .unwrap_or_else(|| "The selected file is not a valid Cairn backup.".to_string()));
     }
 
-    // 2. Resolve the live file path the plugin uses.
-    let live_path = resolve_sqlite_path(&app, &db)?;
-
-    // Guard against a no-op self-restore that would truncate the live file
-    // (copying a file onto itself via std::fs::copy is undefined/destructive).
-    if let (Ok(a), Ok(b)) = (source_path.canonicalize(), live_path.canonicalize()) {
+    // 2. Never restore the live file onto itself.
+    if let (Ok(a), Ok(b)) = (source.canonicalize(), live.canonicalize()) {
         if a == b {
             return Err("db_restore: the selected backup IS the live database.".to_string());
         }
@@ -576,9 +669,7 @@ pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Re
     // 3. Swap the file; the old sidecars are set aside and put back if the
     //    swap fails. The live pool was closed by the JS caller before this
     //    invoke (or was never loaded, on the boot-screen path).
-    replace_database_file(&source_path, &live_path)?;
-
-    Ok(())
+    replace_database_file(source, live).await
 }
 
 /// The ONE database URL `db_sample_reset` may touch (W4 D-S8). Mirrored in TS
@@ -936,12 +1027,12 @@ mod tests {
         std::fs::write(&wal, b"stale wal").unwrap();
         std::fs::write(&shm, b"stale shm").unwrap();
 
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
 
-        // The live file now matches the backup byte-for-byte...
-        let backup_bytes = std::fs::read(&backup).unwrap();
-        let live_bytes = std::fs::read(&live).unwrap();
-        assert_eq!(live_bytes, backup_bytes, "live file should equal the backup");
+        // The live file now holds exactly the backup's content (v1.7.2: the
+        // staged file is rebuilt through SQLite, so its header bookkeeping —
+        // the schema cookie — differs from the backup's bytes)...
+        assert_eq!(db_content(&live).await, db_content(&backup).await, "the live file holds the backup's content");
         // ...and opens as the restored DB with the seeded rows...
         assert_eq!(count_rows(&live, "accounts").await, 2);
         // ...and the stale sidecars are gone.
@@ -959,7 +1050,7 @@ mod tests {
         backup_to(&pool, &backup).await.unwrap();
         pool.close().await;
         // No live file and no sidecars at all — a fresh restore target.
-        replace_database_file(&backup, &live).expect("replace with no sidecars");
+        replace_database_file(&backup, &live).await.expect("replace with no sidecars");
         assert_eq!(count_rows(&live, "accounts").await, 2);
     }
 
@@ -995,7 +1086,7 @@ mod tests {
         perms.set_mode(0o500); // r-x------ : can traverse + read, cannot create
         std::fs::set_permissions(&live_dir, perms).unwrap();
 
-        let result = replace_database_file(&backup, &live);
+        let result = replace_database_file(&backup, &live).await;
 
         // Restore failed...
         assert!(result.is_err(), "a copy into a read-only dir must fail");
@@ -1063,7 +1154,7 @@ mod tests {
             .open(&live)
             .expect("open the live db with share_mode(0)");
 
-        let result = replace_database_file(&backup, &live);
+        let result = replace_database_file(&backup, &live).await;
 
         // The restore failed at the finalize step (the rename) — NOT earlier.
         // Don't pin the OS error code: depending on the Windows version the
@@ -1108,7 +1199,7 @@ mod tests {
         backup_to(&pool, &backup).await.unwrap();
         pool.close().await;
 
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
         assert!(
             !restore_tmp_path(&live).exists(),
             "the .restore-tmp staging file must be renamed away on success"
@@ -1213,7 +1304,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("failed to finalize the restore"), "{msg}");
         assert!(msg.contains("your data is unchanged"), "every file is back, so the claim is true: {msg}");
         assert_untouched(&live, &wal, &shm);
@@ -1222,8 +1313,8 @@ mod tests {
     #[tokio::test]
     async fn replace_database_file_success_removes_the_old_sidecars_and_their_set_aside_copies() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
-        replace_database_file(&backup, &live).expect("replace");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        replace_database_file(&backup, &live).await.expect("replace");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!wal.exists() && !shm.exists(), "the old sidecars are gone");
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "their set-aside copies are gone too");
         assert!(!restore_tmp_path(&live).exists());
@@ -1240,7 +1331,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("your data is unchanged"), "{msg}");
         assert_untouched(&live, &wal, &shm);
     }
@@ -1259,7 +1350,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(!msg.contains("your data is unchanged"), "never claim unchanged when a sidecar moved: {msg}");
         assert!(msg.contains("could not be put back"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()), "the message names where the -wal is: {msg}");
@@ -1274,7 +1365,7 @@ mod tests {
     async fn replace_database_file_refuses_when_an_earlier_restore_left_a_set_aside_sidecar() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         std::fs::write(aside(&wal), b"EARLIER-SET-ASIDE-WAL").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert!(msg.contains("your data is unchanged"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()), "{msg}");
         assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"EARLIER-SET-ASIDE-WAL", "never overwritten");
@@ -1292,7 +1383,7 @@ mod tests {
     async fn replace_database_file_refusal_names_the_leftover_and_the_next_step() {
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         std::fs::write(aside(&wal), b"EARLIER").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert_eq!(
             msg,
             format!(
@@ -1303,7 +1394,7 @@ mod tests {
         // CR-U-25: a leftover -shm set-aside never refuses; with both present
         // only the -wal is named (the singular form is the only form).
         std::fs::write(aside(&shm), b"EARLIER-SHM").unwrap();
-        let msg = replace_database_file(&backup, &live).unwrap_err();
+        let msg = replace_database_file(&backup, &live).await.unwrap_err();
         assert_eq!(
             msg,
             format!(
@@ -1322,7 +1413,7 @@ mod tests {
         let (_dir, backup, live, _wal, shm) = live_with_sidecars().await;
         std::fs::remove_file(&shm).unwrap();
         std::fs::write(aside(&shm), b"STALE-INDEX").unwrap();
-        replace_database_file(&backup, &live).expect("a stale -shm set-aside never blocks");
+        replace_database_file(&backup, &live).await.expect("a stale -shm set-aside never blocks");
         assert!(!aside(&shm).exists(), "the stale -shm set-aside is removed");
     }
 
@@ -1338,11 +1429,11 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let first = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let first = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(first.contains("The index file"), "{first}");
         assert!(aside(&shm).exists(), "the stuck -shm set-aside is still there");
-        replace_database_file(&backup, &live).expect("the leftover -shm set-aside does not block the next restore");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        replace_database_file(&backup, &live).await.expect("the leftover -shm set-aside does not block the next restore");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!wal.exists() && !shm.exists());
         assert!(!aside(&wal).exists() && !aside(&shm).exists(), "no set-aside file is left behind");
         assert_eq!(count_rows(&live, "accounts").await, 2);
@@ -1362,7 +1453,7 @@ mod tests {
             events.borrow_mut().push(format!("sync {}", p.display()));
             real_sync(p)
         };
-        replace_database_file_io(&backup, &live, &mut rename, &mut sync).expect("replace");
+        replace_database_file_io(&backup, &live, &mut rename, &mut sync).await.expect("replace");
         let ev = events.borrow();
         let synced = ev.iter().position(|e| e == &format!("sync {}", tmp.display())).expect("the staged copy is synced");
         let swapped = ev
@@ -1380,7 +1471,7 @@ mod tests {
         let mut sync = |_p: &Path| -> std::io::Result<()> {
             Err(std::io::Error::other("simulated: the flush failed"))
         };
-        let msg = replace_database_file_io(&backup, &live, &mut rename, &mut sync).unwrap_err();
+        let msg = replace_database_file_io(&backup, &live, &mut rename, &mut sync).await.unwrap_err();
         assert!(msg.contains("failed to stage the backup (your data is unchanged)"), "{msg}");
         assert_untouched(&live, &wal, &shm);
     }
@@ -1393,7 +1484,7 @@ mod tests {
         let tmp = restore_tmp_path(&live);
         std::fs::copy(&backup, &tmp).unwrap();
         let before = std::fs::read(&tmp).unwrap();
-        let msg = replace_database_file(&tmp, &live).unwrap_err();
+        let msg = replace_database_file(&tmp, &live).await.unwrap_err();
         assert_eq!(
             msg,
             "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
@@ -1419,7 +1510,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("(your data is unchanged)"), "{msg}");
         assert!(!msg.contains("could not be put back"), "{msg}");
         assert!(!aside(&wal).exists() && !aside(&shm).exists());
@@ -1444,7 +1535,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(!msg.contains("could not be put back"), "no data-loss alarm for the index: {msg}");
         assert!(msg.contains("(your data is unchanged)"), "{msg}");
         assert!(
@@ -1467,7 +1558,7 @@ mod tests {
             }
             std::fs::rename(from, to)
         };
-        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("could not be put back"), "{msg}");
         assert!(!msg.contains("your data is unchanged"), "{msg}");
         assert!(msg.contains(&aside(&wal).display().to_string()) && msg.contains(&aside(&shm).display().to_string()), "{msg}");
@@ -1483,11 +1574,11 @@ mod tests {
         ro.set_readonly(true); // mode 0444 on unix; the Read-only attribute on Windows
         std::fs::set_permissions(&backup, ro).unwrap();
         let backup_before = std::fs::read(&backup).unwrap();
-        replace_database_file(&backup, &live).expect("a read-only backup restores");
+        replace_database_file(&backup, &live).await.expect("a read-only backup restores");
         // NIT (b): the BACKUP itself is untouched — still read-only, same bytes.
         assert!(std::fs::metadata(&backup).unwrap().permissions().readonly(), "the backup keeps its read-only mode");
         assert_eq!(std::fs::read(&backup).unwrap(), backup_before, "the backup's bytes are untouched");
-        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
         assert!(!restore_tmp_path(&live).exists());
         assert_eq!(count_rows(&live, "accounts").await, 2);
@@ -1501,7 +1592,7 @@ mod tests {
     async fn replace_database_file_production_path_syncs_the_staged_copy() {
         let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
         SYNCED.with(|s| s.borrow_mut().clear());
-        replace_database_file(&backup, &live).expect("replace");
+        replace_database_file(&backup, &live).await.expect("replace");
         let synced = SYNCED.with(|s| s.borrow().clone());
         assert_eq!(synced, vec![restore_tmp_path(&live)], "the public entry point flushes the staged copy");
     }
@@ -1510,6 +1601,424 @@ mod tests {
     fn real_sync_reports_a_failure() {
         let dir = tempfile::tempdir().unwrap();
         assert!(real_sync(&dir.path().join("does-not-exist.db")).is_err());
+    }
+
+    // ---- v1.7.2 L37: db_restore's core, driven without an AppHandle. ----
+
+    #[tokio::test]
+    async fn restore_checked_refuses_an_invalid_source_with_its_own_reason_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let junk = dir.path().join("junk.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let reason = validate_backup_file(&junk).await.reason.expect("junk is refused");
+        let err = restore_checked(&junk, &live).await.unwrap_err();
+        assert_eq!(err, reason, "the validator's reason, as it is");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn restore_checked_refuses_the_live_file_itself() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("finance.db");
+        seeded_pool(&live).await.close().await;
+        let before = std::fs::read(&live).unwrap();
+        let err = restore_checked(&live, &live).await.unwrap_err();
+        assert_eq!(err, "db_restore: the selected backup IS the live database.");
+        #[cfg(unix)]
+        {
+            // The same file under another name is the same file.
+            let alias = dir.path().join("alias.db");
+            std::os::unix::fs::symlink(&live, &alias).unwrap();
+            let err = restore_checked(&alias, &live).await.unwrap_err();
+            assert_eq!(err, "db_restore: the selected backup IS the live database.");
+        }
+        assert_eq!(std::fs::read(&live).unwrap(), before, "the live file is byte-for-byte the same");
+        assert!(!restore_tmp_path(&live).exists(), "refused before staging");
+    }
+
+    #[tokio::test]
+    async fn restore_checked_restores_a_valid_backup() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        restore_checked(&backup, &live).await.expect("a valid backup restores");
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+        assert!(!wal.exists() && !shm.exists(), "the replaced file's sidecars went with it");
+        assert!(!restore_tmp_path(&live).exists());
+    }
+
+    // ---- v1.7.2 L8: the file named is the file checked and restored. ----
+
+    /// A valid backup named `name` in a fresh folder.
+    async fn backup_named(name: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = seeded_pool(&dir.path().join("seed.db")).await;
+        let path = dir.path().join(name);
+        backup_to(&pool, &path).await.unwrap();
+        pool.close().await;
+        (dir, path)
+    }
+
+    #[tokio::test]
+    async fn validate_reads_a_name_with_a_percent_escape_as_written() {
+        // No "Cairn backup.db" beside it: the '%20' is part of the name.
+        let (_dir, path) = backup_named("Cairn%20backup.db").await;
+        let v = validate_backup_file(&path).await;
+        assert!(v.ok, "{:?}", v.reason);
+    }
+
+    #[tokio::test]
+    async fn validate_never_checks_the_percent_decoded_sibling_instead() {
+        let (dir, _valid_sibling) = backup_named("cairn-old.db").await;
+        let junk = dir.path().join("cairn%2Dold.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let v = validate_backup_file(&junk).await;
+        assert!(!v.ok, "the file named is junk, whatever sits beside it");
+        assert!(v.reason.unwrap().contains("file is not a database"));
+    }
+
+    /// Unix only: '?' is not a legal file-name character on Windows.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn validate_reads_a_name_with_a_question_mark_as_written() {
+        let (_dir, path) = backup_named("backup?v=1.db").await;
+        let v = validate_backup_file(&path).await;
+        assert!(v.ok, "{:?}", v.reason);
+    }
+
+    #[tokio::test]
+    async fn restore_checked_restores_the_file_named_whatever_its_name() {
+        // The '%20' name runs everywhere; '?' is not a legal file-name
+        // character on Windows, so that name runs on unix only.
+        let mut names = vec!["Cairn%20backup.db"];
+        if cfg!(unix) {
+            names.push("backup?v=1.db");
+        }
+        for name in names {
+            let (dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+            let named = dir.path().join(name);
+            std::fs::copy(&backup, &named).unwrap();
+            restore_checked(&named, &live).await.unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(count_rows(&live, "accounts").await, 2, "{name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn restore_checked_refuses_junk_whose_decoded_name_is_a_valid_backup() {
+        let (dir, backup, live, wal, shm) = live_with_sidecars().await;
+        std::fs::copy(&backup, dir.path().join("cairn-old.db")).unwrap();
+        let junk = dir.path().join("cairn%2Dold.db");
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let err = restore_checked(&junk, &live).await.unwrap_err();
+        assert!(err.contains("file is not a database"), "{err}");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    // ---- v1.7.2 L1 (CR-172-1/4): what was validated is what is restored. ----
+
+    /// Every schema object's SQL, every row of every table (SQL-quoted), and
+    /// `user_version`: what "holds the backup's content" means once the
+    /// staged file is rebuilt through SQLite (its header bookkeeping — the
+    /// schema cookie — differs from the source's bytes by design).
+    async fn db_content(path: &Path) -> Vec<String> {
+        let url = format!("sqlite://{}?mode=ro", path.to_string_lossy());
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.expect("open");
+        let uv: i64 = sqlx::query("PRAGMA user_version").fetch_one(&pool).await.unwrap().get(0);
+        let mut out = vec![format!("user_version {uv}")];
+        let objects = sqlx::query("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        for o in &objects {
+            let (ty, name, sql): (String, String, Option<String>) = (o.get(0), o.get(1), o.get(2));
+            out.push(format!("{ty} {name}: {}", sql.unwrap_or_default()));
+            if ty == "table" {
+                let cols: Vec<String> = sqlx::query(&format!("SELECT name FROM pragma_table_info('{name}')"))
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap()
+                    .iter()
+                    .map(|c| format!("quote(\"{}\")", c.get::<String, _>(0)))
+                    .collect();
+                let rows = sqlx::query(&format!("SELECT {} FROM \"{name}\" ORDER BY rowid", cols.join(" || '|' || ")))
+                    .fetch_all(&pool)
+                    .await
+                    .unwrap();
+                out.extend(rows.iter().map(|r| format!("{name}: {}", r.get::<String, _>(0))));
+            }
+        }
+        pool.close().await;
+        out
+    }
+
+    /// A raw copy of a WAL-mode data folder taken while Cairn had it open
+    /// (Finder, Time Machine): `finance.db` + `-wal` + `-shm`, copied with the
+    /// writer still connected. With `checkpoint_first`, two accounts are in
+    /// the main file; three more (all five without it, plus every table) are
+    /// committed in the copied `-wal` only.
+    async fn raw_copy_of_an_open_wal_database(dir: &Path, checkpoint_first: bool) -> PathBuf {
+        let orig = dir.join("open");
+        std::fs::create_dir(&orig).unwrap();
+        let open = orig.join("finance.db");
+        let url = format!("sqlite://{}?mode=rwc", open.to_string_lossy());
+        // ONE connection: the PRAGMAs are per connection.
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.unwrap();
+        for sql in [
+            "PRAGMA journal_mode = WAL",
+            "PRAGMA wal_autocheckpoint = 0",
+            "CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)",
+            "INSERT INTO schema_migrations (version) VALUES ('0001_initial')",
+            "CREATE TABLE accounts (id INTEGER PRIMARY KEY, name TEXT)",
+            "INSERT INTO accounts (name) VALUES ('Checking'), ('Brokerage')",
+        ] {
+            sqlx::query(sql).execute(&pool).await.unwrap();
+        }
+        sqlx::query(&format!("PRAGMA user_version = {MAX_SCHEMA_VERSION}")).execute(&pool).await.unwrap();
+        if checkpoint_first {
+            sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)").execute(&pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO accounts (name) VALUES ('Roth IRA'), ('HSA'), ('529')").execute(&pool).await.unwrap();
+        let copied = dir.join("copied");
+        std::fs::create_dir(&copied).unwrap();
+        for suffix in ["", "-wal", "-shm"] {
+            let from = PathBuf::from(format!("{}{suffix}", open.display()));
+            std::fs::copy(&from, PathBuf::from(format!("{}{suffix}", copied.join("finance.db").display()))).unwrap();
+        }
+        pool.close().await;
+        copied.join("finance.db")
+    }
+
+    #[tokio::test]
+    async fn restore_of_a_partly_checkpointed_wal_source_restores_the_rows_it_validated() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        // Precondition: the main file alone is older — the -wal holds 3 rows.
+        let main_only = dir.path().join("main-only.db");
+        std::fs::copy(&src, &main_only).unwrap();
+        assert_eq!(count_rows(&main_only, "accounts").await, 2, "the main file alone has 2 accounts");
+        let validated = validate_backup_file(&src).await;
+        assert!(validated.ok, "{:?}", validated.reason);
+        let validated_rows = count_rows(&src, "accounts").await;
+        assert_eq!(validated_rows, 5, "what the validator reads: main file + -wal");
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(count_rows(&live, "accounts").await, validated_rows, "rows validated == rows restored");
+    }
+
+    #[tokio::test]
+    async fn restore_of_a_never_checkpointed_wal_source_is_not_an_empty_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), false).await;
+        let main_only = dir.path().join("main-only.db");
+        std::fs::copy(&src, &main_only).unwrap();
+        assert_eq!(count_tables_named(&main_only, "accounts").await, 0, "the main file alone has no tables yet");
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(db_content(&live).await, db_content(&src).await, "every table, row and the schema version");
+        assert_eq!(count_rows(&live, "accounts").await, 5);
+    }
+
+    #[tokio::test]
+    async fn the_restored_file_is_one_self_contained_rollback_mode_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), false).await;
+        let (_live_dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        // Read the header before any connection opens the restored file.
+        let header = std::fs::read(&live).unwrap();
+        assert_eq!(&header[..16], b"SQLite format 3\0");
+        assert_eq!((header[18], header[19]), (1, 1), "rollback mode: the file alone is the whole database");
+        assert!(!wal.exists() && !shm.exists(), "no -wal or -shm beside the restored file");
+        for suffix in ["-wal", "-shm", "-journal"] {
+            let beside_tmp = PathBuf::from(format!("{}{suffix}", restore_tmp_path(&live).display()));
+            assert!(!beside_tmp.exists(), "nothing left beside the staging file: {suffix}");
+        }
+    }
+
+    #[tokio::test]
+    async fn restore_leaves_the_source_files_byte_identical() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        // The Settings pre-flight (DataSection doRestore) validates first; a
+        // reader writes its lock slots into an existing -shm index there.
+        assert!(validate_backup_file(&src).await.ok);
+        let files = |p: &Path| ["", "-wal", "-shm"].map(|suffix| std::fs::read(format!("{}{suffix}", p.display())).ok());
+        let before = files(&src);
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        restore_checked(&src, &live).await.expect("restore");
+        assert_eq!(files(&src), before, "the source's main file, -wal and -shm are byte-identical");
+        let mut listed: Vec<String> = std::fs::read_dir(src.parent().unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        listed.sort();
+        assert_eq!(listed, ["finance.db", "finance.db-shm", "finance.db-wal"], "nothing added beside the source");
+    }
+
+    /// CR-U-22 stays load-bearing now that SQLite creates the staged file
+    /// fresh (only an unusual umask would make it read-only): pinned on the
+    /// swap half directly, with a read-only staged copy.
+    #[tokio::test]
+    async fn swap_staged_makes_a_read_only_staged_copy_writable_before_its_flush() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let tmp = restore_tmp_path(&live);
+        std::fs::copy(&backup, &tmp).unwrap();
+        let mut ro = std::fs::metadata(&tmp).unwrap().permissions();
+        ro.set_readonly(true);
+        std::fs::set_permissions(&tmp, ro).unwrap();
+        swap_staged(&live, &mut |from: &Path, to: &Path| std::fs::rename(from, to), &mut |p: &Path| real_sync(p))
+            .expect("a read-only staged copy is made writable, flushed and swapped in");
+        assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+    }
+
+    /// Cairn's own backups are rollback-mode files, so reading one needs no
+    /// file beside it: a backup in a folder Cairn cannot write (a read-only
+    /// volume, a locked folder) restores as it did with `fs::copy`.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_backup_in_a_folder_cairn_cannot_write_still_restores() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        let inside = locked.join("backup.db");
+        std::fs::copy(&backup, &inside).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = restore_checked(&inside, &live).await;
+
+        let listed = std::fs::read_dir(&locked).unwrap().count();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.expect("a backup in a read-only folder restores");
+        assert_eq!(listed, 1, "nothing was created beside the backup");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
+    }
+
+    /// The Time Machine / read-only-volume shape (v1.7.2 plan review): a raw
+    /// copy of an open WAL database, `-shm` included, read-only files in a
+    /// folder Cairn cannot write. SQLite reads a read-only `-shm` from its own
+    /// memory and still replays the `-wal`, so every committed row is
+    /// restored, and the staging adds nothing beside the source.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_raw_wal_copy_in_a_folder_cairn_cannot_write_restores_every_row() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        let folder = src.parent().unwrap().to_path_buf();
+        for suffix in ["", "-wal", "-shm"] {
+            let file = format!("{}{suffix}", src.display());
+            std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o444)).unwrap();
+        }
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let (_live_dir, _backup, live, _wal, _shm) = live_with_sidecars().await;
+        let result = restore_checked(&src, &live).await;
+        let mut listed: Vec<String> = std::fs::read_dir(&folder)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        listed.sort();
+
+        std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.expect("a raw WAL copy in a read-only folder restores");
+        assert_eq!(listed, ["finance.db", "finance.db-shm", "finance.db-wal"], "nothing added beside the source");
+        assert_eq!(count_rows(&live, "accounts").await, 5, "every committed row, the -wal's included");
+    }
+
+    #[tokio::test]
+    async fn a_staging_file_left_by_an_interrupted_restore_does_not_block_the_next_one() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        std::fs::write(restore_tmp_path(&live), b"LEFT BY AN INTERRUPTED RESTORE").unwrap();
+        replace_database_file(&backup, &live).await.expect("restores over the leftover");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
+        assert!(!restore_tmp_path(&live).exists());
+    }
+
+    // ---- v1.7.2 (CR-172-1/4): the STAGED file is validated before the swap. ----
+
+    /// What an unfaithful staging copy would leave: an empty file.
+    fn empty_the_staged_file(p: &Path) {
+        std::fs::write(p, b"").unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_staged_file_that_fails_validation_is_never_swapped_in() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = Some(empty_the_staged_file));
+        let result = replace_database_file(&backup, &live).await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(
+            result.unwrap_err(),
+            "db_restore: failed to stage the backup (your data is unchanged): This does not look like a Cairn backup (no schema_migrations table)."
+        );
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn the_staged_check_refuses_a_newer_schema_file_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let newer = dir.path().join("newer.db");
+        let pool = seeded_pool(&newer).await;
+        sqlx::query(&format!("PRAGMA user_version = {}", MAX_SCHEMA_VERSION + 5)).execute(&pool).await.unwrap();
+        pool.close().await;
+        // replace_database_file itself: no source validation runs before it.
+        let err = replace_database_file(&newer, &live).await.unwrap_err();
+        let prefix = format!(
+            "db_restore: failed to stage the backup (your data is unchanged): This backup was created by a newer version of Cairn (schema {};",
+            MAX_SCHEMA_VERSION + 5
+        );
+        assert!(err.starts_with(&prefix), "{err}");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn the_staged_check_refuses_a_file_without_schema_migrations_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let other = dir.path().join("other.db");
+        let url = format!("sqlite://{}?mode=rwc", other.to_string_lossy());
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.unwrap();
+        sqlx::query("CREATE TABLE foo (id INTEGER PRIMARY KEY)").execute(&pool).await.unwrap();
+        pool.close().await;
+        let err = replace_database_file(&other, &live).await.unwrap_err();
+        assert_eq!(
+            err,
+            "db_restore: failed to stage the backup (your data is unchanged): This does not look like a Cairn backup (no schema_migrations table)."
+        );
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    /// A source whose pages go bad past its header: it opens, VACUUM INTO
+    /// creates the staging file, then the copy fails partway. The partial
+    /// staging file is removed and nothing of the live data moves.
+    #[tokio::test]
+    async fn a_staging_copy_that_fails_partway_is_removed_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let pool = seeded_pool(&dir.path().join("large-seed.db")).await;
+        sqlx::query(
+            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) \
+             INSERT INTO accounts (name) SELECT printf('Account %04d, a name long enough to fill pages', i) FROM n",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let bad = dir.path().join("bad.db");
+        backup_to(&pool, &bad).await.unwrap();
+        pool.close().await;
+        // The header and the schema page stay; the middle half becomes 0x5a.
+        let mut bytes = std::fs::read(&bad).unwrap();
+        let len = bytes.len();
+        bytes[len / 4..3 * len / 4].fill(0x5a);
+        std::fs::write(&bad, &bytes).unwrap();
+
+        let err = replace_database_file(&bad, &live).await.unwrap_err();
+        assert!(err.contains("(your data is unchanged)"), "{err}");
+        assert!(!restore_tmp_path(&live).exists(), "the partial staging file is removed: {err}");
+        assert_untouched(&live, &wal, &shm);
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
