@@ -382,8 +382,9 @@ describe('realRateView — the Stress Test / Earliest Retirement rate leg (B2)',
   it('UNFLOORED: 2% at 3% is a NEGATIVE real rate (−0.97087%), phrased −1% — never clamped to 0', () => {
     const v = realRateView(0.02, 0.03);
     expect(v.realRate).toBeCloseTo(-0.0097087378640777, 12);
-    // Either minus glyph: B3 moves formatPercent onto U+2212 app-wide; this pin needs no re-anchor.
-    expect(v.approxReal).toMatch(/^≈ [-−]1% real$/);
+    // One glyph, U+2212: formatPercent has printed the true minus since B3 (v1.7.0); the
+    // either-glyph tolerance is retired (v1.8.0 A-3a, M1 chip i) — a hyphen now reds this pin.
+    expect(v.approxReal).toBe('≈ −1% real');
     // The exact-zero knife edge the solver suite pins (3% at 3%): a real rate of 0, phrased 0%.
     expect(realRateView(0.03, 0.03).realRate).toBe(0);
     expect(realRateView(0.03, 0.03).approxReal).toBe('≈ 0% real');
