@@ -1,4 +1,5 @@
 import type { Transaction, Category } from '@/types/schema';
+import { localTodayISO, utcNoonOf } from '@/lib/dates';
 
 export interface MonthlyCategoryTotal {
   month: string; // YYYY-MM
@@ -56,11 +57,15 @@ export function effectiveSpendingAmount(txn: Transaction): number {
   return txn.amount;
 }
 
-/** Aggregate transactions into the Spending-page summary. */
+/**
+ * Aggregate transactions into the Spending-page summary. `asOf` defaults to
+ * the LOCAL calendar day through its UTC-noon bridge (v1.8.0 A-2′, the
+ * snapshot-bucketing idiom): the month math below reads UTC accessors.
+ */
 export function summarizeSpending(
   transactions: Transaction[],
   categories: Category[],
-  asOf: Date = new Date(),
+  asOf: Date = utcNoonOf(localTodayISO()),
 ): SpendingSummary {
   const byId = new Map<number, Category>();
   for (const c of categories) if (c.id != null) byId.set(c.id, c);

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { isRealSpending, summarizeSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
 import type { Transaction, Category } from '@/types/schema';
 
@@ -114,5 +114,39 @@ describe('summarizeSpending', () => {
     ];
     const s = summarizeSpending(txns, cats, new Date('2026-03-31T00:00:00Z'));
     expect(s.currentMonthTotal).toBe(0);
+  });
+});
+
+describe('v1.8.0 A-2′: summarizeSpending\'s asOf default is the LOCAL month', () => {
+  const ORIGINAL_TZ = process.env.TZ;
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  // LA_EVENING: Dec 31, 2025 19:00 PST — UTC day Jan 1. AKL_MORNING: Jan 1, 2026 09:00 NZDT — UTC day Dec 31.
+  const laEvening = () => {
+    process.env.TZ = 'America/Los_Angeles';
+    vi.setSystemTime(new Date('2026-01-01T03:00:00Z'));
+  };
+  const aklMorning = () => {
+    process.env.TZ = 'Pacific/Auckland';
+    vi.setSystemTime(new Date('2025-12-31T20:00:00Z'));
+  };
+  const txns = [txn({ id: 1, date: '2025-12-15', amount: 100 }), txn({ id: 2, date: '2026-01-01', amount: 40 })];
+
+  it('LA evening (Dec 31 locally): current month 2025-12 — $100 now, $0 the month before', () => {
+    laEvening();
+    const s = summarizeSpending(txns, cats);
+    expect([s.currentMonth, s.currentMonthTotal, s.previousMonthTotal]).toEqual(['2025-12', 100, 0]);
+  });
+
+  it('Auckland morning (Jan 1 locally): current month 2026-01 — $40 now, $100 the month before', () => {
+    aklMorning();
+    const s = summarizeSpending(txns, cats);
+    expect([s.currentMonth, s.currentMonthTotal, s.previousMonthTotal]).toEqual(['2026-01', 40, 100]);
   });
 });

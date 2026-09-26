@@ -33,6 +33,7 @@ import {
 import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
 import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
+import { localTodayISO } from '@/lib/dates';
 
 const moderateScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -439,7 +440,9 @@ describe('Dashboard spending cards', () => {
     });
 
     // A transaction in the current month (2026-05 = today's month per test context)
-    const currentMonthDate = new Date().toISOString().slice(0, 7) + '-15';
+    // v1.8.0 A-2′: the LOCAL month — summarizeSpending's default now reads the local
+    // month, so a UTC-month fixture would land in next month on a US month-end evening.
+    const currentMonthDate = localTodayISO().slice(0, 7) + '-15';
     useTransactionsStore.setState({
       transactions: [
         {

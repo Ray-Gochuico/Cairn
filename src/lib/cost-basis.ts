@@ -1,5 +1,9 @@
 import type { Transaction, Category } from '@/types/schema';
 import { isRealSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
+import { localTodayISO, utcNoonOf } from '@/lib/dates';
+
+// v1.8.0 A-2′: every `asOf` default below is the LOCAL calendar day through
+// its UTC-noon bridge — the window math reads UTC accessors.
 
 /**
  * Cost basis of a property = purchase price + capital-improvement spend
@@ -42,7 +46,7 @@ export function linkedSpendingTransactions(
   link: { propertyId: number } | { vehicleId: number },
   months: number,
   categories: Category[],
-  asOf: Date = new Date(),
+  asOf: Date = utcNoonOf(localTodayISO()),
 ): Transaction[] {
   const categoriesById = new Map<number, Category>();
   for (const c of categories) if (c.id != null) categoriesById.set(c.id, c);
@@ -73,7 +77,7 @@ export function rollingExpense(
   link: { propertyId: number } | { vehicleId: number },
   months: number,
   categories: Category[],
-  asOf: Date = new Date(),
+  asOf: Date = utcNoonOf(localTodayISO()),
 ): number {
   return linkedSpendingTransactions(transactions, link, months, categories, asOf)
     .reduce((s, t) => s + effectiveSpendingAmount(t), 0);
@@ -111,7 +115,7 @@ export function allLinkedSpending(
  */
 export function averageMonthlySpending(
   transactions: Transaction[],
-  asOf: Date = new Date(),
+  asOf: Date = utcNoonOf(localTodayISO()),
 ): number {
   if (transactions.length === 0) return 0;
   let earliest = transactions[0].date;
