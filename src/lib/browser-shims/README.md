@@ -55,11 +55,12 @@ archive paths.
   plugin; absent from `vite build`). `curl -s localhost:1422/__cairn/dev-stamp`
   tells you which tree a port is serving.
 - **Playwright never attaches silently.** `reuseExistingServer` is off by
-  default; a busy 1422/1423 fails at once with Playwright's "is already used"
-  error. `PW_REUSE_SERVER=1` attaches to a server you started yourself —
-  `e2e/global-setup.ts` still refuses a server from another tree, of another
-  role, or without the browser shim (the tree is compared as a path, not as a
-  spelling: realpath, forward slashes, no trailing separator).
+  default; a busy 1422/1423 (or the `E2E_PORT_BASE` pair) fails at once with
+  Playwright's "is already used" error. `PW_REUSE_SERVER=1` attaches to a
+  server you started yourself — `e2e/global-setup.ts` still refuses a server
+  from another tree, of another role, or without the browser shim (the tree is
+  compared as a path, not as a spelling: realpath, forward slashes, no trailing
+  separator).
 - **Two trees at once.** `E2E_PORT_BASE=<n>` moves the seed server to `<n>` and
   the fresh server to `<n>+1` — for `npm run dev:browser:seed` /
   `npm run dev:browser:fresh`, `npx playwright test` and the identity check
@@ -67,13 +68,20 @@ archive paths.
   main checkout runs at the fixed 1422/1423; the 1622/1623 pair is clear of the
   ports the launch configs and the hand smoke use, 1420–1431 and 1523–1530).
   Unset, nothing moves. The tauri (1420) and browser (1421) roles never move; a
-  value outside 1024–65534, or one whose pair lands on 1420/1421, fails at once
-  rather than falling back. A browser-shim server's port now follows the ROLE
-  inside `vite.config.ts` (the two scripts pass no `--port`), so a seed- or
-  fresh-role shim server started by hand without `--port` answers on 1422/1423.
-  A server without the shim (`npm run dev`, `tauri dev`) stays on 1420 whatever
-  `VITE_SEED_DEMO` or `CAIRN_DEV_ROLE` the shell exports. A `--port` on the
-  command line still wins.
+  value outside 1024–65534, one whose pair lands on 1420/1421, or one whose
+  pair holds a WHATWG Fetch "bad port" (1719, 1720, 1723, 2049, …; the full
+  list is `FETCH_BAD_PORTS` in `scripts/dev-servers.ts`) fails at once rather
+  than falling back. Chromium and Node's fetch refuse a bad port before
+  connecting, so base 1722 is refused for its fresh port 1723. A browser-shim
+  server's port now follows the ROLE inside `vite.config.ts` (the two scripts
+  pass no `--port`), so a seed- or fresh-role shim server started by hand
+  without `--port` answers on 1422/1423. A server without the shim
+  (`npm run dev`, `tauri dev`) stays on 1420 whatever `VITE_SEED_DEMO` or
+  `CAIRN_DEV_ROLE` the shell exports. A `--port` on the command line still
+  wins. `.claude/launch.json` declares the fixed ports (its `vite-browser-seed`
+  entry waits on 1422), so unset `E2E_PORT_BASE` wherever `preview_start` runs:
+  with a base exported, the seed server binds the base instead and the preview
+  keeps waiting on 1422.
 - **Load policy.** Above `0.7 × cores` 1-min load the suite runs serialized with
   a 120 s test timeout and says so; at or above `1.5 × cores` (local only) it
   refuses to run, once, with that one line. `E2E_LOAD_SOFT`, `E2E_LOAD_HARD`,
@@ -87,7 +95,10 @@ archive paths.
   budget — 30 s under normal parallelism, 60 s serialized — read from the frozen
   policy in `test.info().config.metadata` (a CLI `--timeout` does not move it);
   `tests/e2e-harness/spec-timeouts.test.ts` refuses a new numeric timeout
-  literal in a spec.
+  literal in a spec. Each dev server's cold start (`webServer[].timeout` in
+  `playwright.config.ts`) follows the same policy: `webServerTimeoutFor()`
+  (`e2e/boot-timeout.ts`) is twice the policy's test budget — 120 s under
+  normal parallelism, 240 s serialized.
 - **Type-checking the harness.** `npx tsc -p tsconfig.node.json --noEmit` covers
   `vite.config.ts`, `playwright.config.ts`, `scripts/dev-servers.ts` and all of
   `e2e/`; the root `npx tsc --noEmit` still covers `src/` only. Its build info
