@@ -226,14 +226,23 @@ export function CalculatorCard({
             aria-expanded flips in place; focus never moves.
             Review fix 1 (WCAG 2.4.7): the REST card is h-32 overflow-hidden,
             which clips an OUTSET ring + offset to invisibility — the ring
-            must draw INSIDE the clip (ring-inset, no offset). */}
+            must draw INSIDE the clip (ring-inset, no offset).
+            A-11(1) (v1.7.1): the NAME is the title + the headline VALUE
+            (`${id}-headline-value`, inside the status region past its W16
+            sr-only "{title}: " prefix) — referencing the whole status region
+            read the title twice. The aria-label is the FALLBACK, the plain
+            title: accname 1.2 uses it when the referenced text is empty, and
+            accessibility readers that do not resolve aria-labelledby (the
+            smoke pane's tree — the R1 "no accessible name" reading) read the
+            title instead of nothing. State stays aria-expanded's job. */}
         <button
           ref={triggerRef}
           type="button"
           onClick={toggle}
           aria-expanded={open}
           aria-controls={`panel-${id}`}
-          aria-labelledby={`${id}-waymark-title ${id}-headline`}
+          aria-labelledby={`${id}-waymark-title ${id}-headline-value`}
+          aria-label={resolvedTitleText}
           data-testid={`${id}-trigger`}
           className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         />
@@ -272,7 +281,7 @@ export function CalculatorCard({
             {resolvedTitleText ? (
               <span className="sr-only">{resolvedTitleText}: </span>
             ) : null}
-            {headline}
+            <span id={`${id}-headline-value`}>{headline}</span>
           </div>
           <p
             data-testid={`${id}-meaning`}
