@@ -236,8 +236,10 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 /// may still hold committed frames. So the sidecars are SET ASIDE, never
 /// deleted, until the swap has succeeded (v1.7.1 CR-U-15, U1-m23/m32).
 ///
-/// ORDERING (every error return leaves the original data whole; a crash
-/// between steps 2 and 3 is not reconciled yet — a chip):
+/// ORDERING (every error return leaves the original data whole — except a
+/// REPORTED put-back failure of the `-wal`, which names where it is (see
+/// put_back_or_report); a crash between steps 2 and 3 is not reconciled yet —
+/// a chip):
 ///   0. Refuse before touching anything when `backup` IS the staging file
 ///      (`<live>.restore-tmp`), or when a set-aside sidecar from an earlier
 ///      restore is still present (`<sidecar>.restore-old`): it may be the only
@@ -412,11 +414,15 @@ fn replace_database_file_io(
 }
 
 /// Rename every set-aside sidecar back (newest move first) and build the
-/// error. "(your data is unchanged)" is claimed only when all went back; a
-/// sidecar that could not go back is named with where it is — kept, never
-/// deleted. The phrase "could not be put back" is read by the JS notice
-/// (src/db/boot-error-screen.ts, src/components/settings/DataSection.tsx) to
-/// drop its own "your data was not changed" line; keep them in sync.
+/// error. "(your data is unchanged)" is claimed unless the `-wal` could not
+/// go back; a sidecar that could not go back is named with where it is —
+/// kept, never deleted. The `-shm` is SQLite's rebuildable wal-index and
+/// holds no data, so a stuck `-shm` alone is reported calmly, never with the
+/// data phrase (CR-U-23c). The phrase "could not be put back" is read by
+/// the JS notices (src/db/boot-error-screen.ts,
+/// src/components/settings/DataSection.tsx) to drop their "your data was not
+/// changed" line, and by src/components/layout/RestoreProblemNote.tsx to
+/// decide whether to show at all; keep them in sync.
 fn put_back_or_report(
     moved: &[(PathBuf, PathBuf)],
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
@@ -424,8 +430,12 @@ fn put_back_or_report(
     e: &std::io::Error,
 ) -> String {
     let mut stuck: Vec<String> = Vec::new();
+    let mut wal_stuck = false;
     for (sidecar, aside) in moved.iter().rev() {
         if let Err(back) = rename(aside, sidecar) {
+            if !sidecar.to_string_lossy().ends_with("-shm") {
+                wal_stuck = true;
+            }
             stuck.push(format!(
                 "{} is at {} ({back})",
                 sidecar.display(),
@@ -435,6 +445,11 @@ fn put_back_or_report(
     }
     if stuck.is_empty() {
         format!("db_restore: {step} (your data is unchanged): {e}")
+    } else if !wal_stuck {
+        format!(
+            "db_restore: {step} (your data is unchanged): {e}. The index file {}; SQLite rebuilds it from your data",
+            stuck.join("; ")
+        )
     } else {
         format!(
             "db_restore: {step}: {e}. Part of your current data could not be put back: {}",
@@ -1270,6 +1285,52 @@ mod tests {
         assert!(!aside(&wal).exists() && !aside(&shm).exists());
         assert!(!wal.exists() && !shm.exists());
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// CR-U-23(c): the -shm is SQLite's rebuildable index — no data. A failed
+    /// swap whose -shm cannot go back (while the -wal did) is NOT reported
+    /// with the data-loss phrase the JS alarm keys on.
+    #[tokio::test]
+    async fn replace_database_file_a_stuck_shm_is_not_reported_as_data_loss() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let live_c = live.clone();
+        let shm_c = shm.clone();
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            if to == shm_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the -shm cannot go back"));
+            }
+            std::fs::rename(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        assert!(!msg.contains("could not be put back"), "no data-loss alarm for the index: {msg}");
+        assert!(msg.contains("(your data is unchanged)"), "{msg}");
+        assert!(
+            msg.contains(&format!("The index file {} is at {}", shm.display(), aside(&shm).display())),
+            "{msg}"
+        );
+        assert!(msg.contains("SQLite rebuilds it from your data"), "{msg}");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal went back");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// CR-U-23(c): when BOTH are stuck, the -wal alarm stands (and names both).
+    #[tokio::test]
+    async fn replace_database_file_a_stuck_wal_alarms_even_when_the_shm_is_stuck_too() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, wal_c, shm_c) = (live.clone(), wal.clone(), shm.clone());
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() || to == wal_c.as_path() || to == shm_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated"));
+            }
+            std::fs::rename(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        assert!(msg.contains("could not be put back"), "{msg}");
+        assert!(!msg.contains("your data is unchanged"), "{msg}");
+        assert!(msg.contains(&aside(&wal).display().to_string()) && msg.contains(&aside(&shm).display().to_string()), "{msg}");
     }
 
     // ---- CR-U-22 (code-review round 3): a read-only backup restores; the

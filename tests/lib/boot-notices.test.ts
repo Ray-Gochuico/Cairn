@@ -137,3 +137,13 @@ describe('CR-U-20a/h — the Rust refusals the notices quote (cross-language)', 
   });
 });
 
+describe('CR-U-23c — a stuck -shm (the rebuildable index) is not data loss', () => {
+  const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
+  it('the Rust -shm-only format keeps "(your data is unchanged)" and never carries the alarm phrase', () => {
+    expect(rust).toContain('"db_restore: {step} (your data is unchanged): {e}. The index file {}; SQLite rebuilds it from your data"');
+  });
+  it('so the notices keep "Your data was not changed." for it', () => {
+    expect(restoreLeftDataUnchanged('db_restore: failed to finalize the restore (your data is unchanged): denied. The index file /x/finance.db-shm is at /x/finance.db-shm.restore-old (denied); SQLite rebuilds it from your data')).toBe(true);
+  });
+});
+

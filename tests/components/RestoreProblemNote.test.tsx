@@ -25,6 +25,12 @@ describe('RestoreProblemNote (CR-U-20b, one-time)', () => {
     expect(sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBe('disk full during restore'); // left for Settings
   });
 
+  it('CR-U-23c: a stuck -shm only (the rebuildable index) never shows the note', () => {
+    stashRestoreFailureNotice('db_restore: failed to finalize the restore (your data is unchanged): denied. The index file /x/finance.db-shm is at /x/finance.db-shm.restore-old (denied); SQLite rebuilds it from your data');
+    const { container } = render(<RestoreProblemNote />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('a put-back failure: the note names it under role="note", and does NOT clear the key on mount', () => {
     stashRestoreFailureNotice(PUT_BACK);
     render(<RestoreProblemNote />);
