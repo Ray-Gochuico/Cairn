@@ -76,11 +76,14 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
 /// The highest schema version this build understands. Derived from the
-/// migration list: it is the COUNT of registered migrations,
-/// which the JS migration runner stamps into `PRAGMA user_version` after
-/// migrations apply (see `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two
-/// MUST stay in lock-step). `db_restore` refuses any backup whose stamped
-/// `user_version` exceeds this, so older code never opens a newer-schema file.
+/// migration list: it is the COUNT of registered migrations (see
+/// `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two MUST stay in
+/// lock-step). The JS migration runner stamps `PRAGMA user_version` inside each
+/// migration's own batch (that migration's registry ordinal, v1.7.1 U3), so a
+/// full run ends at this value and a file an interrupted update left partway
+/// reads as the last migration that committed. `db_restore` refuses any backup
+/// whose stamped `user_version` exceeds this, so older code never opens a
+/// newer-schema file.
 ///
 /// Kept here (not read from JS) because the guard runs entirely in Rust before
 /// the webview is even told to reload. If a future migration is added, bump
