@@ -401,6 +401,8 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
 
   let armed = false;
   let armedAt = 0;
+  // U1F-m16: a dropped multi-click is announced once per arm.
+  let multiClickNoted = false;
   let cancel: HTMLButtonElement | null = null;
   const disarm = (): void => {
     const hadFocus = cancel !== null && document.activeElement === cancel;
@@ -438,6 +440,7 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
           for (const other of [...ctx.armed]) other();
           armed = true;
           armedAt = ctx.now();
+          multiClickNoted = false;
           ctx.armed.add(disarm);
           restoreBtn.textContent = 'Confirm restore — replaces your current data';
           restoreBtn.removeAttribute('aria-label');
@@ -468,8 +471,16 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         return;
       }
       // CR-U-9: never the second click of a double-click, never inside the
-      // arm window.
-      if (ev.detail > 1 || ctx.now() - armedAt < ARM_GUARD_MS) return;
+      // arm window. U1F-m16: a slow double-click setting can turn a
+      // deliberate click into detail 2 — say once, politely, what to do.
+      if (ev.detail > 1) {
+        if (!multiClickNoted) {
+          multiClickNoted = true;
+          ctx.status.textContent = 'Confirm restore is ready — select it once more to replace your data.';
+        }
+        return;
+      }
+      if (ctx.now() - armedAt < ARM_GUARD_MS) return;
       ctx.state.restoring = true;
       setButtonsDisabled(ctx.screen, true);
       try {

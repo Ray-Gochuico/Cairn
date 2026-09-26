@@ -831,6 +831,59 @@ describe('CR-U-20f (U1F-m14) — focus comes back to the row after an alert', ()
   });
 });
 
+describe('CR-U-20g (U1F-m16) — a dropped multi-click on an armed row is announced once', () => {
+  const NOTE = 'Confirm restore is ready — select it once more to replace your data.';
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+  });
+
+  it('the first dropped detail>1 click says so politely; more dropped clicks do not repeat it; a re-arm resets it', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    const status = root.querySelector('[data-testid="boot-restore-status"]')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    let changes = 0;
+    const obs = new MutationObserver((records) => { changes += records.length; });
+    obs.observe(status, { childList: true, characterData: true, subtree: true });
+    clickWith(btn, 2);
+    clickWith(btn, 3);
+    clickWith(btn, 4);
+    await new Promise((r) => setTimeout(r, 20));
+    obs.disconnect();
+    expect(status.textContent).toBe(NOTE);
+    expect(changes).toBe(1);
+    expect(mRestore).not.toHaveBeenCalled();
+    [...rows(root)[0].querySelectorAll('button')].find((b) => b.textContent === 'Cancel')!.click();
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    pastGuard();
+    clickWith(btn, 2);
+    expect(status.textContent).toBe(NOTE);                  // announced again for the new arm
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(mRestore).toHaveBeenCalledTimes(1)); // a single click still confirms
+  });
+
+  it('a click inside the arm window (detail 1) is not what this line is for — no announcement', async () => {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    clickWith(btn, 1);
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    clickWith(btn, 1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(root.querySelector('[data-testid="boot-restore-status"]')!.textContent).not.toBe(NOTE);
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });
