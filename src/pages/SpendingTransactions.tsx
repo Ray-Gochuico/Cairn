@@ -12,6 +12,7 @@ import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Wallet } from 'lucide-react';
+import { ReimbursementMarker } from '@/components/spending/ReimbursementMarker';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -100,6 +101,8 @@ const TransactionRow = memo(function TransactionRow({
         ) : (
           <span>{formatCurrencyCents(t.amount)}</span>
         )}
+        {/* v1.7.1 R10: Reimbursed / Awaiting under the amount (CR-R10-3). */}
+        <ReimbursementMarker t={t} />
       </td>
       <td className="py-2 text-right">
         {isConfirmingDelete ? (

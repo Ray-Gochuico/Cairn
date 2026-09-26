@@ -391,4 +391,50 @@ describe('SpendingTransactions page', () => {
       );
     });
   });
+
+  describe('v1.7.1 R10 — each row states its saved reimbursement state under its amount (chip A-10a)', () => {
+    async function primeReimbursementRows() {
+      await useCategoriesStore.getState().load();
+      await useTransactionsStore.getState().createMany([
+        mkTxn({ merchant: 'SKYLINE BISTRO', date: '2026-03-04', amount: 132.4,
+          reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 132.4 }),
+        mkTxn({ merchant: 'HARBOR CAB', date: '2026-03-03', amount: 46, reimbursable: true }),
+        mkTxn({ merchant: 'AMAZON', date: '2026-03-02' }),
+        // Saved before R10: Reimbursable off, a stale record left behind.
+        mkTxn({ merchant: 'LEGACY HOTEL', date: '2026-03-01', amount: 80,
+          reimbursable: false, reimbursedAt: '2026-03-10', reimbursedAmount: 80 }),
+      ]);
+    }
+    const rowOf = (merchant: string) =>
+      screen.getByRole('cell', { name: merchant, exact: true }).closest('tr') as HTMLElement;
+
+    it('Reimbursed / Awaiting / nothing — read from the saved row', async () => {
+      await primeReimbursementRows();
+      renderPage();
+      await screen.findByText('SKYLINE BISTRO');
+      expect(within(rowOf('SKYLINE BISTRO')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Reimbursed$/);
+      expect(within(rowOf('HARBOR CAB')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Awaiting$/);
+      expect(within(rowOf('AMAZON')).queryByTestId('reimbursement-marker')).toBeNull();
+      expect(within(rowOf('LEGACY HOTEL')).queryByTestId('reimbursement-marker')).toBeNull();
+    });
+
+    it('the marker lives in the AMOUNT cell — the merchant cell keeps its exact name and no column is added (CR-R10-3)', async () => {
+      await primeReimbursementRows();
+      renderPage();
+      await screen.findByText('SKYLINE BISTRO');
+      expect(within(screen.getByRole('table')).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
+        ['Date', 'Merchant', 'Category', 'Account', 'Amount', 'Actions'],
+      );
+      const cells = within(rowOf('SKYLINE BISTRO')).getAllByRole('cell');
+      expect(cells.map((c) => c.textContent)).toEqual(
+        [formatDate('2026-03-04'), 'SKYLINE BISTRO', 'Shopping', '—', '$132.40 Reimbursed', ''],
+      );
+      // The one accessible name that moves, deliberately: the amount cell of a
+      // reimbursable row. A plain row's amount cell is byte-identical.
+      expect(cells[4]).toHaveAccessibleName('$132.40 Reimbursed');
+      expect(within(rowOf('HARBOR CAB')).getAllByRole('cell')[4]).toHaveAccessibleName('$46.00 Awaiting');
+      expect(within(rowOf('AMAZON')).getAllByRole('cell')[4]).toHaveAccessibleName('$54.23');
+      expect(within(rowOf('AMAZON')).getAllByRole('cell')[4].textContent).toBe('$54.23');
+    });
+  });
 });

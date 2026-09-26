@@ -1002,6 +1002,52 @@ describe('Spending page', () => {
     expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
   });
 
+  describe('v1.7.1 R10 — reimbursement state in Recent transactions; the CSV round trip (chip A-10a)', () => {
+    const mk = (over: Partial<Omit<Transaction, 'id'>>): Omit<Transaction, 'id'> => ({
+      householdId: 1, date: '2026-03-05', merchant: 'X', merchantRaw: null, amount: 10,
+      categoryId: 37, sourceAccountId: 1, propertyId: null, vehicleId: null,
+      personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null, ...over,
+    });
+    async function primeAccount() {
+      await db.execute(
+        `INSERT INTO accounts
+          (id, household_id, owner_person_id, beneficiary_dependent_id, name,
+           institution, type, crypto_wallet_address, auto_fetch_enabled,
+           excluded_from_net_worth, allow_margin, state_of_plan)
+         VALUES (1, 1, NULL, NULL, 'Chase Checking', NULL, 'ACCOUNT_CASH', NULL, 0, 0, 0, NULL)`,
+      );
+    }
+
+    it('each recent row states its saved reimbursement state under its amount; the merchant cells keep their exact names (CR-R10-3)', async () => {
+      await useCategoriesStore.getState().load();
+      await primeAccount();
+      await useTransactionsStore.getState().createMany([
+        mk({ merchant: 'SKYLINE BISTRO', date: '2026-03-04', amount: 132.4,
+          reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 132.4 }),
+        mk({ merchant: 'HARBOR CAB', date: '2026-03-03', amount: 46, reimbursable: true }),
+        mk({ merchant: 'AMAZON', date: '2026-03-02' }),
+      ]);
+      renderPage();
+      const table = await screen.findByRole('table');
+      await within(table).findByText('SKYLINE BISTRO');
+      const rowOf = (merchant: string) =>
+        within(table).getByRole('cell', { name: merchant, exact: true }).closest('tr') as HTMLElement;
+      expect(within(rowOf('SKYLINE BISTRO')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Reimbursed$/);
+      expect(within(rowOf('HARBOR CAB')).getByTestId('reimbursement-marker')).toHaveTextContent(/^Awaiting$/);
+      expect(within(rowOf('AMAZON')).queryByTestId('reimbursement-marker')).toBeNull();
+      // No column added; Date · Merchant · Category · Amount · Edit.
+      expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
+        ['Date', 'Merchant', 'Category', 'Amount', 'Edit'],
+      );
+      expect(within(rowOf('SKYLINE BISTRO')).getAllByRole('cell').map((c) => c.textContent)).toEqual(
+        [formatDate('2026-03-04'), 'SKYLINE BISTRO', 'Shopping', '$132.40 Reimbursed', ''],
+      );
+      expect(within(rowOf('HARBOR CAB')).getAllByRole('cell')[3]).toHaveAccessibleName('$46.00 Awaiting');
+      expect(within(rowOf('AMAZON')).getAllByRole('cell')[3]).toHaveAccessibleName('$10.00');
+    });
+  });
+
   describe('Wave A: person-view honoring (D2/D9/D12)', () => {
     const localMonth = (() => {
       const d = new Date();
