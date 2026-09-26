@@ -140,7 +140,7 @@ export default function GoalForm({
                 onChange={(v) =>
                   form.setValue('targetDate', v, { shouldDirty: true, shouldTouch: true })
                 }
-                maxYear={new Date().getUTCFullYear() + 60}
+                maxYear={new Date().getFullYear() + 60}
               />
               <FieldError id="goal-target-date-error" message={form.formState.errors.targetDate?.message} />
             </div>

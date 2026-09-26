@@ -72,7 +72,7 @@ export default function DatePicker({
   ariaDescribedBy,
 }: DatePickerProps) {
   const today = useMemo(() => new Date(), []);
-  const effectiveMaxYear = maxYear ?? today.getUTCFullYear() + 1;
+  const effectiveMaxYear = maxYear ?? today.getFullYear() + 1; // the LOCAL year (v1.8.0 A-2′)
 
   // Local state for partial selections. The parent only sees the value once
   // all three sub-fields are filled (compose returns '' otherwise), but the
