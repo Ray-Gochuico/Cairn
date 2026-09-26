@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
 import type { SyncResult } from '@/market/fund-holdings-sync';
 import type { YahooClient } from '@/market/yahoo-client';
@@ -88,8 +88,10 @@ function makeHoldings(items: Holding[]): Pick<HoldingsRepo, 'listAll'> {
   };
 }
 
-// Fixed "today" for deterministic age calculations
-const TODAY = new Date('2026-05-14T00:00:00Z');
+// Fixed "today" for deterministic age calculations. v1.8.0 A-2′: the gate counts from
+// the LOCAL day of this instant, so it sits at 12:00Z — May 14 locally from UTC−12 to
+// UTC+11 (00:00Z was May 13 anywhere west of UTC).
+const TODAY = new Date('2026-05-14T12:00:00Z');
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -513,5 +515,41 @@ describe('syncStaleFunds', () => {
       expect(fundSectors.upsertSectors).toHaveBeenCalled();
       expect(result.refreshed).toContain('VTI');
     });
+  });
+});
+
+describe('v1.8.0 A-2′: the 90-day gate counts on the LOCAL calendar (the pair with yahoo-client\'s asOf)', () => {
+  // asOf 2025-10-03 is 89 days before Dec 31, 2025 (Oct 3→31 = 28, + Nov 30 = 58, + Dec 31 = 89)
+  // and 90 days before Jan 1, 2026. Fresh means ageDays < 90.
+  const ORIGINAL_TZ = process.env.TZ;
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+  async function syncAt(instant: string) {
+    const yahoo = makeYahoo();
+    const fundHoldings = makeFundHoldings();
+    (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue('2025-10-03');
+    const tickers = makeTickers({ VTI: makeTicker('VTI', 'US_TOTAL_MARKET') });
+    const holdings = makeHoldings([makeHolding(1, 'VTI')]);
+    const result = await syncStaleFunds(
+      { yahoo: yahoo as unknown as YahooClient, fundHoldings: fundHoldings as unknown as FundHoldingsRepo, tickers: tickers as unknown as TickersRepo, holdings: holdings as unknown as HoldingsRepo },
+      new Date(instant),
+    );
+    return { yahoo, result };
+  }
+
+  it('Los Angeles at 2026-01-01T03:00Z (Dec 31 locally): 89 days — fresh, no Yahoo call', async () => {
+    process.env.TZ = 'America/Los_Angeles';
+    const { yahoo, result } = await syncAt('2026-01-01T03:00:00Z');
+    expect(yahoo.fundTopHoldings).not.toHaveBeenCalled();
+    expect(result.skipped).toEqual(['VTI']);
+  });
+
+  it('Pacific/Auckland at 2025-12-31T20:00Z (Jan 1 locally): 90 days — stale, refetched', async () => {
+    process.env.TZ = 'Pacific/Auckland';
+    const { yahoo, result } = await syncAt('2025-12-31T20:00:00Z');
+    expect(yahoo.fundTopHoldings).toHaveBeenCalledWith('VTI');
+    expect(result.refreshed).toEqual(['VTI']);
   });
 });

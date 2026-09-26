@@ -5,6 +5,7 @@ import type { FundSectorsRepo } from '@/domain/fund-sectors';
 import type { TickersRepo } from '@/domain/tickers';
 import type { HoldingsRepo } from '@/domain/holdings';
 import type { AssetClass } from '@/types/schema';
+import { localTodayISO } from '@/lib/dates';
 
 const FUND_ASSET_CLASSES = new Set<AssetClass>([
   'US_TOTAL_MARKET', 'US_LARGE_CAP', 'US_MID_CAP', 'US_SMALL_CAP',
@@ -53,7 +54,9 @@ export async function syncStaleFunds(
   const refreshed: string[] = [];
   const skipped: string[] = [];
   const errors: string[] = [];
-  const todayIso = today.toISOString().slice(0, 10);
+  // v1.8.0 A-2′: the LOCAL calendar day of `today`, the same calendar
+  // yahoo-client stamps asOf on — the pair moves together.
+  const todayIso = localTodayISO(today);
 
   for (const ticker of uniqueTickers) {
     const t = await deps.tickers.lookup(ticker);

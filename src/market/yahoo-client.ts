@@ -1,6 +1,7 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
 import { observeYahooShape } from '@/market/yahoo-schemas';
+import { localTodayISO } from '@/lib/dates';
 
 export interface QuoteResult {
   ticker: string;
@@ -176,7 +177,9 @@ export class YahooClient {
     // narrowed typed wrappers (this method and fundProfile) enforce shape at
     // the return boundary instead.
     const result = (data as any).quoteSummary?.result?.[0]?.topHoldings;
-    if (!result?.holdings) return { holdings: [], asOf: new Date().toISOString().slice(0, 10) };
+    // v1.8.0 A-2′: asOf is the LOCAL calendar day — the day syncStaleFunds'
+    // 90-day freshness gate counts from (fund-holdings-sync.ts).
+    if (!result?.holdings) return { holdings: [], asOf: localTodayISO() };
     return {
       holdings: result.holdings.map((h: any) => ({
         symbol: h.symbol,
@@ -187,7 +190,7 @@ export class YahooClient {
         // Defensive: fall back to null when Yahoo omits it.
         name: h.holdingName ?? null,
       })).filter((h: any) => h.symbol),
-      asOf: new Date().toISOString().slice(0, 10),
+      asOf: localTodayISO(),
     };
   }
 
@@ -211,7 +214,7 @@ export class YahooClient {
     // returns an open-ended JSON blob; the typed boundary is this return type.
     const result = (data as any).quoteSummary?.result?.[0]?.topHoldings;
     const rawSectors = result?.sectorWeightings;
-    const asOf = new Date().toISOString().slice(0, 10);
+    const asOf = localTodayISO(); // v1.8.0 A-2′: the LOCAL day (the freshness gate's calendar)
     if (!Array.isArray(rawSectors)) return { sectors: [], asOf };
     const sectors: { sector: string; weight: number }[] = [];
     for (const entry of rawSectors) {
