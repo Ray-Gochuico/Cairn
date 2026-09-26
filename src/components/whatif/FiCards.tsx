@@ -8,12 +8,11 @@ import { buildWhatIfCoastLeg, TODAY_PHRASE, type RegisteredFigure } from '@/lib/
 import { currentAge } from '@/lib/dates';
 import { formatCurrency, withTrueMinus } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
-import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import type { AppSettings, Household, Person } from '@/types/schema';
+import type { Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
 export interface FiCardsProps {
@@ -21,6 +20,13 @@ export interface FiCardsProps {
   projections: Map<number, MonthlyState[]>;
   household: Household;
   persons: Person[];
+  /**
+   * v1.8.0 A-3a: the PAGE's display inflation (WhatIf.tsx displayInflation —
+   * the rate the chart caption names and the chart deflates at). One resolver
+   * per page: the Coast explainer and target read this, never a second
+   * resolution of their own.
+   */
+  inflation: number;
 }
 
 interface ComputedRow {
@@ -66,8 +72,8 @@ const SETUP_REQUIRED = 'setup-required' as const;
 const BASELINE_REQUIRED = 'baseline-required' as const;
 type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED | typeof BASELINE_REQUIRED;
 
-function computeCards(props: FiCardsProps, settings: AppSettings | null): ComputeResult {
-  const { scenarios, projections, household, persons } = props;
+function computeCards(props: FiCardsProps): ComputeResult {
+  const { scenarios, projections, household, persons, inflation } = props;
   // Cold-start: no household yet, or zero persons → caller renders the
   // setup-CTA empty state (W7-UX MF-8).
   if (!household || persons.length === 0) return SETUP_REQUIRED;
@@ -104,11 +110,9 @@ function computeCards(props: FiCardsProps, settings: AppSettings | null): Comput
   // Coast FI: computed behind the boundary (buildWhatIfCoastLeg) at the FLOORED
   // real rate — discounting the today's-$ FI target by the REAL growth rate.
   // Mixing a real target with a nominal rate is the bug fixed in W7-Finance.
-  // N1: resolve inflation through the CANONICAL chain (the same
-  // effectiveBaselineInflation the dashboard FI/Coast cards now use) so both
-  // surfaces produce identical coast numbers for the same household, and the
-  // shared realRateOf() applies the same 0-floor on the negative-real edge.
-  const inflation = effectiveBaselineInflation(ref, household, settings);
+  // N1 + v1.8.0 A-3a: `inflation` is the page's ONE resolution (the canonical
+  // effectiveBaselineInflation chain over the page's active scenario, the
+  // rate the caption names), so the explainer can never name a second rate.
 
   return {
     liquidNw,
@@ -422,11 +426,7 @@ function FiCardsBaselineEmptyState() {
 }
 
 export default function FiCards(props: FiCardsProps) {
-  // N1: feed the canonical inflation resolver the app settings so the Coast FI
-  // figure matches the dashboard cards exactly (household.inflationAssumption
-  // takes precedence; settings.defaultInflation is the fallback).
-  const settings = useSettingsStore((s) => s.settings);
-  const computed = computeCards(props, settings);
+  const computed = computeCards(props);
   if (computed === SETUP_REQUIRED) {
     return <FiCardsEmptyState />;
   }

@@ -26,6 +26,12 @@ function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
+// v1.8.0 A-3a (one inflation resolver per page): FiCards states the PAGE's
+// display inflation (WhatIf.tsx displayInflation) and resolves none of its
+// own. Each render below hands the rate the page resolves for its fixture —
+// the household's 2.5% unless a test sets another; the page seam pins the
+// resolution itself (WhatIf.basis-seam / WhatIf.fi-cards).
+
 // This file's fixtures pin fiTarget = 4000·12/0.04 = $1,200,000 and the
 // three standard growth scenarios across many call sites — one wrapper
 // carries those file-local defaults instead of overrides at every call.
@@ -110,6 +116,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     // 4000 * 12 / 0.04 = 1,200,000
@@ -126,6 +133,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     // Coast FI = 1,200,000 / (1.06 ^ yearsUntilRetirement). Don't depend on
@@ -140,6 +148,23 @@ describe('FiCards', () => {
     // T17: the explainer now states BOTH bases (nominal + Fisher real rate).
     expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation)');
     expect(coast).toHaveTextContent('$');
+  });
+
+  it('A-3a: states the PAGE rate it is handed, never a resolution of its own — the household reads 2.5%, the page 4%', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(200_000, 50_000)]]);
+    renderWithRouter(
+      <FiCards
+        scenarios={[makeScenario()]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson()]}
+        inflation={0.04}
+      />,
+    );
+    // 1.06 / 1.04 − 1 = 0.0192307… → "1.9"; a card that re-resolved from the household would read "(≈3.4% real after 2.5% inflation)".
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈1.9% real after 4.0% inflation)');
+    expect(coast).not.toHaveTextContent('after 2.5% inflation');
   });
 
   it('M1 (v1.7.1): a negative REAL rate in the Coast explainer reads with one true minus — "(≈−1.0% real after 3.0% inflation)"', () => {
@@ -157,6 +182,7 @@ describe('FiCards', () => {
           ],
         })}
         persons={[makePerson()]}
+        inflation={0.03}
       />,
     );
     // realRateUnfloored = 1.02 / 1.03 − 1 = −0.0097087… → toFixed(1) "-1.0" before M1.
@@ -174,9 +200,10 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={-0.02}
       />,
     );
-    // real = 1.06 / 0.98 − 1 = 0.0816… → "8.2"; the scenario's inflation default outranks the household's (effective-inflation.ts:57-59).
+    // real = 1.06 / 0.98 − 1 = 0.0816… → "8.2"; the page resolves the lever's −2% over the household's 2.5% (effective-inflation.ts:57-59) and hands it down.
     expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈8.2% real after −2.0% inflation)');
   });
 
@@ -191,6 +218,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     const fiProgress = screen.getByTestId('whatif-fi-number-progress');
@@ -206,6 +234,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     expect(screen.getByTestId('whatif-fi-number-progress').textContent).toBe('−$60,000 / $1,200,000 · −5%');
@@ -219,6 +248,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold({ growthScenarios: [] })}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -235,6 +265,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold({ withdrawalRate: 0 })}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     const fi = screen.getByTestId('whatif-fi-number');
@@ -249,6 +280,7 @@ describe('FiCards', () => {
         projections={new Map()}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -262,6 +294,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson({ targetRetirementAge: 60 })]}
+        inflation={0.025}
       />,
     );
     const control = screen.getByTestId('whatif-retirement-age-control');
@@ -282,6 +315,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson({ targetRetirementAge: 65 })]}
+        inflation={0.025}
       />,
     );
     const input = screen.getByLabelText('Retirement age') as HTMLInputElement;
@@ -300,6 +334,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()} // withdrawalRate = 0.04 → would give $1,200,000
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const fi = screen.getByTestId('whatif-fi-number');
@@ -316,6 +351,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()} // withdrawalRate = 0.04
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const fi = screen.getByTestId('whatif-fi-number');
@@ -332,6 +368,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()} // withdrawalRate = 0.04
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const fi = screen.getByTestId('whatif-fi-number');
@@ -375,6 +412,7 @@ describe('FiCards', () => {
           projections={projections}
           household={household}
           persons={[person]}
+          inflation={0.03}
         />,
       );
       const coast = screen.getByTestId('whatif-coastfi-number');
@@ -406,6 +444,7 @@ describe('FiCards', () => {
           projections={projections}
           household={household}
           persons={[person]}
+          inflation={0.05}
         />,
       );
       // Real rate floored at 0 → coast == fiTarget == $2,000,000.
@@ -426,6 +465,7 @@ describe('FiCards', () => {
           projections={new Map()}
           household={makeHousehold()}
           persons={[]}
+          inflation={0.025}
         />,
       );
       const empty = screen.getByTestId('whatif-fi-cards-empty');
@@ -440,6 +480,7 @@ describe('FiCards', () => {
           projections={new Map()}
           household={makeHousehold()}
           persons={[]}
+          inflation={0.025}
         />,
       );
       const householdLink = screen.getByTestId('whatif-fi-cards-empty-household-link');
@@ -459,6 +500,7 @@ describe('FiCards', () => {
           projections={new Map([[1, seedState(100_000, 50_000)]])}
           household={makeHousehold({ growthScenarios: [] })}
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       expect(container).toBeEmptyDOMElement();
@@ -490,6 +532,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()}
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       expect(
@@ -507,6 +550,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()}
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const inline = screen.getByTestId('whatif-drawdown-tax-rate-inline');
@@ -538,6 +582,7 @@ describe('FiCards', () => {
           projections={projections}
           household={makeHousehold()}
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const inline = screen.getByTestId('whatif-drawdown-tax-rate-inline');
@@ -553,6 +598,7 @@ describe('FiCards', () => {
           projections={new Map([[1, seedState(787_000, 0)]])}
           household={makeHousehold({ monthlyExpenseBaseline: 0 })}
           persons={[makePerson()]}
+          inflation={0.025}
         />,
       );
       const empty = screen.getByTestId('whatif-fi-cards-baseline-empty');
@@ -571,6 +617,7 @@ describe('FiCards', () => {
           projections={new Map()}
           household={makeHousehold({ monthlyExpenseBaseline: 0 })}
           persons={[]}
+          inflation={0.025}
         />,
       );
       expect(screen.getByTestId('whatif-fi-cards-empty')).toBeInTheDocument();
@@ -598,6 +645,7 @@ describe('FiCards', () => {
         projections={projections}
         household={makeHousehold()}
         persons={[makePerson()]}
+        inflation={0.025}
       />,
     );
     const fiProgress = screen.getByTestId('whatif-fi-number-progress');
@@ -619,7 +667,7 @@ describe("W5.1 — FI + Coast FI are PINNED today's-dollar figures (spec F10 cla
 
   it("ANCHOR PAIR: $1,200,000 / $453,214 carry 'in today's dollars' in BOTH bases; re-inflated + nominal-rate anti-pins never render", () => {
     const { container } = renderWithRouter(
-      <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} />,
+      <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} inflation={0.025} />,
     );
     const fi = screen.getByTestId('whatif-fi-number-target');
     const coast = screen.getByTestId('whatif-coastfi-number-target');
@@ -648,7 +696,7 @@ describe("W5.1 — FI + Coast FI are PINNED today's-dollar figures (spec F10 cla
   it('sweep: pinned targets + invariant progress rows; no unregistered $ on the cards', () => {
     expectBasisDiscipline(
       <MemoryRouter>
-        <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} />
+        <FiCards scenarios={[makeScenario()]} projections={projections()} household={makeHousehold()} persons={[makePerson()]} inflation={0.025} />
       </MemoryRouter>,
       { figures: WHATIF_FI_BASIS_FIGURES, charts: [] },
       { pageId: WHATIF_PAGE_ID },

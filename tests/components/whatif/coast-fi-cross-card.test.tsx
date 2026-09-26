@@ -7,7 +7,7 @@ import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenar
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf } from '@/lib/calculators/real-rate';
 import { formatCurrency, formatSignedCurrency } from '@/lib/format';
-import { emptyLeverPayload } from '@/lib/scenarios';
+import { emptyLeverPayload, effectiveBaselineInflation } from '@/lib/scenarios';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -197,6 +197,11 @@ describe('N1: dashboard PathToFiCard ⇄ What-If FiCards coast agreement', () =>
 
     // ── What-If FiCards coast figure ─────────────────────────────────────────
     const projections = new Map<number, MonthlyState[]>([[1, seedState()]]);
+    // v1.8.0 A-3a: FiCards states the PAGE's inflation — WhatIf.tsx resolves it as
+    // effectiveBaselineInflation(active scenario, household, settings); for this
+    // active Baseline that is the household's 5%, never the settings' 2.5%.
+    const pageInflation = effectiveBaselineInflation(baselineScenario(), household(), useSettingsStore.getState().settings);
+    expect(pageInflation).toBe(HOUSEHOLD_INFLATION);
     const { unmount } = render(
       <MemoryRouter>
         <FiCards
@@ -204,6 +209,7 @@ describe('N1: dashboard PathToFiCard ⇄ What-If FiCards coast agreement', () =>
           projections={projections}
           household={household()}
           persons={[person]}
+          inflation={pageInflation}
         />
       </MemoryRouter>,
     );

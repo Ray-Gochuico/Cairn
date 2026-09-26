@@ -264,6 +264,41 @@ describe('W5.1 page seam — the chart and the scoreboard receive the ONE bundle
     expect(p.basisCaption).toBe("All lines in today's dollars — one deflator, 4% inflation.");
     expect(p.displayProjections.get(1)![1].netWorth).toBeCloseTo(1_025_000 / 1.04, 6); // 985,576.92
     expect(p.displayProjections.get(2)![1].netWorth).toBeCloseTo(512_500 / 1.04, 6); //  same deflator for every scenario
+    // A-3a: the FI cards state the SAME page rate (1.06 / 1.04 − 1 = 0.01923… → "1.9").
+    expect(screen.getByTestId('whatif-coastfi-number')).toHaveTextContent('Moderate 6.0% nominal (≈1.9% real after 4.0% inflation)');
+  });
+
+  // v1.8.0 A-3a (item 3): ONE inflation resolver per page. The active scenario
+  // is HIDDEN and carries a 4% lever; the visible Baseline carries none. The
+  // page deflates at the active scenario's 4% (caption + rows) — and the Coast
+  // explainer names that same rate. Before A-3a FiCards re-resolved from the
+  // VISIBLE reference scenario and read the household's 2.5%.
+  it('ONE inflation resolver: a HIDDEN active scenario with a 4% lever sets the caption AND the Coast explainer — never the visible Baseline\'s 2.5%', () => {
+    h.scenarios = [
+      { ...scenario(1, 'Baseline'), isActive: false },
+      { ...scenario(2, 'Plan B', 0.04), isActive: true, visible: false },
+    ];
+    h.projections = new Map<number, unknown[]>([[1, NOMINAL_1]]); // the store projects VISIBLE scenarios only
+    renderPage();
+    expect(lastChart().basisCaption).toBe("All lines in today's dollars — one deflator, 4% inflation.");
+    expect(lastChart().displayProjections.get(1)![1].netWorth).toBeCloseTo(1_025_000 / 1.04, 6);
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈1.9% real after 4.0% inflation)');
+    expect(coast).not.toHaveTextContent('after 2.5% inflation');
+  });
+
+  // v1.8.0 A-3a (plan review): with FiCards' own resolver gone, the page's
+  // precedence is the only one — household over settings
+  // (effective-inflation.ts). No lever; the household says 2.5%, Settings says
+  // 5%: the caption AND the Coast explainer both name the household's 2.5%.
+  it("ONE inflation resolver, precedence: with no lever the household's 2.5% outranks a Settings default of 5% — caption AND Coast explainer", () => {
+    useSettingsStore.setState({ settings: { ...useSettingsStore.getState().settings!, defaultInflation: 0.05 } } as never);
+    renderPage();
+    expect(lastChart().basisCaption).toBe("All lines in today's dollars — one deflator, 2.5% inflation.");
+    // 1.06 / 1.025 − 1 = 0.03414… → "3.4".
+    const coast = screen.getByTestId('whatif-coastfi-number');
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation)');
+    expect(coast).not.toHaveTextContent('after 5.0% inflation');
   });
 
   it("scoreboard (Manage…, a portal): each 30y NW cell is the bundle's figure under its OWN mark — never a nominal figure under (today's $)", async () => {
