@@ -22,6 +22,7 @@ export const RELEASED_SCHEMAS: Readonly<Record<string, number>> = Object.freeze(
   'v1.5.0': 55,
   'v1.6.0': 55,
   'v1.7.0': 55,
+  'v1.7.1': 55,
 });
 
 /** The distinct schemas a released build ever left a file at, ascending — the upgrade harness starts from each. */

@@ -5,6 +5,118 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-09-26
+
+Updating gets a safety net. Installing an update never touches your data;
+an update that changes how data is stored first keeps a checked copy of
+your data, listed in Settings → Data as "Before update"; every screen
+Cairn shows when your data cannot open can now restore a copy; and
+updating on a Mac says when it is done. Alongside: money reads with a
+true minus, clearer "never reached" readings on the calculators,
+reimbursement state in the Spending lists, clearer disclosure prompts and
+a round of accessibility fixes. Nothing leaves your machine. No database
+change.
+
+### Added
+
+- **A copy of your data before an update changes it.** The first launch of a
+  version that changes how data is stored now saves a checked copy of your
+  database before anything is migrated. Cairn keeps the newest three such
+  copies separately from your manual backups, so neither ever pushes the other
+  out, lists them under Settings → Data as "Before update", and shows a
+  one-time note: "Cairn updated your data for this version. A copy from before
+  the update is in Settings → Data." If the copy cannot be written (a full
+  disk, or a folder Cairn cannot write to), Cairn stops before migrating and
+  offers to try again, continue without a copy, or open the backups folder.
+  Installing an update never touches your data: the program and your database
+  live in different places. This release does not change the database, so
+  installing it makes no copy; the first one comes with the next release that
+  does.
+- **Restore from every database startup-failure screen.** When your data cannot
+  open — a damaged file, a file from a newer version of Cairn, an update that
+  stopped partway, or any other database failure — the screen now lists your
+  backups and "Before update" copies with a two-step Restore: Restore, then
+  "Confirm restore — replaces your current data". After an update that stopped
+  partway, restoring the copy from before it puts your data back the way it
+  was, and the next screen lets you choose whether to run the update again or
+  open the releases page, where the previous version is. A restore that cannot
+  finish keeps your current data, and says so if any part of it could not be
+  put back.
+- **Reimbursement state in the Spending lists.** On Spending's Recent
+  transactions and on All transactions, a reimbursable transaction now shows
+  "Reimbursed" or "Awaiting" in small text under its amount; other rows are
+  unchanged. Unchecking Reimbursable on a reimbursed transaction now asks first
+  ("Clear the recorded reimbursement?"), and "Clear and save" clears the
+  recorded amount and date; when that amount had been netted from your
+  spending, the prompt says the totals then count the full amount. Cancel saves
+  nothing and keeps the editor open. Checking Reimbursable on a transaction
+  that was not reimbursable now starts it at Awaiting — a record left behind by
+  an earlier uncheck no longer comes back as Reimbursed.
+
+### Changed
+
+- When Settings → Updates offers a new version, it now says your data stays
+  where it is, and that Cairn first keeps a copy when that version changes how
+  data is stored. An install that fails now reads "Couldn't install the update"
+  with its reason and says your data was not changed; it used to read "Couldn't
+  check for updates".
+- **Negative money reads with a true minus.** Negative dollar amounts now
+  render with a true minus sign (−$500), matching the percentages beside them,
+  instead of a hyphen (-$500) or, on chart axes, a sign after the dollar sign
+  ($-500). This covers transaction amounts, chart axes and labels, the
+  Dashboard's summary tiles and Net Worth's change, the growth and breakdown
+  cards on Investments and Net Worth with their percentages, What-If's FI
+  progress and Coast FI explanation, and Spending's "Gross minus spending". No
+  value changes, only the sign.
+- Path to FI's "Stop today" reading ends with how long the goal takes if you
+  keep contributing; when the goal is never reached, that clause showed a bare
+  dash. It now says why: "never reached with nothing invested" when the
+  portfolio and contributions in the scenario bar are both zero, and, for
+  example, "Moderate: never reached if you keep contributing — returns at or
+  below inflation" when the scenario's return does not beat inflation. The
+  Stress Test's recovery line drops "— with your $0/yr contributions counted."
+  when you contribute nothing, and its chart tooltip names the line "Portfolio
+  (today's $)", matching the chart's caption (it read "Portfolio (real $)").
+- When Cairn cannot read which disclosures you have accepted and shows the
+  app-wide disclaimer again, the prompt now says why: "We couldn’t confirm
+  which disclosures you’ve accepted, so this disclaimer is shown here for you
+  to read and accept." On the Roadmap, the "Read full →" disclosure sheets show
+  the same collapsed "What changed" note as Settings → Disclosures (today on
+  About the Frameworks, version 1.2). No disclosure's text or version changes,
+  so nothing asks to be accepted again.
+- **Under the hood.** Updates are now tested against every earlier database
+  version before each release, and an update that stops partway now marks how
+  far it got, so an older version of Cairn will not open a half-updated file.
+
+### Fixed
+
+- **Updating on a Mac says when it is done.** After you click **Install
+  update**, the Updates card now ends on "Update installed. Quit and reopen
+  Cairn to finish." — it used to promise a restart that a Mac never does. The
+  update now downloads once, with no second check, and Cairn closes your data
+  cleanly before the new version goes in place. *Coming from 1.7.0 or earlier:*
+  this first update still runs through the old updater, so its card keeps
+  saying "Downloading and installing… the app will restart when done." after
+  the install has finished. Give it a minute or two, then quit Cairn (Cmd+Q)
+  and open it again; if **Settings → Updates** still shows the old version,
+  check again.
+- When the Historical Backtest was the first page to load, it could flash its
+  disclosure prompt before your household had loaded, even if you had already
+  accepted it. The page now shows its loading placeholder until the household
+  is ready.
+- Screen readers now name each calculator card's toggle once — its title and
+  headline, such as "Path to FI 45% of CoastFI" — where they used to repeat the
+  title. In Settings → Disclosures, a heading inside a disclosure's text now
+  sits one level below the disclosure's own title.
+- After you send a scenario to What-If from the calculators, reloading What-If
+  no longer replays the arrival: the highlight, the scroll and the comparison
+  it sets up happen once. Links such as "Open Accounts →" now land with
+  Investments' Accounts, Holdings, Contributions or Tickers tab at the top of
+  the page even when the tab is short; they used to stop partway down. Saving
+  again while the goal editor was closing could add a second copy of the goal;
+  a closed editor now ignores it. The What-If chart's "Detail:" label lines up
+  with its options.
+
 ## [1.7.0] - 2026-09-25
 
 Honesty work across the Roadmap, What-If and the calculators: every
