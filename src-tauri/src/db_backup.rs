@@ -236,14 +236,18 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 /// may still hold committed frames. So the sidecars are SET ASIDE, never
 /// deleted, until the swap has succeeded (v1.7.1 CR-U-15, U1-m23/m32).
 ///
-/// ORDERING (every failure point leaves the original data whole):
-///   0. If a set-aside sidecar from an earlier restore is still present
-///      (`<sidecar>.restore-old`), refuse before touching anything: it may be
-///      the only copy of that session's WAL, and step 2 must never overwrite it.
-///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`).
-///      A failure here leaves `live` and its sidecars untouched (the temp file
-///      is removed). `live` is never the copy target, so the in-copy truncation
-///      window of a plain `fs::copy(backup, live)` does not exist.
+/// ORDERING (every error return leaves the original data whole; a crash
+/// between steps 2 and 3 is not reconciled yet — a chip):
+///   0. Refuse before touching anything when `backup` IS the staging file
+///      (`<live>.restore-tmp`), or when a set-aside sidecar from an earlier
+///      restore is still present (`<sidecar>.restore-old`): it may be the only
+///      copy of that session's WAL, and step 2 must never overwrite it. The
+///      refusal names every leftover and says to move it out of the folder.
+///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`)
+///      and flush it to stable storage (`sync_all`). A failure here leaves
+///      `live` and its sidecars untouched (the temp file is removed). `live`
+///      is never the copy target, so the in-copy truncation window of a plain
+///      `fs::copy(backup, live)` does not exist.
 ///   2. RENAME the old `-wal` / `-shm` aside to `<sidecar>.restore-old` (a
 ///      missing sidecar is skipped). They must not sit next to the restored
 ///      file — a stale WAL would be replayed over it on reopen — but they are
@@ -267,23 +271,72 @@ fn replace_database_file_with(
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), String> {
+    replace_database_file_io(backup, live, rename, &mut |p: &Path| real_sync(p))
+}
+
+/// Flush a file's data to stable storage (F_FULLFSYNC on Apple via std).
+/// Opened for writing: Windows FlushFileBuffers needs a writable handle.
+fn real_sync(p: &Path) -> std::io::Result<()> {
+    std::fs::OpenOptions::new().write(true).open(p)?.sync_all()
+}
+
+/// `replace_database_file_with` plus a `sync` seam for the staged copy.
+fn replace_database_file_io(
+    backup: &Path,
+    live: &Path,
+    rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
+    sync: &mut dyn FnMut(&Path) -> std::io::Result<()>,
+) -> Result<(), String> {
     let tmp = restore_tmp_path(live);
     let sidecars = sidecar_paths(live);
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
 
-    // 0. Never overwrite what an earlier restore set aside.
-    for aside in &asides {
-        if std::fs::symlink_metadata(aside).is_ok() {
+    // 0a. Never restore FROM this module's own staging file (U1F-m9): step 1
+    //     would truncate it while copying it onto itself, and an empty file
+    //     would be swapped in.
+    if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
+        if src == staging {
+            return Err(
+                "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
+                    .to_string(),
+            );
+        }
+    }
+
+    // 0b. Never overwrite what an earlier restore set aside. The refusal
+    //     names every leftover and the calm next step (CR-U-20a, U1F-m1/m19).
+    let leftovers: Vec<String> = asides
+        .iter()
+        .filter(|a| std::fs::symlink_metadata(a).is_ok())
+        .map(|a| a.display().to_string())
+        .collect();
+    match leftovers.as_slice() {
+        [] => {}
+        [one] => {
             return Err(format!(
-                "db_restore: {} from an earlier restore is still next to your data, so this restore did not start (your data is unchanged)",
-                aside.display()
-            ));
+                "db_restore: {one} from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)"
+            ))
+        }
+        many => {
+            return Err(format!(
+                "db_restore: {} from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)",
+                many.join(" and ")
+            ))
         }
     }
 
     // 1. Stage the restore in a sibling temp file. A mid-copy failure here
     //    cannot corrupt `live` because `live` is never the copy target.
     if let Err(e) = std::fs::copy(backup, &tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "db_restore: failed to stage the backup (your data is unchanged): {e}"
+        ));
+    }
+    //    Flush the staged copy to stable storage BEFORE anything moves, so a
+    //    power cut right after the swap can never leave an unflushed
+    //    finance.db (CR-U-20c, U1F-m3).
+    if let Err(e) = sync(&tmp) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
@@ -1072,6 +1125,114 @@ mod tests {
         assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
         assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX");
         assert!(!restore_tmp_path(&live).exists(), "refused before staging");
+    }
+
+    // ---- CR-U-20 (code-review round 2) ----
+
+    /// (a) U1F-m1/m19: the step-0 refusal names the leftover and gives a calm
+    /// next step; the refusal itself stays (it protects a set-aside WAL).
+    #[tokio::test]
+    async fn replace_database_file_refusal_names_the_leftover_and_the_next_step() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        std::fs::write(aside(&wal), b"EARLIER").unwrap();
+        let msg = replace_database_file(&backup, &live).unwrap_err();
+        assert_eq!(
+            msg,
+            format!(
+                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)",
+                aside(&wal).display()
+            )
+        );
+        std::fs::write(aside(&shm), b"EARLIER-SHM").unwrap();
+        let msg = replace_database_file(&backup, &live).unwrap_err();
+        assert_eq!(
+            msg,
+            format!(
+                "db_restore: {} and {} from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)",
+                aside(&wal).display(),
+                aside(&shm).display()
+            )
+        );
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+    }
+
+    /// (c) U1F-m3: the staged copy is flushed to disk BEFORE the atomic swap.
+    #[tokio::test]
+    async fn replace_database_file_syncs_the_staged_copy_before_the_swap() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let tmp = restore_tmp_path(&live);
+        let events = std::cell::RefCell::new(Vec::<String>::new());
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            events.borrow_mut().push(format!("rename {} -> {}", from.display(), to.display()));
+            std::fs::rename(from, to)
+        };
+        let mut sync = |p: &Path| -> std::io::Result<()> {
+            events.borrow_mut().push(format!("sync {}", p.display()));
+            real_sync(p)
+        };
+        replace_database_file_io(&backup, &live, &mut rename, &mut sync).expect("replace");
+        let ev = events.borrow();
+        let synced = ev.iter().position(|e| e == &format!("sync {}", tmp.display())).expect("the staged copy is synced");
+        let swapped = ev
+            .iter()
+            .position(|e| e == &format!("rename {} -> {}", tmp.display(), live.display()))
+            .expect("the swap ran");
+        assert!(synced < swapped, "sync before the swap: {ev:?}");
+        assert!(ev.iter().take(synced).all(|e| !e.starts_with("rename")), "sync before the sidecars move too: {ev:?}");
+    }
+
+    #[tokio::test]
+    async fn replace_database_file_failed_sync_of_the_staged_copy_leaves_every_file_as_it_was() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let mut rename = |from: &Path, to: &Path| std::fs::rename(from, to);
+        let mut sync = |_p: &Path| -> std::io::Result<()> {
+            Err(std::io::Error::other("simulated: the flush failed"))
+        };
+        let msg = replace_database_file_io(&backup, &live, &mut rename, &mut sync).unwrap_err();
+        assert!(msg.contains("failed to stage the backup (your data is unchanged)"), "{msg}");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    /// (h) U1F-m9: a leftover `<live>.restore-tmp` picked as the source would
+    /// be truncated by its own staging copy and an empty file swapped in.
+    #[tokio::test]
+    async fn replace_database_file_refuses_its_own_staging_file_as_the_source() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let tmp = restore_tmp_path(&live);
+        std::fs::copy(&backup, &tmp).unwrap();
+        let before = std::fs::read(&tmp).unwrap();
+        let msg = replace_database_file(&tmp, &live).unwrap_err();
+        assert_eq!(
+            msg,
+            "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
+        );
+        assert_eq!(std::fs::read(&tmp).unwrap(), before, "the staging file is not truncated");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX");
+    }
+
+    /// (d) U1F-m6: with NO sidecars present (the usual Settings path, where
+    /// pool.close() removed them) a failed swap is still "unchanged" — a
+    /// missing sidecar is never treated as moved.
+    #[tokio::test]
+    async fn replace_database_file_failed_swap_with_no_sidecars_claims_unchanged_and_sets_nothing_aside() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        std::fs::remove_file(&wal).unwrap();
+        std::fs::remove_file(&shm).unwrap();
+        let live_c = live.clone();
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            std::fs::rename(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).unwrap_err();
+        assert!(msg.contains("(your data is unchanged)"), "{msg}");
+        assert!(!msg.contains("could not be put back"), "{msg}");
+        assert!(!aside(&wal).exists() && !aside(&shm).exists());
+        assert!(!wal.exists() && !shm.exists());
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided

@@ -118,3 +118,22 @@ describe('U1F-m10 — the post-update note knows whether its copy is from before
   });
 });
 
+describe('CR-U-20a/h — the Rust refusals the notices quote (cross-language)', () => {
+  const rust = readFileSync(resolve(__dirname, '../../src-tauri/src/db_backup.rs'), 'utf8');
+  const ONE = 'from an earlier restore is next to your data. Move it out of that folder, then try again (your data is unchanged)';
+  const MANY = 'from an earlier restore are next to your data. Move them out of that folder, then try again (your data is unchanged)';
+  const STAGING = "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)";
+
+  it('the step-0 refusals (one leftover, both leftovers) and the staging-file refusal are the exact Rust formats', () => {
+    expect(rust).toContain(`"db_restore: {one} ${ONE}"`);
+    expect(rust).toContain(`"db_restore: {} ${MANY}"`);
+    expect(rust).toContain(`"${STAGING}"`);
+  });
+
+  it('each keeps the notice\'s "Your data was not changed." (nothing was moved)', () => {
+    for (const reason of [`db_restore: /x/finance.db-wal.restore-old ${ONE}`, `db_restore: /x/a and /x/b ${MANY}`, STAGING]) {
+      expect(restoreLeftDataUnchanged(reason)).toBe(true);
+    }
+  });
+});
+
