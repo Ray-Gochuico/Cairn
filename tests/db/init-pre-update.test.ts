@@ -214,6 +214,7 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
       name: 'MigrationFailedError',
       preUpdateCopyPath: partwayCopy,
       copyIsFromBeforeUpdate: false,
+      chainOrigin: 53,                                            // CR-U-23a: the chain started at 53
     });
   });
 
@@ -226,11 +227,11 @@ describe('initDatabase — the pre-update copy seam (CR-U-1/5)', () => {
 
   it('maybeTakePreUpdateCopy alone: { copyPath, updating }, with the path in Tauri while updating, a null path in the browser, and updating false once migrated', async () => {
     await atSchema53();
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true, copyIsFromBeforeUpdate: true });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: COPY, updating: true, copyIsFromBeforeUpdate: true, chainOrigin: 53 });
     isTauri.mockReturnValue(false);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true, copyIsFromBeforeUpdate: false });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: true, copyIsFromBeforeUpdate: false, chainOrigin: 53 });
     await runMigrations(db, all);
-    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false, copyIsFromBeforeUpdate: false });
+    expect(await maybeTakePreUpdateCopy(db, all)).toEqual({ copyPath: null, updating: false, copyIsFromBeforeUpdate: false, chainOrigin: null });
   });
 });
 

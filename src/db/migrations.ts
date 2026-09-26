@@ -57,12 +57,21 @@ export class SchemaTooNewError extends Error {
  * `copyIsFromBeforeUpdate` is false when the named copy was taken of a file an
  * earlier attempt had already changed partway (no origin copy existed), so
  * the screen never calls it the data from before the update (U1-m9).
+ * `chainOrigin` is the schema the file held before ANY attempt of this update
+ * (null when unknown), so the screen labels every family copy whose `from`
+ * differs honestly (CR-U-23a).
  */
 export class MigrationFailedError extends Error {
   readonly cause: unknown;
   readonly preUpdateCopyPath: string | null;
   readonly copyIsFromBeforeUpdate: boolean;
-  constructor(cause: unknown, preUpdateCopyPath: string | null, copyIsFromBeforeUpdate = true) {
+  readonly chainOrigin: number | null;
+  constructor(
+    cause: unknown,
+    preUpdateCopyPath: string | null,
+    copyIsFromBeforeUpdate = true,
+    chainOrigin: number | null = null,
+  ) {
     super(
       'Cairn could not finish updating your data: ' +
         (cause instanceof Error ? cause.message : String(cause)),
@@ -71,6 +80,7 @@ export class MigrationFailedError extends Error {
     this.cause = cause;
     this.preUpdateCopyPath = preUpdateCopyPath;
     this.copyIsFromBeforeUpdate = copyIsFromBeforeUpdate;
+    this.chainOrigin = chainOrigin;
     Object.setPrototypeOf(this, MigrationFailedError.prototype);
   }
 }

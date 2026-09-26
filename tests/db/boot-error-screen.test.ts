@@ -967,6 +967,32 @@ describe('v1.7.1 U1 — the failed-migration screen', () => {
     expect(pane).not.toContain('Cairn could not finish updating your data');
   });
 
+  it('CR-U-23a: EVERY family row whose schemaFrom is not the chain origin is labelled honestly; the origin copy keeps "Before update"', async () => {
+    const NAMED = { ...PRE, name: 'cairn-pre-update-54-to-55-20260926-090000.db', path: '/x/backups/cairn-pre-update-54-to-55-20260926-090000.db', takenAt: new Date(2026, 8, 26, 9, 0, 0), schemaFrom: 54 };
+    const EARLIER_PARTWAY = { ...PRE, name: 'cairn-pre-update-54-to-55-20260925-180000.db', path: '/x/backups/cairn-pre-update-54-to-55-20260925-180000.db', takenAt: new Date(2026, 8, 25, 18, 0, 0), schemaFrom: 54 };
+    mList.mockResolvedValue([NAMED, EARLIER_PARTWAY, PRE, MANUAL]);
+    renderBootError(root, new MigrationFailedError(new Error('x'), NAMED.path, false, 53));
+    await vi.waitFor(() => expect(rows(root)).toHaveLength(4));
+    const label = (i: number) => rows(root)[i].querySelector('span')?.textContent;
+    const name = (i: number) => rows(root)[i].querySelector('button')?.getAttribute('aria-label');
+    expect(label(0)).toBe(`Saved before this attempt — ${whenOf(NAMED.takenAt)}`);
+    expect(label(1)).toBe(`Saved before this attempt — ${whenOf(EARLIER_PARTWAY.takenAt)}`);
+    expect(name(1)).toBe(`Restore the copy saved before this attempt, ${whenOf(EARLIER_PARTWAY.takenAt)}`);
+    expect(label(2)).toBe(`Before update — ${whenOf(PRE.takenAt)}`);          // schemaFrom 53 = the origin
+    expect(name(2)).toBe(`Restore the copy from before the update, ${whenOf(PRE.takenAt)}`);
+    expect(label(3)).toBe(whenOf(MANUAL.takenAt));
+  });
+
+  it('CR-U-23a: without a known origin, the NAMED partway copy is still matched by path; the others keep their labels', async () => {
+    const NAMED = { ...PRE, name: 'cairn-pre-update-54-to-55-20260926-090000.db', path: '/x/backups/cairn-pre-update-54-to-55-20260926-090000.db', takenAt: new Date(2026, 8, 26, 9, 0, 0), schemaFrom: 54 };
+    mList.mockResolvedValue([NAMED, PRE, MANUAL]);
+    renderBootError(root, new MigrationFailedError(new Error('x'), NAMED.path, false));
+    await vi.waitFor(() => expect(rows(root)).toHaveLength(3));
+    expect(rows(root)[0].querySelector('span')?.textContent).toBe(`Saved before this attempt — ${whenOf(NAMED.takenAt)}`);
+    expect(rows(root)[1].querySelector('span')?.textContent).toBe(`Before update — ${whenOf(PRE.takenAt)}`);
+    expect(rows(root)[2].querySelector('span')?.textContent).toBe(whenOf(MANUAL.takenAt));
+  });
+
   it('without a copy: says so', () => {
     renderBootError(root, new MigrationFailedError(new Error('x'), null));
     expect(root.textContent).toContain('The update stopped partway. No copy was saved before it started.');

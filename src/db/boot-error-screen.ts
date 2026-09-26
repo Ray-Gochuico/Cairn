@@ -629,6 +629,7 @@ export function renderBootError(
     // chain origin; a copy of a file an earlier attempt changed partway is
     // named for what it is.
     const fromBeforeUpdate = (e as { copyIsFromBeforeUpdate?: unknown }).copyIsFromBeforeUpdate !== false;
+    const chainOrigin = (e as { chainOrigin?: unknown }).chainOrigin;
     const body =
       typeof copyPath === 'string' && copyPath.length > 0
         ? fromBeforeUpdate
@@ -667,8 +668,12 @@ export function renderBootError(
       now,
       // CR-U-18: only this screen holds, and only for the named true copy.
       holdFor: (entry) => fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
-      // U1F-m10: the named copy is labelled honestly when it is a partway one.
-      notBeforeUpdate: (entry) => !fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath,
+      // U1F-m10 / CR-U-23a: the named copy when it is a partway one, and
+      // EVERY family copy whose `from` is not the chain's origin, is
+      // labelled for what it is.
+      notBeforeUpdate: (entry) =>
+        (!fromBeforeUpdate && typeof copyPath === 'string' && entry.path === copyPath) ||
+        (typeof chainOrigin === 'number' && typeof entry.schemaFrom === 'number' && entry.schemaFrom !== chainOrigin),
     });
     root.replaceChildren(container);
     return;

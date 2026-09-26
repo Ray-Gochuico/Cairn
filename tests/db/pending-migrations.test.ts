@@ -84,4 +84,9 @@ describe('MigrationFailedError', () => {
     expect(new MigrationFailedError('x', '/x/a.db').copyIsFromBeforeUpdate).toBe(true);
     expect(new MigrationFailedError('x', '/x/a.db', false).copyIsFromBeforeUpdate).toBe(false);
   });
+
+  it("CR-U-23a: carries the chain's origin schema (default null)", () => {
+    expect(new MigrationFailedError('x', '/x/a.db').chainOrigin).toBeNull();
+    expect(new MigrationFailedError('x', '/x/a.db', false, 53).chainOrigin).toBe(53);
+  });
 });
