@@ -243,7 +243,8 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///      restore is still present (`<sidecar>.restore-old`): it may be the only
 ///      copy of that session's WAL, and step 2 must never overwrite it. The
 ///      refusal names every leftover and says to move it out of the folder.
-///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`)
+///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`),
+///      make it owner-writable (a read-only backup stages a read-only copy)
 ///      and flush it to stable storage (`sync_all`). A failure here leaves
 ///      `live` and its sidecars untouched (the temp file is removed). `live`
 ///      is never the copy target, so the in-copy truncation window of a plain
@@ -277,7 +278,33 @@ fn replace_database_file_with(
 /// Flush a file's data to stable storage (F_FULLFSYNC on Apple via std).
 /// Opened for writing: Windows FlushFileBuffers needs a writable handle.
 fn real_sync(p: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    SYNCED.with(|s| s.borrow_mut().push(p.to_path_buf()));
     std::fs::OpenOptions::new().write(true).open(p)?.sync_all()
+}
+
+/// CR-U-22: give the staged copy an owner-writable mode (unix: add 0o600;
+/// Windows: clear Read-only) — the backup may be read-only.
+fn make_owner_writable(p: &Path) -> std::io::Result<()> {
+    let mut perm = std::fs::metadata(p)?.permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        perm.set_mode(perm.mode() | 0o600);
+    }
+    #[cfg(not(unix))]
+    {
+        #[allow(clippy::permissions_set_readonly_false)]
+        perm.set_readonly(false);
+    }
+    std::fs::set_permissions(p, perm)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// CR-U-22: every path the production `real_sync` flushed, so a test can
+    /// see that the public entry point syncs the staged copy.
+    static SYNCED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// `replace_database_file_with` plus a `sync` seam for the staged copy.
@@ -328,6 +355,16 @@ fn replace_database_file_io(
     // 1. Stage the restore in a sibling temp file. A mid-copy failure here
     //    cannot corrupt `live` because `live` is never the copy target.
     if let Err(e) = std::fs::copy(backup, &tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "db_restore: failed to stage the backup (your data is unchanged): {e}"
+        ));
+    }
+    //    `fs::copy` carries the backup's permission bits, so a read-only
+    //    backup would stage a read-only copy that cannot be opened for the
+    //    flush below — and would become a read-only finance.db. Make it
+    //    owner-writable first (CR-U-22).
+    if let Err(e) = make_owner_writable(&tmp) {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
@@ -1233,6 +1270,41 @@ mod tests {
         assert!(!aside(&wal).exists() && !aside(&shm).exists());
         assert!(!wal.exists() && !shm.exists());
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    // ---- CR-U-22 (code-review round 3): a read-only backup restores; the
+    // production path really syncs. ----
+
+    #[tokio::test]
+    async fn replace_database_file_restores_from_a_read_only_backup() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        let mut ro = std::fs::metadata(&backup).unwrap().permissions();
+        ro.set_readonly(true); // mode 0444 on unix; the Read-only attribute on Windows
+        std::fs::set_permissions(&backup, ro).unwrap();
+        replace_database_file(&backup, &live).expect("a read-only backup restores");
+        assert_eq!(std::fs::read(&live).unwrap(), std::fs::read(&backup).unwrap());
+        assert!(!std::fs::metadata(&live).unwrap().permissions().readonly(), "the restored finance.db is writable");
+        assert!(!restore_tmp_path(&live).exists());
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+        let mut rw = std::fs::metadata(&backup).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        rw.set_readonly(false);
+        std::fs::set_permissions(&backup, rw).unwrap();
+    }
+
+    #[tokio::test]
+    async fn replace_database_file_production_path_syncs_the_staged_copy() {
+        let (_dir, backup, live, _wal, _shm) = live_with_sidecars().await;
+        SYNCED.with(|s| s.borrow_mut().clear());
+        replace_database_file(&backup, &live).expect("replace");
+        let synced = SYNCED.with(|s| s.borrow().clone());
+        assert_eq!(synced, vec![restore_tmp_path(&live)], "the public entry point flushes the staged copy");
+    }
+
+    #[test]
+    fn real_sync_reports_a_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(real_sync(&dir.path().join("does-not-exist.db")).is_err());
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
