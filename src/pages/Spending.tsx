@@ -15,6 +15,7 @@ import MetricCard from '@/components/cards/MetricCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import { SpendingSummaryHero } from '@/components/spending/SpendingSummaryHero';
+import { ReimbursementMarker } from '@/components/spending/ReimbursementMarker';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -695,6 +696,8 @@ export default function Spending() {
                       ) : (
                         <span>{formatCurrencyCents(t.amount)}</span>
                       )}
+                      {/* v1.7.1 R10: Reimbursed / Awaiting under the amount (CR-R10-3). */}
+                      <ReimbursementMarker t={t} />
                     </td>
                     <td className="py-2 pr-2 text-right">
                       <button

@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import DatePicker from '@/components/ui/DatePicker';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useTransactionsStore } from '@/stores/transactions-store';
-import { formatCurrencyCents, formatDate } from '@/lib/format';
+import { reimbursementState, reimbursementStatusLine } from '@/lib/reimbursement-status';
+import { isRealSpending } from '@/lib/spending-analysis';
 import type { Transaction, Category, Property, Vehicle } from '@/types/schema';
 
 interface TransactionEditDialogProps {
@@ -23,24 +25,6 @@ interface TransactionEditDialogProps {
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
-
-/**
- * R2 (chip task_32707759): the row editor states a reimbursement's STATE,
- * not just the "Reimbursable" flag — before this, a settled reimbursement
- * showed nowhere except as its absence from Spending's "Awaiting
- * reimbursement" list. Reads the SAVED row, never the checkbox's live state:
- * the status is a fact about the transaction as stored, and the dialog's
- * save path leaves reimbursed_at / reimbursed_amount untouched on uncheck
- * (D-R2-9). Byte-exact copy: CR-R2-1 / CR-R2-2 / CR-R2-3.
- */
-export function reimbursementStatusLine(
-  t: Pick<Transaction, 'reimbursable' | 'reimbursedAt' | 'reimbursedAmount'>,
-): string | null {
-  if (!t.reimbursable) return null;
-  if (t.reimbursedAt == null) return 'Awaiting reimbursement.';
-  if (t.reimbursedAmount == null) return `Reimbursed on ${formatDate(t.reimbursedAt)}.`;
-  return `Reimbursed ${formatCurrencyCents(t.reimbursedAmount)} on ${formatDate(t.reimbursedAt)}.`;
-}
 
 export function TransactionEditDialog({
   transaction, categories, properties, vehicles, persons, onClose, onSaved,
@@ -60,6 +44,8 @@ export function TransactionEditDialog({
 
   const update = useTransactionsStore((s) => s.update);
   const remove = useTransactionsStore((s) => s.remove);
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  // R2: the status line reads the SAVED row, never the checkbox's live state.
   const reimbursementStatus = reimbursementStatusLine(transaction);
 
   const homeParent = categories.find((c) => c.name === 'Home' && c.parentCategoryId === null);
@@ -77,6 +63,30 @@ export function TransactionEditDialog({
     if (!date) { setError('Please select a date.'); return; }
     if (merchant.trim() === '') { setError('Merchant cannot be empty.'); return; }
     if (transaction.id == null) return;
+    // v1.7.1 R10 (D-R10-2): unchecking Reimbursable on a row with a RECORDED
+    // reimbursement clears that record, so the save waits for a confirm that
+    // names it. Cancel leaves the dialog open and writes nothing.
+    if (!reimbursable && reimbursementState(transaction) === 'reimbursed') {
+      // The totals sentence is said only when a recorded amount is netted
+      // today, by the same rule the totals use (CR-R10-5): the saved row is
+      // real spending (isRealSpending — a positive charge outside the
+      // Income / Transfer categories) and its recorded amount is > 0
+      // (spending-analysis counts amount - reimbursedAmount). A record with
+      // no amount or $0 already counts the full amount, and a non-spending
+      // row counts in no total, so clearing either moves no total.
+      const categoriesById = new Map<number, Category>();
+      for (const c of categories) if (c.id != null) categoriesById.set(c.id, c);
+      const totalsLine =
+        isRealSpending(transaction, categoriesById) && (transaction.reimbursedAmount ?? 0) > 0
+          ? ' Spending totals then count its full amount.'
+          : '';
+      const ok = await confirm({
+        title: 'Clear the recorded reimbursement?',
+        description: `Unchecking Reimbursable clears the recorded reimbursement: ${reimbursementStatus}${totalsLine}`,
+        confirmLabel: 'Clear and save',
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -89,6 +99,13 @@ export function TransactionEditDialog({
         vehicleId: isVehicle ? vehicleId : null,
         personId,
         reimbursable,
+        // v1.7.1 R10 (D-R10-3): an unchecked row carries no reimbursement
+        // record. A row saved reimbursable that stays checked omits both
+        // fields, so a recorded reimbursement survives every other edit. A
+        // FRESH check (the saved row was not reimbursable) starts from
+        // Awaiting, so a stale pre-R10 record the editor never showed does not
+        // come back as Reimbursed (CR-R10-6).
+        ...(reimbursable && transaction.reimbursable ? {} : { reimbursedAt: null, reimbursedAmount: null }),
         notes: notes.trim() === '' ? null : notes.trim(),
       });
       onSaved();
@@ -250,6 +267,9 @@ export function TransactionEditDialog({
           )}
         </DialogFooter>
       </DialogContent>
+      {/* R10: the uncheck confirm (house useConfirm; it portals itself and
+          stacks above this dialog, which stays open behind it). */}
+      {confirmDialog}
     </Dialog>
   );
 }
