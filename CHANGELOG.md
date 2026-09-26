@@ -5,6 +5,39 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-09-26
+
+Restoring a copy of your data now puts back everything the copy holds.
+This release adds no database change. Updating from 1.5.0 or later
+changes no data; updating from 1.4.0 or earlier changes how data is
+stored, so Cairn first keeps a checked copy of your data, listed in
+Settings → Data as "Before update". Nothing leaves your machine.
+
+### Fixed
+
+- **Restore from a file puts back everything the file holds.** A copy of
+  Cairn's data folder made while Cairn was open (for example in Finder, or
+  by Time Machine) keeps its most recent changes in a second file,
+  `finance.db-wal`, beside `finance.db`. Restoring that `finance.db` with
+  Settings → Data → "Restore from a file…" checked both files but put back
+  only the first, so the restored data could be older than the copy, or
+  empty. Cairn now makes the copy it restores through SQLite, which reads
+  both files, checks that copy, and only then replaces your data. The data
+  in the file you chose is only read. Backups that Cairn makes itself were
+  not affected.
+- **Backups whose names contain "%" or "?"** are now checked and restored
+  as named. Before, a name such as `Cairn%20backup.db` could be refused, and
+  a file beside it with a similar name could be checked in its place.
+- **Restoring another copy after Cairn held an update.** When Cairn has put
+  back the copy from before an update and the next start stops before the
+  update step, restoring a different copy on that screen now lets the start
+  after it run normally. Before, that start could say Cairn had put back your
+  data from before the update when it had not.
+- **The 1.7.1 notes** said installing it makes no copy. That holds when
+  updating from 1.5.0 or later. Updating from 1.4.0 or earlier to 1.7.1 or
+  1.7.2 changes how data is stored, so Cairn first keeps a checked copy of
+  your data, listed in Settings → Data as "Before update".
+
 ## [1.7.1] - 2026-09-26
 
 Updating gets a safety net. Installing an update never touches your data;
