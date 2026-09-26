@@ -144,9 +144,11 @@ export function AppDisclaimerGate({ children }: Props) {
   // `acceptedVersions`, so a stale-but-current cached value from a prior
   // successful load could otherwise make the gate read `ready` and render
   // un-consented children on this errored boot. Handling error here closes
-  // that structurally. On this path the modal carries the one-line
-  // orientation note (A-7(1), FAIL_CLOSED_ORIENTATION) instead of a
-  // what-changed box, since no earlier acceptance can be proven.
+  // that structurally. On this path the modal also carries the one-line
+  // orientation note (A-7(1), FAIL_CLOSED_ORIENTATION), with or without a
+  // what-changed box: the box still follows the modal's own rule (shown only
+  // over a cached earlier acceptance), and the note shows on every errored
+  // read, since the load could not prove which version was accepted.
   if (effectiveStatus !== 'error' && appWideAccepted === null) {
     // Genuine first run (load succeeded, no app_wide row): let the Setup
     // Wizard own the initial acceptance.
