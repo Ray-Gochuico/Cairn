@@ -150,10 +150,10 @@ export async function pendingMigrations(
 // v1.7.1 U3: the test is STATEMENT-INITIAL and runs on the runner's own
 // comment-stripped statements (splitStatements): a statement that IS a
 // `BEGIN`, `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE`, each optionally followed by
-// `TRANSACTION`. A comment that mentions BEGIN, or a `CREATE TRIGGER … BEGIN
-// … END` body (one statement that merely contains the word), stays on the
-// wrapped, atomic path.
-const SELF_MANAGED_TX_RE = /^BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?$/i;
+// `TRANSACTION` and, after it, a transaction name. A comment that mentions
+// BEGIN, or a `CREATE TRIGGER … BEGIN … END` body (one statement that merely
+// contains the word), stays on the wrapped, atomic path.
+const SELF_MANAGED_TX_RE = /^BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION(?:\s+\w+)?)?$/i;
 
 /**
  * The runner's statement list: line-level SQL comments (-- ...) stripped

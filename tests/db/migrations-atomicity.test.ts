@@ -166,4 +166,13 @@ describe('the self-managed detector is statement-initial (v1.7.1 U3)', () => {
       await expect(runMigrations(db, [m])).resolves.toBeUndefined();
     }
   });
+
+  // Code review CR-U3-9: SQLite also accepts a transaction NAME after TRANSACTION
+  // (`BEGIN [DEFERRED|IMMEDIATE|EXCLUSIVE] TRANSACTION name`).
+  it('the named form is self-managed too: BEGIN TRANSACTION name, with or without a type (planted)', async () => {
+    for (const [i, begin] of ['BEGIN TRANSACTION u3_named', 'begin immediate transaction u3_named'].entries()) {
+      const m = { version: `u3_named_${i}`, sql: `${begin};\nCREATE TABLE u3_n${i} (id INTEGER);\nCOMMIT;` };
+      await expect(runMigrations(db, [m])).resolves.toBeUndefined();
+    }
+  });
 });
