@@ -11,7 +11,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
-import { stashPostUpdateNotice } from '@/lib/boot-notices';
+import { stashPostUpdateNotice, stashRestoreFailureNotice } from '@/lib/boot-notices';
 
 // W4 review (MINOR 13): P-W4-7's TourOverlay gate had no pin — the overlay
 // renders nothing until the tour store is started, so mounting it in explore
@@ -148,5 +148,18 @@ describe('PageShell route title + focus', () => {
   it('U1: no note without a pending key (production first-run is untouched)', () => {
     renderAt('/');
     expect(screen.queryByRole('note', { name: 'Update notice' })).toBeNull();
+  });
+
+  it('CR-U-20b: a put-back failure from the last restore shows in the chrome on the first successful boot', () => {
+    stashRestoreFailureNotice('db_restore: failed to finalize the restore: denied. Part of your current data could not be put back: /x/finance.db-wal is at /x/finance.db-wal.restore-old (denied)');
+    renderAt('/');
+    expect(screen.getByRole('note', { name: 'Restore notice' })).toBeInTheDocument();
+  });
+
+  it('CR-U-20b: never while exploring', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    stashRestoreFailureNotice('db_restore: x. Part of your current data could not be put back: y');
+    renderAt('/');
+    expect(screen.queryByRole('note', { name: 'Restore notice' })).toBeNull();
   });
 });

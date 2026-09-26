@@ -9,6 +9,7 @@ import { documentTitleFor } from '@/lib/route-titles';
 import { isExploreMode } from '@/lib/explore-mode';
 import { SampleDataBanner } from './SampleDataBanner';
 import { PostUpdateNote } from './PostUpdateNote';
+import { RestoreProblemNote } from './RestoreProblemNote';
 
 /*
  * Layout floor (Wave 11 T19): the desktop window enforces 1024×700
@@ -59,8 +60,9 @@ export default function PageShell() {
     // W4 (D-S5): a COLUMN — the sample banner is app-level chrome spanning the
     // full window width ABOVE Sidebar + content, so the existing row nests one
     // level down (min-h-0 keeps <main>'s overflow-y-auto scrolling). The
-    // one-time update note takes the same slot on the real profile (U1);
-    // never both.
+    // one-time update note takes the same slot on the real profile (U1), with
+    // the one-time restore-problem note above it (CR-U-20b); never while
+    // exploring.
     <div className="flex flex-col h-screen overflow-hidden bg-background text-foreground">
       {/*
        * Skip-to-main-content link (Wave-5 frontend A+ #1). Visually hidden
@@ -76,7 +78,14 @@ export default function PageShell() {
       >
         Skip to main content
       </a>
-      {exploring ? <SampleDataBanner /> : <PostUpdateNote />}
+      {exploring ? (
+        <SampleDataBanner />
+      ) : (
+        <>
+          <RestoreProblemNote />
+          <PostUpdateNote />
+        </>
+      )}
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex-1 min-w-0 flex flex-col">

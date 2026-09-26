@@ -7,7 +7,8 @@
  *
  *  - RESTORE_FAILURE_NOTICE_KEY (moved from backup-restore.ts, v1.7.1 U1):
  *    a failed db_restore's reason, read-once by DataSection and by every
- *    boot-error screen.
+ *    boot-error screen; a put-back failure is also shown in the app chrome
+ *    on the first successful boot (RestoreProblemNote, CR-U-20b).
  *  - PRE_UPDATE_NOTICE_KEY: the path of the copy taken before this boot's
  *    migrations; PostUpdateNote peeks it on mount and clears it on Dismiss.
  *  - PRE_UPDATE_SKIP_ONCE_KEY: "Continue without a copy" — consumed by the
@@ -59,6 +60,9 @@ export function withoutTrailingPeriod(reason: string): string {
 
 export function stashRestoreFailureNotice(reason: string): void { write(RESTORE_FAILURE_NOTICE_KEY, reason); }
 export function takeRestoreFailureNotice(): string | null { return take(RESTORE_FAILURE_NOTICE_KEY); }
+/** CR-U-20b: the chrome's RestoreProblemNote peeks, and clears on Dismiss. */
+export function peekRestoreFailureNotice(): string | null { return peek(RESTORE_FAILURE_NOTICE_KEY); }
+export function clearRestoreFailureNotice(): void { clear(RESTORE_FAILURE_NOTICE_KEY); }
 
 /** U1F-m10: a copy of a file an earlier attempt had changed partway is
  * recorded with this prefix, so the note never calls it "from before the
