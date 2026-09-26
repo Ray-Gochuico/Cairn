@@ -70,6 +70,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # v1.7.1 U3: full history and tags, so the released-schema guard
+          # below can read the previous release tag's pins.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -90,6 +94,21 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Type check (node project — configs, scripts, e2e)
+        # v1.7.1 I-(a): gate.sh's tsc-node leg (tsconfig.json covers src/ only).
+        run: npx tsc -p tsconfig.node.json --noEmit
+
+      - name: Released-schema guard (previous tag)
+        # v1.7.1 U3: the previous release tag's two MAX_SCHEMA_VERSION pins must
+        # equal its row in tests/db/released-schemas.ts. Dry run locally:
+        # `node scripts/released-schema-guard.mjs vX.Y.Z` (or `--all`).
+        run: node scripts/released-schema-guard.mjs "${GITHUB_REF_NAME}"
+
+      - name: Upgrade path from every released schema
+        # v1.7.1 U3: already inside the unit suite above; run by name so the
+        # release gate says what it proved.
+        run: npx vitest run tests/db/upgrade-path.test.ts tests/db/released-schemas.test.ts tests/policy/migrations-policy.test.ts tests/scripts/released-schema-guard.test.ts
 
       - name: cargo test (src-tauri)
         working-directory: src-tauri
