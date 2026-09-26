@@ -39,9 +39,10 @@ import { scrollIntoViewWhenSettled } from '@/lib/scroll-into-view-settled';
  * not relaunch (only its Windows path exits), and Cairn ships no process
  * plugin (CR-U4-1) — so the flow ends on an honest "quit and reopen" line. A
  * failure before the close changes nothing and stays on the live pool; an
- * install that fails AFTER the close stashes its reason and reloads (M-4:
- * never stay on a closed pool), and the card shows the reason after the
- * reload. Both notes live in sessionStorage, which dies with the window.
+ * install that fails AFTER the close stashes its reason and reloads into
+ * Settings (M-4: never stay on a closed pool; CR-U4-6: land on this card from
+ * whatever page the user was on), and the card shows the reason there. Both
+ * notes live in sessionStorage, which dies with the window.
  *
  * Local state machine:
  *   idle         → "Check for updates" button enabled, prior result hidden
@@ -131,9 +132,13 @@ function restingState(): CheckState {
 }
 
 export function UpdaterSection({
-  reload = () => window.location.reload(),
+  reload = () => window.location.assign('/settings'),
 }: {
-  /** Injectable for tests; defaults to `window.location.reload()`. */
+  /** Where the window goes after an install fails past the close: a full
+   * load of Settings, so boot re-inits a pool (M-4) and this card mounts to
+   * say why (CR-U4-6). No `#updates` fragment — from /settings a
+   * fragment-only change is not a load, and the window would stay on the
+   * closed pool. Injectable for tests. */
   reload?: () => void;
 }) {
   // W4 review (MINOR 20): D-S7 — explore is offline. This was the one
@@ -173,8 +178,9 @@ export function UpdaterSection({
     setLastChecked(localStorage.getItem(prefKey(LAST_CHECKED_KEY)));
   }, []);
 
-  // U4: an install that failed after the close reloaded the window (M-4);
-  // show its reason once (read-once, the DataSection restore-notice pattern).
+  // U4: an install that failed after the close reloaded the window into
+  // Settings (M-4, CR-U4-6); show its reason once (read-once, the DataSection
+  // restore-notice pattern).
   useEffect(() => {
     const reason = takeSession(INSTALL_FAILURE_KEY);
     if (reason !== null) {
@@ -242,7 +248,8 @@ export function UpdaterSection({
       await update.install();
     } catch (e) {
       // M-4: the pool is closed, so this window cannot keep running on it.
-      // Stash the reason FIRST, then reload; the card shows it after.
+      // Stash the reason FIRST, then reload into Settings, where the card
+      // shows it, scrolled into view (CR-U4-6).
       writeSession(INSTALL_FAILURE_KEY, messageOf(e));
       reload();
       return;

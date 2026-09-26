@@ -236,12 +236,43 @@ describe('UpdaterSection — install (v1.7.1 U4)', () => {
     expect(mockCheck).not.toHaveBeenCalled();
   });
 
-  it('in the app the reload is the real one: Settings renders the card with no props, so the default reloads the window (M-4)', () => {
-    const src = readFileSync(
-      path.resolve(__dirname, '../../src/components/settings/UpdaterSection.tsx'),
-      'utf8',
+  it('lands on the card after a failed install: the landing mount shows the stashed reason once, scrolled into view (CR-U4-6)', async () => {
+    mockClose.mockResolvedValue(undefined);
+    const land = vi.fn();
+    const update = fakeUpdate([], {
+      install: async () => {
+        throw 'Failed to move the new app into place.';
+      },
+    });
+    const { user, install, view } = await reachAvailable(update, land);
+    await user.click(install);
+    await waitFor(() => expect(land).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0)); // the flow settles; in the app the page goes with it
+    view.unmount();
+    const scroll = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: scroll, configurable: true, writable: true });
+    render(<UpdaterSection reload={vi.fn()} />); // Settings mounts the card on the landing
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe(
+      "Couldn't install the update: Failed to move the new app into place. Your data was not changed.",
     );
-    expect(src).toContain('  reload = () => window.location.reload(),\n');
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+    expect(scroll.mock.contexts[0]).toBe(alert);
+    expect(sessionStorage.getItem(FAILURE_KEY)).toBeNull();
+  });
+
+  it('in the app a failed install lands on the Updates card: Settings renders the card with no props, and the default is a full load of /settings, so boot re-runs (M-4, CR-U4-6)', () => {
+    const read = (p: string) => readFileSync(path.resolve(__dirname, '../..', p), 'utf8');
+    // No #updates fragment: from /settings a fragment-only change is not a
+    // load, and the window would stay on the closed pool.
+    expect(read('src/components/settings/UpdaterSection.tsx')).toContain(
+      "  reload = () => window.location.assign('/settings'),\n",
+    );
+    // The card lives on that route, under the section anchor #updates.
+    expect(read('src/App.tsx')).toContain("{ path: 'settings', element: lazyRoute(Settings) },");
+    expect(read('src/pages/Settings.tsx')).toContain(
+      "{ id: 'updates', label: 'Updates', Component: UpdaterSection },",
+    );
   });
 
   it('the available panel says the data stays where it is, in the README’s words', async () => {
