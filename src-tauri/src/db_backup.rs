@@ -347,8 +347,9 @@ async fn replace_database_file_io(
 
 /// Steps 0-1 of `replace_database_file` up to the staged copy: refuse before
 /// touching anything, then stage `backup` into `<live>.restore-tmp`. Every
-/// error return leaves `live` and its sidecars untouched and no staging file
-/// behind.
+/// error return leaves `live` and its sidecars untouched; a staging file it
+/// created is removed when the removal succeeds, which is not guaranteed (a
+/// leftover is removed again before the next restore stages).
 async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let tmp = restore_tmp_path(live);
     let sidecars = sidecar_paths(live);
@@ -1674,6 +1675,8 @@ mod tests {
         assert!(v.reason.unwrap().contains("file is not a database"));
     }
 
+    /// Unix only: '?' is not a legal file-name character on Windows.
+    #[cfg(unix)]
     #[tokio::test]
     async fn validate_reads_a_name_with_a_question_mark_as_written() {
         let (_dir, path) = backup_named("backup?v=1.db").await;
@@ -1683,7 +1686,13 @@ mod tests {
 
     #[tokio::test]
     async fn restore_checked_restores_the_file_named_whatever_its_name() {
-        for name in ["Cairn%20backup.db", "backup?v=1.db"] {
+        // The '%20' name runs everywhere; '?' is not a legal file-name
+        // character on Windows, so that name runs on unix only.
+        let mut names = vec!["Cairn%20backup.db"];
+        if cfg!(unix) {
+            names.push("backup?v=1.db");
+        }
+        for name in names {
             let (dir, backup, live, _wal, _shm) = live_with_sidecars().await;
             let named = dir.path().join(name);
             std::fs::copy(&backup, &named).unwrap();
@@ -1959,10 +1968,11 @@ mod tests {
         pool.close().await;
         // replace_database_file itself: no source validation runs before it.
         let err = replace_database_file(&newer, &live).await.unwrap_err();
-        assert!(
-            err.starts_with("db_restore: failed to stage the backup (your data is unchanged): This backup was created by a newer version of Cairn (schema 60;"),
-            "{err}"
+        let prefix = format!(
+            "db_restore: failed to stage the backup (your data is unchanged): This backup was created by a newer version of Cairn (schema {};",
+            MAX_SCHEMA_VERSION + 5
         );
+        assert!(err.starts_with(&prefix), "{err}");
         assert_untouched(&live, &wal, &shm);
     }
 
@@ -1979,6 +1989,35 @@ mod tests {
             err,
             "db_restore: failed to stage the backup (your data is unchanged): This does not look like a Cairn backup (no schema_migrations table)."
         );
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    /// A source whose pages go bad past its header: it opens, VACUUM INTO
+    /// creates the staging file, then the copy fails partway. The partial
+    /// staging file is removed and nothing of the live data moves.
+    #[tokio::test]
+    async fn a_staging_copy_that_fails_partway_is_removed_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let pool = seeded_pool(&dir.path().join("large-seed.db")).await;
+        sqlx::query(
+            "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 2000) \
+             INSERT INTO accounts (name) SELECT printf('Account %04d, a name long enough to fill pages', i) FROM n",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let bad = dir.path().join("bad.db");
+        backup_to(&pool, &bad).await.unwrap();
+        pool.close().await;
+        // The header and the schema page stay; the middle half becomes 0x5a.
+        let mut bytes = std::fs::read(&bad).unwrap();
+        let len = bytes.len();
+        bytes[len / 4..3 * len / 4].fill(0x5a);
+        std::fs::write(&bad, &bytes).unwrap();
+
+        let err = replace_database_file(&bad, &live).await.unwrap_err();
+        assert!(err.contains("(your data is unchanged)"), "{err}");
+        assert!(!restore_tmp_path(&live).exists(), "the partial staging file is removed: {err}");
         assert_untouched(&live, &wal, &shm);
     }
 
