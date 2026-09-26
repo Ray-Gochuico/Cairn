@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { DisclosuresSection } from '@/components/settings/DisclosuresSection';
-import { DISCLOSURES } from '@/legal/disclosures';
+import { DISCLOSURES, type DisclosureId } from '@/legal/disclosures';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 
 /**
  * Legal M1/M2 coverage — the in-app home for the consented disclosures.
@@ -49,15 +50,23 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
 
   it('shows each document version (exact text — the R3 what-changed notes also begin "Version x.y …")', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.5, interview=1.2.
-    // Exact-string matches on purpose: two documents are now 1.5, and each
-    // note's first sentence ("Version 1.5 adds…", "Version 1.5 changes only…",
-    // "Version 1.2 adds…") would substring-match a regex.
-    expect(screen.getAllByText('Version 1.5')).toHaveLength(2); // app_wide + backtest (R3 bump)
-    expect(screen.getAllByText('Version 1.2')).toHaveLength(1); // interview (R4 bump)
-    expect(screen.queryByText('Version 1.1')).toBeNull();
-    expect(screen.getAllByText('Version 1.0')).toHaveLength(2); // roadmap + learning
-    expect(screen.queryByText('Version 1.4')).toBeNull(); // the backtest bump landed
+    // A-7(7) (v1.7.1): each viewer shows exactly ONE version line and it is its
+    // OWN document's current version, from the one literal table
+    // (tests/helpers/disclosure-versions.ts); the page shows exactly five.
+    // Tighter than the old per-version census (which could not see two
+    // documents swap versions), and a bump re-targets only the table. Anchored
+    // on purpose: each note's first sentence ("Version 1.5 adds…",
+    // "Version 1.5 changes only…", "Version 1.2 adds…") must not count.
+    const VERSION_LINE = /^Version \d+\.\d+$/;
+    const viewers = screen.getAllByTestId('disclosure-viewer');
+    for (const id of Object.keys(DISCLOSURE_VERSIONS) as DisclosureId[]) {
+      const viewer = viewers.find((v) => within(v).queryByRole('heading', { name: DISCLOSURES[id].title }) !== null);
+      expect(viewer, id).toBeDefined();
+      expect(within(viewer as HTMLElement).getAllByText(VERSION_LINE).map((el) => el.textContent), id).toEqual([
+        `Version ${DISCLOSURE_VERSIONS[id]}`,
+      ]);
+    }
+    expect(screen.getAllByText(VERSION_LINE)).toHaveLength(5);
   });
 
   it('renders each document body as Markdown (bold → <strong>, no literal asterisks)', () => {
@@ -118,7 +127,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
       '[data-testid="disclosure-viewer"]',
     );
     expect(appWide).not.toBeNull();
-    expect(within(appWide as HTMLElement).getByText('Version 1.5')).toBeInTheDocument();
+    expect(within(appWide as HTMLElement).getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`)).toBeInTheDocument();
   });
 
   describe('what-changed notes (R3, v1.7.0 — the diff has a permanent, read-only home)', () => {
@@ -149,7 +158,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     it('the backtest note: summary names the version, the text is hidden until toggled, then reads CR-R3-2 byte-exact', () => {
       renderSection();
       const viewer = viewerOf(DISCLOSURES.backtest.title);
-      const summary = within(viewer).getByText('What changed in version 1.5');
+      const summary = within(viewer).getByText(`What changed in version ${DISCLOSURE_VERSIONS.backtest}`);
       const body = within(viewer).getByTestId('disclosure-viewer-diff-body');
       expect(body).not.toBeVisible();
       fireEvent.click(summary);
@@ -158,7 +167,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
         'Version 1.5 changes only the acceptance checkbox: it now names all three views of the 1871–2022 replay that this document covers — the Backtest tool, the Stress Test card, and the History view — where the v1.4 checkbox named only the backtest and stress test. The body is unchanged from v1.4. Please re-read and re-accept.',
       );
       // The note sits between the version line and the body (the modal's order).
-      const version = within(viewer).getByText('Version 1.5');
+      const version = within(viewer).getByText(`Version ${DISCLOSURE_VERSIONS.backtest}`);
       const docBody = within(viewer).getByTestId('disclosure-viewer-body');
       const note = within(viewer).getByTestId('disclosure-viewer-diff');
       expect(version.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -168,12 +177,12 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     it('every note names its own document’s version and carries that document’s diff (app_wide 1.5, interview 1.2)', () => {
       renderSection();
       const appWide = viewerOf(DISCLOSURES.app_wide.title);
-      expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
+      expect(within(appWide).getByText(`What changed in version ${DISCLOSURE_VERSIONS.app_wide}`)).toBeInTheDocument();
       expect(within(appWide).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
         DISCLOSURES.app_wide.diffFromPrevious,
       );
       const interview = viewerOf(DISCLOSURES.interview.title);
-      expect(within(interview).getByText('What changed in version 1.2')).toBeInTheDocument();
+      expect(within(interview).getByText(`What changed in version ${DISCLOSURE_VERSIONS.interview}`)).toBeInTheDocument();
       expect(within(interview).getByTestId('disclosure-viewer-diff-body').textContent?.trim()).toBe(
         DISCLOSURES.interview.diffFromPrevious,
       );
@@ -206,17 +215,22 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
 
     it('the two identical "What changed in version 1.5" summaries are told apart by their region names', () => {
       renderSection();
+      // This pin's premise, stated: app_wide and backtest share a version. A
+      // bump that splits them reds here first and re-targets this test on
+      // purpose (A-7(7)).
+      expect(DISCLOSURE_VERSIONS.app_wide).toBe(DISCLOSURE_VERSIONS.backtest);
+      const shared = `What changed in version ${DISCLOSURE_VERSIONS.backtest}`;
       // Byte-identical summary strings — the document context lives in the region name.
-      expect(screen.getAllByText('What changed in version 1.5')).toHaveLength(2);
+      expect(screen.getAllByText(shared)).toHaveLength(2);
       const backtest = screen.getByRole('region', { name: 'About the Historical Backtest' });
       const appWide = screen.getByRole('region', { name: 'Disclaimer' });
       expect(backtest).not.toBe(appWide);
-      expect(within(backtest).getByText('What changed in version 1.5')).toBeInTheDocument();
-      expect(within(appWide).getByText('What changed in version 1.5')).toBeInTheDocument();
+      expect(within(backtest).getByText(shared)).toBeInTheDocument();
+      expect(within(appWide).getByText(shared)).toBeInTheDocument();
       // The interview note names its own version inside its own region.
       expect(
         within(screen.getByRole('region', { name: 'About the Frameworks' })).getByText(
-          'What changed in version 1.2',
+          `What changed in version ${DISCLOSURE_VERSIONS.interview}`,
         ),
       ).toBeInTheDocument();
     });

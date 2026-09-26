@@ -12,6 +12,7 @@ import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { QuestionFormat, Topic } from '@/types/enums';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 import { TodaysTriviaCard } from '@/components/dashboard/TodaysTriviaCard';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 // The store's REAL load — the MUST-1 loading test stubs it; boot() restores it.
 const realLearningLoad = useLearningStore.getState().load;
@@ -73,7 +74,7 @@ async function boot(open: boolean): Promise<SqliteAdapter> {
   if (open) {
     await db.execute(
       `INSERT INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
-       VALUES (1, 'learning', '1.0', '2026-05-28T00:00:00Z')`,
+       VALUES (1, 'learning', '${DISCLOSURE_VERSIONS.learning}', '2026-05-28T00:00:00Z')`,
     );
   }
   await useHouseholdStore.getState().load();

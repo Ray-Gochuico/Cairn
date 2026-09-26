@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BacktestDisclosureCallout } from '@/components/backtest/BacktestDisclosureCallout';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { DISCLOSURE_VERSIONS } from '../helpers/disclosure-versions';
 
 describe('BacktestDisclosureCallout', () => {
   it('renders with data-testid="backtest-disclosure-callout"', () => {
@@ -44,7 +45,7 @@ describe('BacktestDisclosureCallout', () => {
     // guard pins it to the registry: a future body edit bumps the registry
     // version, which trips this assertion and forces a conscious callout review.
     expect(DISCLOSURES.backtest.title).toBe('About the Historical Backtest');
-    expect(DISCLOSURES.backtest.version).toBe('1.5');
+    expect(DISCLOSURES.backtest.version).toBe(DISCLOSURE_VERSIONS.backtest);
 
     render(<BacktestDisclosureCallout />);
     // The callout must carry the registry's load-bearing claims.

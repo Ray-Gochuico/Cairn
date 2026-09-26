@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Step0Disclaimer from '@/pages/setup/Step0Disclaimer';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { DISCLOSURE_VERSIONS } from '../../helpers/disclosure-versions';
 import * as exploreTransitions from '@/lib/explore-transitions';
 import type { Person } from '@/types/schema';
 
@@ -21,7 +22,7 @@ describe('Step0Disclaimer', () => {
   it('renders the app_wide disclaimer modal', () => {
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
-    expect(screen.getByText(/version 1\.5/i)).toBeInTheDocument();
+    expect(screen.getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`)).toBeInTheDocument();
   });
 
   it('T23: shows the branded Welcome-to-Cairn frame above the disclaimer', () => {
@@ -48,7 +49,7 @@ describe('Step0Disclaimer', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /continue to setup/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.5');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', DISCLOSURE_VERSIONS.app_wide);
     });
   });
 
