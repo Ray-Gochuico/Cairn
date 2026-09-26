@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
@@ -19,11 +19,19 @@ const roadmapDoc = {
   acceptanceCheckboxLabel: 'I understand the Roadmap is algorithmic.',
 };
 
+// v1.7.1 A-5a: the store's real action, captured before any test can replace it.
+const REAL_LOAD = useAcceptancesStore.getState().load;
+
 describe('DisclosureModal', () => {
   // R3: the modal reads the acceptances projection (keyed by document id) to
   // decide whether the "What changed" box is re-prompt copy for THIS household.
   beforeEach(() => {
     useAcceptancesStore.setState({ acceptedVersions: {}, status: 'ready', isLoading: false, error: null });
+  });
+  // v1.7.1 A-5a (R3 residual): a test that swaps an ACTION in (the load() spy
+  // below) gets it back out — beforeEach resets data fields only.
+  afterEach(() => {
+    useAcceptancesStore.setState({ load: REAL_LOAD });
   });
 
   it('renders the disclosure body as text', () => {
@@ -192,6 +200,16 @@ describe('DisclosureModal', () => {
       render(<DisclosureModal document={updated} onAccept={vi.fn()} />);
       expect(screen.getByText('What changed since you last accepted:')).toBeInTheDocument();
       expect(load).not.toHaveBeenCalled();
+    });
+
+    // v1.7.1 A-5a (R3 residual): the `load` spy above is installed with
+    // setState, which a shallow merge never undoes — without the file's
+    // afterEach every later test would run against a vi.fn() load. This
+    // test sits DIRECTLY after it on purpose: vitest runs a file's tests in
+    // declaration order, and vitest.config.ts sets no sequence.shuffle.
+    it('the load() spy does not leak: the next test sees the store’s REAL load action', () => {
+      expect(useAcceptancesStore.getState().load).toBe(REAL_LOAD);
+      expect(vi.isMockFunction(useAcceptancesStore.getState().load)).toBe(false);
     });
   });
 
