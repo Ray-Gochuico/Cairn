@@ -257,7 +257,9 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
 ///      (`<live>.restore-tmp`) THROUGH SQLite (v1.7.2, L1): `backup` is opened
 ///      read-only by filename and copied with `VACUUM INTO`, so committed
 ///      frames in a `-wal` beside a WAL-mode backup reach the staged file,
-///      which is one self-contained rollback-mode file. Make it
+///      which is one self-contained rollback-mode file. VALIDATE the staged
+///      file (the checks `validate_backup_file` runs) — it is the file step 3
+///      puts in place (CR-172-1). Make it
 ///      owner-writable and flush it to stable storage (`sync_all`). A
 ///      failure here leaves `live` and its sidecars untouched (the temp file
 ///      is removed). `live` is never the copy target, so the in-copy
@@ -324,6 +326,10 @@ thread_local! {
     /// CR-U-22: every path the production `real_sync` flushed, so a test can
     /// see that the public entry point syncs the staged copy.
     static SYNCED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// v1.7.2 (CR-172-4): a test changes the staged file here, between the
+    /// staging copy and its validation, to prove that what is swapped in is
+    /// what was validated.
+    static AFTER_STAGE: std::cell::RefCell<Option<fn(&Path)>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
@@ -388,6 +394,24 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let _ = std::fs::remove_file(&tmp);
     if let Err(e) = stage_through_sqlite(backup, &tmp).await {
         let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "db_restore: failed to stage the backup (your data is unchanged): {e}"
+        ));
+    }
+    #[cfg(test)]
+    AFTER_STAGE.with(|hook| {
+        if let Some(f) = *hook.borrow() {
+            f(&tmp)
+        }
+    });
+    //    Then validate what was staged — the file step 3 puts in place, not
+    //    the source it came from (CR-172-1): quick_check, schema_migrations,
+    //    user_version <= MAX_SCHEMA_VERSION. A refusal removes the staging
+    //    file; `live` and its sidecars have not been touched.
+    let staged = validate_backup_file(&tmp).await;
+    if !staged.ok {
+        let _ = std::fs::remove_file(&tmp);
+        let e = staged.reason.unwrap_or_default();
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
         ));
@@ -1904,6 +1928,58 @@ mod tests {
         replace_database_file(&backup, &live).await.expect("restores over the leftover");
         assert_eq!(db_content(&live).await, db_content(&backup).await);
         assert!(!restore_tmp_path(&live).exists());
+    }
+
+    // ---- v1.7.2 (CR-172-1/4): the STAGED file is validated before the swap. ----
+
+    /// What an unfaithful staging copy would leave: an empty file.
+    fn empty_the_staged_file(p: &Path) {
+        std::fs::write(p, b"").unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_staged_file_that_fails_validation_is_never_swapped_in() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = Some(empty_the_staged_file));
+        let result = replace_database_file(&backup, &live).await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(
+            result.unwrap_err(),
+            "db_restore: failed to stage the backup (your data is unchanged): This does not look like a Cairn backup (no schema_migrations table)."
+        );
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn the_staged_check_refuses_a_newer_schema_file_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let newer = dir.path().join("newer.db");
+        let pool = seeded_pool(&newer).await;
+        sqlx::query(&format!("PRAGMA user_version = {}", MAX_SCHEMA_VERSION + 5)).execute(&pool).await.unwrap();
+        pool.close().await;
+        // replace_database_file itself: no source validation runs before it.
+        let err = replace_database_file(&newer, &live).await.unwrap_err();
+        assert!(
+            err.starts_with("db_restore: failed to stage the backup (your data is unchanged): This backup was created by a newer version of Cairn (schema 60;"),
+            "{err}"
+        );
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    #[tokio::test]
+    async fn the_staged_check_refuses_a_file_without_schema_migrations_and_touches_nothing() {
+        let (dir, _backup, live, wal, shm) = live_with_sidecars().await;
+        let other = dir.path().join("other.db");
+        let url = format!("sqlite://{}?mode=rwc", other.to_string_lossy());
+        let pool = SqlitePoolOptions::new().max_connections(1).connect(&url).await.unwrap();
+        sqlx::query("CREATE TABLE foo (id INTEGER PRIMARY KEY)").execute(&pool).await.unwrap();
+        pool.close().await;
+        let err = replace_database_file(&other, &live).await.unwrap_err();
+        assert_eq!(
+            err,
+            "db_restore: failed to stage the backup (your data is unchanged): This does not look like a Cairn backup (no schema_migrations table)."
+        );
+        assert_untouched(&live, &wal, &shm);
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
