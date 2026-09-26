@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CALCULATOR_CARD_IDS } from '@/lib/calculator-card-layout';
@@ -506,6 +506,72 @@ describe('CalculatorsLayout', () => {
         expect(hits().at(-1)!.opts).toMatchObject({ block: 'nearest' });
       } finally {
         delete (window.HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    // A-11(5) (v1.7.1): the corrective #hash scroll moved onto the shared
+    // scrollIntoViewWhenSettled, which cancels on unmount. A same-id element
+    // left in the document after the layout unmounts stands in for "the poll
+    // is still running": the old inline loop had no cancel, kept resolving
+    // document.getElementById on its 50 ms ticks, and scrolled it.
+    const recordScrolls = () => {
+      const calls: Array<{ el: Element; opts: ScrollIntoViewOptions | undefined }> = [];
+      (window.HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView = function (
+        this: HTMLElement,
+        opts?: ScrollIntoViewOptions,
+      ) {
+        calls.push({ el: this, opts });
+      };
+      return calls;
+    };
+    const cleanupScrolls = () => {
+      vi.useRealTimers();
+      delete (window.HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    };
+
+    it('A-11(5): the #hash settle poll is cancelled on unmount — nothing is scrolled after the layout is gone', () => {
+      window.history.replaceState(null, '', '/calculators#path-to-fi');
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const calls = recordScrolls();
+      const stray = document.createElement('div');
+      stray.id = 'path-to-fi';
+      try {
+        const { unmount } = render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+        // Guard (non-vacuous): the hash really was consumed — the card opened.
+        expect(screen.getAllByTestId('path-to-fi-trigger')[0]).toHaveAttribute('aria-expanded', 'true');
+        unmount(); // before the first 50 ms tick
+        document.body.appendChild(stray);
+        act(() => { vi.advanceTimersByTime(1000); });
+        expect(calls.map((c) => c.el)).not.toContain(stray);
+      } finally {
+        stray.remove();
+        cleanupScrolls();
+      }
+    });
+
+    it('A-11(5): a consume-effect re-run mid-settle (a settings refresh) does not cancel the corrective scroll', () => {
+      window.history.replaceState(null, '', '/calculators#path-to-fi');
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const calls = recordScrolls();
+      try {
+        render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+        const card = document.getElementById('path-to-fi')!;
+        const openScrolls = calls.filter((c) => c.el === card).length; // the card's own open-effect scroll
+        expect(openScrolls).toBeGreaterThan(0);
+        // A new settings object re-runs the consume effect (its `settings` dep).
+        act(() => { useSettingsStore.setState({ settings: { ...useSettingsStore.getState().settings! } } as never); });
+        act(() => { vi.advanceTimersByTime(1000); });
+        const onCard = calls.filter((c) => c.el === card);
+        expect(onCard).toHaveLength(openScrolls + 1); // exactly one corrective scroll
+        expect(onCard.at(-1)!.opts).toMatchObject({ block: 'nearest' });
+      } finally {
+        cleanupScrolls();
       }
     });
 

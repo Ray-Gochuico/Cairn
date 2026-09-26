@@ -1,9 +1,34 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import type { DisclosureDocument } from './disclosures';
 
 interface Props {
   document: DisclosureDocument;
 }
+
+/**
+ * A-11(2) (v1.7.1): markdown rendered inside the viewer sits BELOW the
+ * viewer's own <h3> title (Settings → Disclosures <h2> → this <h3>), so every
+ * markdown heading renders at least one level under it. The interview body
+ * opens `## Mechanical frameworks, not advice`, which rendered as an <h2>
+ * inside this <h3>-titled region (R3 smoke) — an inverted outline. The fix is
+ * the RENDERER's, never the body's: bodies are versioned legal text (a body
+ * edit is a version bump that re-gates everyone), and this map changes only
+ * the element each heading renders as — the text, the order and every other
+ * element are byte-identical. `#` and `##` both map to <h4> (no body uses
+ * `#`; `##` is the house section level); deeper levels keep their relative
+ * depth down to <h6>. Tag-name strings, not components, so react-markdown
+ * passes no `node` prop through to the DOM (hast-util-to-jsx-runtime forwards
+ * `node` only to function components). Self-contained on purpose: A-7's
+ * details-only export builds on it.
+ */
+const VIEWER_MARKDOWN_COMPONENTS: Components = {
+  h1: 'h4',
+  h2: 'h4',
+  h3: 'h5',
+  h4: 'h6',
+  h5: 'h6',
+  h6: 'h6',
+};
 
 /**
  * Read-only renderer for a consented disclosure document.
@@ -68,7 +93,7 @@ export function DisclosureViewer({ document }: Props) {
             data-testid="disclosure-viewer-diff-body"
             className="mt-2 text-sm leading-relaxed text-foreground space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold"
           >
-            <ReactMarkdown>{document.diffFromPrevious}</ReactMarkdown>
+            <ReactMarkdown components={VIEWER_MARKDOWN_COMPONENTS}>{document.diffFromPrevious}</ReactMarkdown>
           </div>
         </details>
       )}
@@ -76,13 +101,16 @@ export function DisclosureViewer({ document }: Props) {
         Identical prose styling to DisclosureModal's body div so the read-only
         rendering matches the modal exactly (same heading/list/strong/link
         treatment). Markdown is parsed by react-markdown — bold/lists/links
-        render as real elements, never literal asterisks.
+        render as real elements, never literal asterisks. A-11(2): plus the
+        [&_h4] trio — markdown headings render one level under this viewer's
+        <h3> (VIEWER_MARKDOWN_COMPONENTS), and the trio gives the demoted `##`
+        exactly the look the modal's [&_h2] trio gives it.
       */}
       <div
         data-testid="disclosure-viewer-body"
-        className="mt-3 text-sm leading-relaxed text-foreground space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
+        className="mt-3 text-sm leading-relaxed text-foreground space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_h4]:text-sm [&_h4]:font-semibold [&_h4]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
       >
-        <ReactMarkdown>{document.body}</ReactMarkdown>
+        <ReactMarkdown components={VIEWER_MARKDOWN_COMPONENTS}>{document.body}</ReactMarkdown>
       </div>
     </section>
   );

@@ -4,10 +4,10 @@
  * Pages that mount charts above the target keep growing for a few frames
  * after mount (Recharts measures asynchronously), so an immediate
  * scrollIntoView lands, then the content above pushes the target back below
- * the fold — the deep-link class CalculatorsLayout fixed inline
- * (CalculatorsLayout.tsx:365-388, smoke item 7). Extracted here (C1) so the
- * Send-to-What-If arrival ring and the Investments `?manage` deep link share
- * one idiom instead of a third copy.
+ * the fold — the deep-link class CalculatorsLayout first fixed inline (smoke
+ * item 7). Extracted here (C1); since A-11(5) (v1.7.1) its three callers —
+ * the Calculators #hash deep link, the Send-to-What-If arrival ring and the
+ * Investments `?manage` deep link — share this one idiom, with no inline copy.
  *
  * Polls the target's top every 50ms until it is stable for two consecutive
  * ticks (bounded at 10), then scrolls ONCE — instantly under reduced motion

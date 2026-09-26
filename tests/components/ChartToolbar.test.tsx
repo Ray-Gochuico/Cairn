@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
@@ -144,6 +144,26 @@ describe('ChartToolbar — projection detail level segmented control', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('group', { name: /projection detail level/i })).toBeInTheDocument();
+  });
+
+  // A-11(8) (v1.7.1): the B2 smoke read the "Detail:" label 5 px below its
+  // options. Measured at plan time (Chromium, 1024 and 1440): the TEXT
+  // baselines agree within 0.25 px; the 5 px is the label BOX — 21.5 px tall,
+  // centred against the 32 px size="sm" options, so it sits 5.25 px inside
+  // their top and bottom edges. The label box now takes the options' own
+  // height token, so label and options share one row box (smoke S7 measures
+  // both deltas; jsdom has no layout).
+  it("A-11(8): the Detail label box takes the options' height token and centres its text", () => {
+    render(
+      <MemoryRouter>
+        <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
+      </MemoryRouter>,
+    );
+    const group = screen.getByRole('group', { name: 'Projection detail level' });
+    const label = group.querySelector('label')!;
+    const heights = [...within(group).getByRole('button', { name: /^single$/i }).classList].filter((c) => /^h-\d+$/.test(c));
+    expect(heights).toEqual(['h-8']); // guard: the size="sm" option height this label matches
+    expect(label).toHaveClass('inline-flex', 'items-center', heights[0]);
   });
 
   // UX W3-2: each toggle button must have its own glossary popover

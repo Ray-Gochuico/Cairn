@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { useGoalsStore } from '@/stores/goals-store';
@@ -779,5 +779,86 @@ describe('Goals page — drawer create submits (W14 page-level create coverage)'
       }),
     );
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+// A-11(6) (v1.7.1): Radix keeps a closing Sheet MOUNTED until its exit
+// animation ends — and animationend never fires in a hidden pane (B3 smoke),
+// so the closed drawer's form stayed live. GoalForm keeps its values
+// (defaultValues, no re-sync), so a late submit reached the page AFTER close,
+// when `editing` was already undefined, and took the create branch: a
+// duplicate goal. jsdom never animates, so the stuck state is reproduced the
+// way the pane produced it: Radix Presence sees an exit animation that never
+// ends (animationName read from each element's data-state).
+describe('Goals page — a closed-but-mounted drawer ignores a late submit (A-11(6))', () => {
+  let restoreStyle: () => void;
+  beforeEach(() => {
+    resetStores();
+    const real = window.getComputedStyle.bind(window);
+    const spy = vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
+      const style = real(el, pseudo);
+      return new Proxy(style, {
+        get(target, prop) {
+          if (prop === 'animationName') {
+            const s = el.getAttribute('data-state');
+            return s === 'open' ? 'x1-enter' : s === 'closed' ? 'x1-exit' : 'none';
+          }
+          const v = Reflect.get(target, prop, target);
+          return typeof v === 'function' ? v.bind(target) : v;
+        },
+      });
+    });
+    restoreStyle = () => spy.mockRestore();
+  });
+  afterEach(() => restoreStyle());
+
+  // The late submit: RHF's handleSubmit + the zod resolver settle over a few
+  // microtasks; 50 ms inside act is where the probe on bc7300b0 saw the
+  // duplicate create land.
+  const lateSubmit = async (dialog: HTMLElement) => {
+    await act(async () => {
+      fireEvent.submit(dialog.querySelector('form')!);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+  };
+
+  it('Edit → Cancel → a late submit from the still-mounted form saves NOTHING (no duplicate goal)', async () => {
+    const create = vi.fn(async () => 1);
+    const update = vi.fn(async () => {});
+    primeStores({ goals: [{ id: 9, name: 'Emergency Fund' }] });
+    useGoalsStore.setState({ create, update } as never);
+    const user = userEvent.setup();
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /edit goal emergency fund/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit goal/i });
+    await user.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+    // Guard (non-vacuous): CLOSED, still MOUNTED, and its form still holds the goal.
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('data-state', 'closed');
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('Emergency Fund');
+    await lateSubmit(dialog);
+    expect(create).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('Add goal → fill → Cancel → a late submit creates NOTHING', async () => {
+    const create = vi.fn(async () => 1);
+    primeStores({ goals: [{ name: 'Existing goal' }] });
+    useGoalsStore.setState({ create } as never);
+    const user = userEvent.setup();
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /^add goal$/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add goal/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), 'House Down Payment');
+    await user.clear(within(dialog).getByLabelText(/target amount/i));
+    await user.type(within(dialog).getByLabelText(/target amount/i), '80000');
+    const picker = within(dialog).getByTestId('targetDate-picker');
+    await user.selectOptions(within(picker).getByLabelText(/year$/i), '2032');
+    await user.selectOptions(within(picker).getByLabelText(/month$/i), '06');
+    await user.selectOptions(within(picker).getByLabelText(/day$/i), '01');
+    await user.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+    expect(dialog).toHaveAttribute('data-state', 'closed'); // guard: closed but mounted
+    await lateSubmit(dialog);
+    expect(create).not.toHaveBeenCalled();
   });
 });

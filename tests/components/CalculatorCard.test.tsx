@@ -89,6 +89,55 @@ it('sr-only prefix uses titleText when the title is a ReactNode (and survives OP
   expect(status.querySelector('.sr-only')?.textContent).toBe('CoastFI: ');
 });
 
+// A-11(1) (v1.7.1): the stretched trigger's accessible name. It was
+// aria-labelledby="{id}-waymark-title {id}-headline", and the headline status
+// region OPENS with the W16 sr-only "{title}: " prefix, so the title was read
+// twice ("Test calc Test calc:$1,234" in jsdom). The name is now the title +
+// the headline VALUE. A plain-title aria-label is the FALLBACK for readers
+// that do not resolve aria-labelledby (the smoke pane's tree — the R1 "no
+// accessible name" reading) and for an empty referenced text (accname 1.2).
+// jsdom's dom-accessibility-api never falls back while a referenced id
+// resolves, so the fallback is pinned as the attribute.
+it('A-11(1): REST — the trigger is named "{title} {headline}" once, with the title as its aria-label fallback', () => {
+  render(<Harness>{card()}</Harness>);
+  const trigger = screen.getByTestId('test-calc-trigger');
+  expect(screen.getByRole('button', { name: 'Test calc $1,234' })).toBe(trigger);
+  expect(trigger).toHaveAttribute('aria-label', 'Test calc');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('A-11(1): OPEN — the SAME name; state rides aria-expanded, never the name', () => {
+  render(<Harness initialOpen="test-calc">{card()}</Harness>);
+  const trigger = screen.getByTestId('test-calc-trigger');
+  expect(screen.getByRole('button', { name: 'Test calc $1,234' })).toBe(trigger);
+  expect(trigger).toHaveAttribute('aria-label', 'Test calc');
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+});
+
+it('A-11(1): a ReactNode title names the trigger from its rendered text; the fallback needs titleText', () => {
+  const { unmount } = render(
+    <Harness>
+      <CalculatorCard title={<span>Coast<strong>FI</strong></span>} titleText="CoastFI" headline="80%" meaning="m" cardId="coast-fi">
+        <div>Body</div>
+      </CalculatorCard>
+    </Harness>,
+  );
+  expect(screen.getByRole('button', { name: 'CoastFI 80%' })).toBe(screen.getByTestId('coast-fi-trigger'));
+  expect(screen.getByTestId('coast-fi-trigger')).toHaveAttribute('aria-label', 'CoastFI');
+  unmount();
+  // No titleText → no plain string to fall back to (titleText is "Required
+  // when title is a ReactNode", CalculatorCard.tsx:16-18): no aria-label.
+  render(
+    <Harness>
+      <CalculatorCard title={<span>Coast<strong>FI</strong></span>} headline="80%" meaning="m" cardId="coast-fi">
+        <div>Body</div>
+      </CalculatorCard>
+    </Harness>,
+  );
+  expect(screen.getByRole('button', { name: 'CoastFI 80%' })).toBe(screen.getByTestId('coast-fi-trigger'));
+  expect(screen.getByTestId('coast-fi-trigger')).not.toHaveAttribute('aria-label');
+});
+
 it('clicking the trigger opens the panel — SAME element, aria-expanded flips, focus stays', async () => {
   const user = userEvent.setup();
   render(<Harness>{card()}</Harness>);
