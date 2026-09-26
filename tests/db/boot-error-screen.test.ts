@@ -754,6 +754,83 @@ describe('CR-U-20d (U1F-m15/m17) — the arm window edge, the name after every d
   });
 });
 
+describe('CR-U-20f (U1F-m14) — focus comes back to the row after an alert', () => {
+  // jsdom keeps focus on a disabled button; Blink and WebKit move it to <body>.
+  // Mimic the browsers' focus fix-up so the test sees what a user would.
+  let restoreDisabled: () => void = () => {};
+  let root: HTMLElement;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    root = document.createElement('div');
+    document.body.append(root);
+    mList.mockResolvedValue([PRE, MANUAL]);
+    mValidate.mockResolvedValue(OK);
+    mRestore.mockResolvedValue(undefined);
+    const desc = Object.getOwnPropertyDescriptor(HTMLButtonElement.prototype, 'disabled')!;
+    Object.defineProperty(HTMLButtonElement.prototype, 'disabled', {
+      configurable: true,
+      get: desc.get,
+      set(v: boolean) {
+        // Blur first: jsdom ignores blur() on an element that is already disabled.
+        if (v && document.activeElement === this) (this as HTMLButtonElement).blur();
+        desc.set!.call(this, v);
+      },
+    });
+    restoreDisabled = () => Object.defineProperty(HTMLButtonElement.prototype, 'disabled', desc);
+  });
+  afterEach(() => { restoreDisabled(); root.remove(); });
+
+  async function firstRow() {
+    renderBootError(root, new DatabaseCorruptError('x'), { now });
+    await settled(root, 2);
+    const btn = rows(root)[0].querySelector('button')!;
+    btn.focus();
+    return btn;
+  }
+
+  it('an invalid file: the reason is an alert and focus is back on the row Restore', async () => {
+    mValidate.mockResolvedValue({ ok: false, user_version: 0, max_supported_version: 55, reason: 'The backup failed an integrity check (quick_check returned "x"). It may be corrupt.' });
+    const btn = await firstRow();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')).not.toBeNull());
+    expect(document.activeElement).toBe(btn);
+  });
+
+  it('focus is only RETURNED, never stolen: a user who moved on (to Reveal) stays there', async () => {
+    let settle: (v: unknown) => void = () => {};
+    mValidate.mockImplementation(() => new Promise((r) => { settle = r; }));
+    const btn = await firstRow();
+    btn.click();
+    await vi.waitFor(() => expect(mValidate).toHaveBeenCalled());
+    const reveal = [...root.querySelectorAll('button')].find((b) => /^Reveal backups/.test(b.textContent ?? ''))!;
+    reveal.focus();
+    settle({ ok: false, user_version: 0, max_supported_version: 55, reason: 'The backup failed an integrity check (quick_check returned "x"). It may be corrupt.' });
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')).not.toBeNull());
+    expect(document.activeElement).toBe(reveal);
+  });
+
+  it('a validate error: the same', async () => {
+    mValidate.mockRejectedValue(new Error('ipc down'));
+    const btn = await firstRow();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Could not read that file: ipc down'));
+    expect(document.activeElement).toBe(btn);
+  });
+
+  it('"Restore did not start": the same', async () => {
+    mRestore.mockRejectedValue(new Error('close failed'));
+    const btn = await firstRow();
+    btn.click();
+    await vi.waitFor(() => expect(btn.textContent).toBe(armedLabel));
+    btn.focus();
+    pastGuard();
+    btn.click();
+    await vi.waitFor(() => expect(rows(root)[0].querySelector('[role="alert"]')?.textContent).toBe('Restore did not start: close failed'));
+    expect(document.activeElement).toBe(btn);
+  });
+});
+
 describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });

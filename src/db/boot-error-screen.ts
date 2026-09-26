@@ -293,6 +293,13 @@ function appendRestoreSection(container: HTMLElement, opts: RestoreSectionOption
   void hydrateRestoreList(list, ctx);
 }
 
+/** U1F-m14: Blink and WebKit move focus to <body> when the focused button is
+ * disabled; bring it back to `el` when that happened. */
+function focusIfLost(el: HTMLElement): void {
+  const active = document.activeElement;
+  if (active === null || active === document.body) el.focus();
+}
+
 function setButtonsDisabled(scope: HTMLElement, disabled: boolean): void {
   for (const b of scope.querySelectorAll('button')) b.disabled = disabled;
 }
@@ -451,8 +458,11 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         } finally {
           if (!ctx.state.restoring) {
             setButtonsDisabled(row, false);
-            // After the re-enable: a disabled button cannot take focus.
+            // After the re-enable: a disabled button cannot take focus. An
+            // alert (invalid file, a validate error) leaves focus on the row's
+            // Restore (U1F-m14); the alert itself is announced (role=alert).
             if (armed) cancel?.focus();
+            else focusIfLost(restoreBtn);
           }
         }
         return;
@@ -481,6 +491,7 @@ function makeRestoreRow(entry: BackupEntry, ctx: RestoreContext): HTMLLIElement 
         setAlert(`Restore did not start: ${messageOf(err)}`);
         setButtonsDisabled(ctx.screen, false);
         disarm();
+        focusIfLost(restoreBtn); // U1F-m14
       }
     })();
   });
