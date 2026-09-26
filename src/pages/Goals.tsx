@@ -534,6 +534,12 @@ export default function Goals() {
             persons={personOptions}
             accounts={accountOptions}
             onSubmit={async (v) => {
+              // A-11(6) (v1.7.1): Radix keeps a closing Sheet mounted until its
+              // exit animation ends, and animationend never fires in a hidden
+              // pane (B3 smoke) — so a late submit could land here AFTER close,
+              // when `editing` is already undefined, and take the create
+              // branch: a duplicate goal. A closed drawer saves nothing.
+              if (!open) return;
               if (editing) await updateGoal(editing.id!, v); else await createGoal(v);
               setDrawer('closed');
             }}
