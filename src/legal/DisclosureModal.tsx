@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Dialog,
@@ -134,6 +134,19 @@ export function DisclosureModal({
     priorAcceptedVersion !== null &&
     priorAcceptedVersion !== document.version;
 
+  // CR-D7-5 (D7 review): the orientation note joins the dialog's accessible
+  // description, so assistive tech announces it with the version line when
+  // the dialog opens. DialogDescription keeps Radix's own id and its exact
+  // `Version x.y` text (e2e and unit pins read it), so the modal takes that id
+  // from the mounted element (the state setter is its callback ref; Radix
+  // mounts the portal content a render late) and names both ids, only while a
+  // note shows. Overriding the description's id instead would trip Radix's
+  // Missing-Description warning.
+  const [descriptionEl, setDescriptionEl] = useState<HTMLParagraphElement | null>(null);
+  const orientationId = useId();
+  const describedBy =
+    orientationNote && descriptionEl?.id ? `${descriptionEl.id} ${orientationId}` : null;
+
   const [error, setError] = useState<string | null>(null);
   /**
    * W4: the secondary action runs behind the SAME attestation gate as
@@ -201,6 +214,9 @@ export function DisclosureModal({
         // the inferred value inconsistently. Setting it explicitly closes
         // the gap with no behavior change for modern AT.
         aria-modal="true"
+        // CR-D7-5: only while a note shows. Otherwise Radix wires
+        // DialogDescription itself; an explicit undefined here would drop it.
+        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
         // Hide the shadcn-default close ("X") button: it's the last child
         // of <DialogContent>. Composition is keyboard-friendly + the
         // explicit Cancel/Continue buttons remain the only acceptance
@@ -219,11 +235,11 @@ export function DisclosureModal({
         {heroHeader}
         <div className="px-6 py-4 border-b">
           <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
+          <DialogDescription ref={setDescriptionEl} className="text-xs text-muted-foreground">
             Version {document.version}
           </DialogDescription>
           {orientationNote && (
-            <p data-testid="disclosure-modal-orientation" className="mt-2 text-xs text-muted-foreground">
+            <p id={orientationId} data-testid="disclosure-modal-orientation" className="mt-2 text-xs text-muted-foreground">
               {orientationNote}
             </p>
           )}

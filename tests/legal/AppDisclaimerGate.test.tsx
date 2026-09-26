@@ -407,6 +407,28 @@ describe('A-7(1): the fail-closed re-prompt says why the disclaimer is back', ()
     expect(screen.queryByText(NOTE)).toBeNull();
   });
 
+  // CR-D7-5 (D7 review): the note is part of the dialog's accessible
+  // description on the fail-closed path (so it is announced on open), while
+  // DialogDescription itself keeps its exact `Version x.y` text (e2e pins it)
+  // and never contains the note.
+  it('CR-D7-5: on the fail-closed path the accessible description is the version line plus the note, and the note sits outside DialogDescription', () => {
+    seedHousehold();
+    seedErrored({});
+    renderGate();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAccessibleDescription(`Version ${DISCLOSURE_VERSIONS.app_wide} ${NOTE}`);
+    const description = screen.getByText(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+    expect(description.textContent).toBe(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+    expect(description.contains(screen.getByTestId('disclosure-modal-orientation'))).toBe(false);
+  });
+
+  it('CR-D7-5: the version-bump re-prompt keeps the version line as its whole accessible description', () => {
+    seedHousehold();
+    seedAcceptances({ app_wide: '1.4' });
+    renderGate();
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(`Version ${DISCLOSURE_VERSIONS.app_wide}`);
+  });
+
   it('registry rule: every document past 1.0 ships its own diffFromPrevious (so the gate\'s deleted default strings stay unreachable and every re-prompt box has its copy)', () => {
     const bumped = Object.entries(DISCLOSURES).filter(([, d]) => d.version !== '1.0');
     expect(bumped.length).toBeGreaterThan(0);
