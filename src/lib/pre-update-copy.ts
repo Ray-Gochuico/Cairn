@@ -97,9 +97,9 @@ function messageOf(e: unknown): string {
  * passed over, as the sweep leaves it out of reuse. Null when there is none;
  * when a newer candidate could not be opened or checked (a rejection that
  * says nothing about the file), so it never names an OLDER copy past a newer
- * one it could not check (L33); and wherever the copy step would have failed
- * (the folder, the path API, a validator call that threw). The boot then goes
- * on exactly as it did without a copy.
+ * one it could not check (L33); and when the folder cannot be read, the path
+ * API fails, or validating an origin candidate throws. The boot then goes on
+ * exactly as it did without a copy.
  */
 export async function findOriginCopy(originFrom: number): Promise<string | null> {
   try {
