@@ -2543,6 +2543,38 @@ mod tests {
         assert_eq!(db_content(&src).await, content, "the same tables, rows and schema version");
     }
 
+    /// Code review (X4): `is_locked` reads SQLite's EXTENDED result codes. A
+    /// real SQLITE_BUSY_SNAPSHOT (517: a read transaction on a stale WAL
+    /// snapshot asks to write) is a lock answer; a missing file (14) is not.
+    #[tokio::test]
+    async fn is_locked_reads_an_extended_busy_code_as_a_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let opts = SqliteConnectOptions::new()
+            .filename(dir.path().join("snapshot.db"))
+            .create_if_missing(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+            .busy_timeout(std::time::Duration::ZERO);
+        let mut reader = opts.clone().connect().await.unwrap();
+        sqlx::query("CREATE TABLE t (n INTEGER)").execute(&mut reader).await.unwrap();
+        let mut writer = opts.connect().await.unwrap();
+        sqlx::query("BEGIN").execute(&mut reader).await.unwrap();
+        sqlx::query("SELECT COUNT(*) FROM t").fetch_one(&mut reader).await.unwrap();
+        sqlx::query("INSERT INTO t VALUES (1)").execute(&mut writer).await.unwrap();
+        let stale = sqlx::query("INSERT INTO t VALUES (2)").execute(&mut reader).await.unwrap_err();
+        let _ = sqlx::query("ROLLBACK").execute(&mut reader).await;
+        let _ = reader.close().await;
+        let _ = writer.close().await;
+        assert_eq!(stale.as_database_error().and_then(|d| d.code()).as_deref(), Some("517"));
+        assert!(is_locked(&stale), "SQLITE_BUSY_SNAPSHOT is a lock answer");
+        let missing = SqliteConnectOptions::new()
+            .filename(dir.path().join("missing.db"))
+            .create_if_missing(false)
+            .connect()
+            .await
+            .unwrap_err();
+        assert!(!is_locked(&missing), "a missing file says nothing about other connections");
+    }
+
     /// The names in a folder, sorted.
     fn names_in(dir: &Path) -> Vec<String> {
         let mut v: Vec<String> = std::fs::read_dir(dir)
