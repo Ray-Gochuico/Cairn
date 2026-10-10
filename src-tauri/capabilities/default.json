@@ -27,7 +27,7 @@
     "fs:default",
     {
       "identifier": "fs:allow-read-dir",
-      "__comment__": "Two callers: (1) backup rotation/listing readDirs $APPCONFIG/backups (explicit entries below; fs:default's recursive app-dir read covers it too); (2) the statements archive (src/lib/statements-archive.ts) readDirs settings.statementsFolderPath — a user-chosen folder PERSISTED across sessions, so the dialog's session-only auto-grant is not enough and the $HOME scope must stay. Narrowing $HOME away silently breaks PDF archiving (it degrades to a warning string, never throws).",
+      "__comment__": "Three callers: (1) backup rotation and listing (src/lib/backup-restore.ts) and (2) the pre-update copy (src/lib/pre-update-copy.ts: takePreUpdateCopy and findOriginCopy) readDir $APPCONFIG/backups (explicit entries below; fs:default's recursive app-dir read covers it too); (3) the statements archive (src/lib/statements-archive.ts) readDirs settings.statementsFolderPath — a user-chosen folder PERSISTED across sessions, so the dialog's session-only auto-grant is not enough and the $HOME scope must stay. Narrowing $HOME away silently breaks PDF archiving (it degrades to a warning string, never throws).",
       "allow": [
         { "path": "$APPCONFIG/backups" },
         { "path": "$APPCONFIG/backups/**" },
@@ -36,7 +36,7 @@
     },
     {
       "identifier": "fs:allow-remove",
-      "__comment__": "Backup rotation (src/lib/backup-restore.ts rotateBackups) deletes the oldest cairn-*.db files beyond MAX_BACKUPS — the ONLY remove caller in the app. Narrowed from $HOME/**/* (Wave 5, 2026-07): the webview can now only delete inside the app's own backups dir.",
+      "__comment__": "Two callers, both inside the app's own backups dir: backup rotation (src/lib/backup-restore.ts rotateBackups) deletes the oldest cairn-*.db files beyond MAX_BACKUPS, and the pre-update copy (src/lib/pre-update-copy.ts) deletes family copies the validator rejects definitively, a copy it could not finish, and the oldest valid copies beyond its keep-3. Narrowed from $HOME/**/* (Wave 5, 2026-07): the webview can now only delete inside the app's own backups dir.",
       "allow": [{ "path": "$APPCONFIG/backups/**" }]
     },
     {
@@ -46,7 +46,7 @@
     },
     {
       "identifier": "fs:allow-mkdir",
-      "__comment__": "runBackup ensures $APPCONFIG/backups exists (recursive mkdir) — the ONLY mkdir caller. Narrowed from $HOME/**/* (Wave 5, 2026-07). $APPCONFIG itself is listed because a recursive mkdir on first run may create the parent; fs:default's create-app-specific-dirs also covers that.",
+      "__comment__": "Two callers ensure $APPCONFIG/backups exists (recursive mkdir): runBackup (src/lib/backup-restore.ts) and the pre-update copy (src/lib/pre-update-copy.ts). Narrowed from $HOME/**/* (Wave 5, 2026-07). $APPCONFIG itself is listed because a recursive mkdir on first run may create the parent; fs:default's create-app-specific-dirs also covers that.",
       "allow": [{ "path": "$APPCONFIG" }, { "path": "$APPCONFIG/backups" }]
     },
     "updater:default"

@@ -235,7 +235,9 @@ function isNotLoadedRejection(e: unknown): boolean {
  * `Database.load(url).close()` — see restoreFromBackup below). Two callers:
  * restoreFromBackup (step 1) and the macOS updater in Settings → Updates
  * (after the download, before the bundle swap). It drains only THIS process's
- * pool; a second Cairn window is not covered (U1 chip p).
+ * pool; db_restore itself refuses while another connection — a second Cairn
+ * window, another program — has the file open (v1.8.0 H2, U1 chip p;
+ * residuals: D-H2-1b).
  *
  * It rejects with the plugin's error unchanged — the only rejection in
  * tauri-plugin-sql 2.4.0 is the not-loaded one, before anything is closed —
@@ -249,10 +251,16 @@ export async function closeLiveDatabase(): Promise<void> {
 
 /**
  * Restore the live database from `source`, corruption-safely:
+ *   0. invoke Rust `db_restore_check` (v1.8.0 H2, chip v): db_restore's
+ *      refusals that need no closed pool — the chosen file IS the live file,
+ *      or Cairn's own staging file, or a set-aside `-wal` from an earlier
+ *      restore is next to the data — run first, so a refusal leaves this
+ *      session's pool open: it propagates with no reload, like a failed close;
  *   1. close the live pool so no connection holds the file/WAL open;
- *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file,
- *      setting the old `-wal`/`-shm` sidecars aside and putting them back if
- *      the swap fails — see src-tauri/src/db_backup.rs replace_database_file);
+ *   2. invoke Rust `db_restore` (re-validates, refuses while another
+ *      connection has the file open, then ATOMICALLY swaps the file, setting
+ *      the old `-wal`/`-shm` sidecars aside and putting them back if the swap
+ *      fails — see src-tauri/src/db_backup.rs replace_database_file);
  *   3. ALWAYS reload the webview so boot re-inits a fresh pool.
  *
  * STEP 1 invokes the plugin's `close` command (closeLiveDatabase) rather than
@@ -296,6 +304,10 @@ export async function restoreFromBackup(
   opts: { reload?: () => void; tolerateNotLoaded?: boolean; onRestored?: () => void } = {},
 ): Promise<void> {
   const reload = opts.reload ?? (() => window.location.reload());
+
+  // Step 0 (v1.8.0 H2): refusals that need no closed pool come first. A
+  // rejection here is BEFORE the point of no return: propagate, no reload.
+  await invoke('db_restore_check', { db: DB_URL, source });
 
   // Deterministically close the EXISTING live pool (drains + closes every
   // connection, checkpoints WAL). Do NOT use Database.load here — see above.

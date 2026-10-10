@@ -328,7 +328,7 @@ describe('restoreFromBackup', () => {
       'db_restore',
       { db: 'sqlite:finance.db', source: '/some/backup.db' },
     );
-    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
+    expect(order).toEqual(['db_restore_check', 'plugin:sql|close', 'db_restore', 'reload']);
   });
 
   it('STILL reloads when db_restore throws — the pool is already closed (M-4)', async () => {
@@ -346,7 +346,7 @@ describe('restoreFromBackup', () => {
     await restoreFromBackup('/some/backup.db', { reload });
 
     expect(reload).toHaveBeenCalledTimes(1);
-    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
+    expect(order).toEqual(['db_restore_check', 'plugin:sql|close', 'db_restore', 'reload']);
   });
 
   it('stashes the failure reason for the post-reload app to surface (M-4)', async () => {
@@ -443,6 +443,40 @@ describe('listBackups — both families (v1.7.1 U1)', () => {
   });
 });
 
+describe('restoreFromBackup — the refusals that need no closed pool come first (v1.8.0 H2, chip v)', () => {
+  // db_restore_check runs db_restore's step-0 refusals (the live file itself,
+  // Cairn's own staging file, a set-aside -wal) BEFORE the close, so a
+  // refusal leaves the session on its open pool: no reload, and the caller
+  // shows the reason against the still-live data.
+  const REFUSAL =
+    'db_restore: /x/finance.db-wal.restore-old from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)';
+
+  it('the check is handed the same db and source as db_restore, first', async () => {
+    await restoreFromBackup('/some/backup.db', { reload: vi.fn() });
+    expect(mockInvoke).toHaveBeenNthCalledWith(1, 'db_restore_check', { db: 'sqlite:finance.db', source: '/some/backup.db' });
+  });
+
+  it('a refusal from the check propagates before the close: no close, no db_restore, no reload, nothing stashed', async () => {
+    for (const extra of [{}, { tolerateNotLoaded: true }]) {
+      vi.resetAllMocks();
+      window.sessionStorage?.clear();
+      const order: string[] = [];
+      mockInvoke.mockImplementation(async (cmd: string) => {
+        order.push(cmd);
+        if (cmd === 'db_restore_check') throw REFUSAL; // a Rust Err(String) arrives as a plain string
+        return undefined;
+      });
+      const reload = vi.fn();
+      const onRestored = vi.fn();
+      await expect(restoreFromBackup('/some/backup.db', { reload, onRestored, ...extra })).rejects.toBe(REFUSAL);
+      expect(order).toEqual(['db_restore_check']);
+      expect(reload).not.toHaveBeenCalled();
+      expect(onRestored).not.toHaveBeenCalled();
+      expect(takeRestoreFailureNotice()).toBeNull();
+    }
+  });
+});
+
 describe('restoreFromBackup — tolerateNotLoaded (the boot path, v1.7.1 U2)', () => {
   const NOT_LOADED = 'database sqlite:finance.db not loaded'; // tauri-plugin-sql 2.4.0 error.rs:15, serialized as a plain string
 
@@ -455,7 +489,7 @@ describe('restoreFromBackup — tolerateNotLoaded (the boot path, v1.7.1 U2)', (
     });
     const reload = vi.fn(() => { order.push('reload'); });
     await restoreFromBackup('/some/backup.db', { reload, tolerateNotLoaded: true });
-    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
+    expect(order).toEqual(['db_restore_check', 'plugin:sql|close', 'db_restore', 'reload']);
   });
 
   it('with the option: the same message as an Error is tolerated too', async () => {
@@ -503,7 +537,7 @@ describe('restoreFromBackup — onRestored (CR-U-14: the boot screens set the on
     const onRestored = vi.fn(() => { order.push('onRestored'); });
     const reload = vi.fn(() => { order.push('reload'); });
     await restoreFromBackup('/some/backup.db', { reload, onRestored });
-    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'onRestored', 'reload']);
+    expect(order).toEqual(['db_restore_check', 'plugin:sql|close', 'db_restore', 'onRestored', 'reload']);
     expect(onRestored).toHaveBeenCalledTimes(1);
   });
 
