@@ -174,8 +174,9 @@ function contentChanges(before: Map<string, TableRows>, after: Map<string, Table
   return out;
 }
 
-/** The failure text for contentChanges: the chain, each change, then what to do about an intended one. */
+/** The failure text for contentChanges: the chain, each change, then what to do about an intended one (and, for a row or a table that goes, why INTENDED_REWRITES cannot take it). */
 function contentMessage(n: number, changes: readonly string[]): string {
+  const gone = changes.some((c) => c.endsWith(': the row is gone') || c.endsWith(': the table is gone'));
   return [
     '',
     `The chain from released schema ${n} changed rows that existed before it ran:`,
@@ -186,6 +187,14 @@ function contentMessage(n: number, changes: readonly string[]): string {
     'INTENDED_REWRITES in tests/db/upgrade-path.test.ts in the same change, with the reason. A table rebuild that runs',
     'with foreign keys on nulls or deletes child rows, and shows up here too (post-release review L13).',
     '',
+    ...(gone
+      ? [
+          'A row or a table that goes has no INTENDED_REWRITES form. Refresh the rows by UPDATE in place (as 0031',
+          'does) or by INSERT … ON CONFLICT DO UPDATE, which keeps the id, or extend this harness on purpose with a',
+          'row-drop form, its planted self-test and its mutant, in the same change (D-H1-7).',
+          '',
+        ]
+      : []),
   ].join('\n');
 }
 
@@ -505,6 +514,13 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
     const chain = [...all, ZERO_A_GOAL];
     expect(rewritesFrom(all.length, chain, planted)).toEqual(planted.h1_plant_zero); // the chain runs it
     expect(rewritesFrom(all.length + 1, chain, planted)).toEqual([]); // the file already had it
+  });
+
+  it('the failure text gives the remedy for a row or a table that goes, which has no INTENDED_REWRITES form, and only then', () => {
+    const REMEDY = 'A row or a table that goes has no INTENDED_REWRITES form.';
+    expect(contentMessage(47, ['persons [1]: the row is gone'])).toContain(REMEDY);
+    expect(contentMessage(47, ['fund_sectors: the table is gone'])).toContain(REMEDY);
+    expect(contentMessage(47, ['goals [1] target_amount: 5000 → 0', 'housing_payments.name: the column is gone'])).not.toContain(REMEDY);
   });
 
   it('INTENDED_REWRITES hygiene: each entry names a migration a released chain runs; replayed alone, that migration does what the entry says (at least one column; each listed column there before it and rewritten or dropped by it; every selected row changed; every volatile column set to the clock by its own SQL)', async () => {
