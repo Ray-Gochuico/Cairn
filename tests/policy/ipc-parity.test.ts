@@ -131,4 +131,21 @@ describe('JS ↔ Rust IPC parity', () => {
     expect(body).toContain('if let Ok(live) = resolve_sqlite_path(app, LIVE_DB_URL) {');
     expect(body.match(/reconcile_interrupted_restore\(&live\);/g)).toHaveLength(1);
   });
+
+  it('db_restore_check hands the check the chosen file, then the live file (v1.8.0 H2, chip v; as v1.7.2 L37 pins db_restore)', () => {
+    // No test builds an AppHandle: a swapped order would look for set-asides
+    // beside the backup, pass, and leave the refusal to after the close.
+    const rust = readFileSync(RUST_DB_BACKUP, 'utf8');
+    const start = rust.indexOf('pub async fn db_restore_check(');
+    expect(start, 'pub async fn db_restore_check in src-tauri/src/db_backup.rs').toBeGreaterThan(-1);
+    const body = rust
+      .slice(start, rust.indexOf('\n}\n', start))
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(body).toContain('let live_path = resolve_sqlite_path(&app, &db)?;');
+    expect(body.match(/refuse_before_close\(/g)).toHaveLength(1);
+    expect(body).toContain('refuse_before_close(Path::new(&source), &live_path)');
+    expect(rust).toContain('fn refuse_before_close(source: &Path, live: &Path) -> Result<(), String> {');
+  });
 });

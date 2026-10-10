@@ -479,30 +479,14 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     let sidecars = sidecar_paths(live);
     let asides = [set_aside_path(&sidecars[0]), set_aside_path(&sidecars[1])];
 
-    // 0a. Never restore FROM this module's own staging file (U1F-m9): step 1
-    //     removes a leftover staging file before staging, so restoring FROM
-    //     it would delete the file chosen.
-    if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
-        if src == staging {
-            return Err(
-                "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
-                    .to_string(),
-            );
-        }
-    }
-
-    // 0b. Never overwrite a set-aside -wal an earlier restore left: it may
-    //     hold that session's committed frames. The refusal names it and the
-    //     calm next step (CR-U-20a, U1F-m1/m19). A leftover -shm set-aside is
-    //     SQLite's rebuildable index and holds no data, so it never refuses
-    //     (CR-U-25): it is removed here best-effort. One this removal cannot
-    //     delete could not be renamed over either (a locked file or folder
-    //     refuses both), so step 2, which no longer replaces a file (v1.8.0
-    //     H2, chip t), refuses then with the -shm named.
-    let [wal_aside, shm_aside] = &asides;
-    if std::fs::symlink_metadata(wal_aside).is_ok() {
-        return Err(leftover_refusal(wal_aside));
-    }
+    // 0a + 0b's refusal (`refuse_before_staging`). A leftover -shm set-aside
+    // is SQLite's rebuildable index and holds no data, so it never refuses
+    // (CR-U-25): it is removed here best-effort. One this removal cannot
+    // delete could not be renamed over either (a locked file or folder
+    // refuses both), so step 2, which no longer replaces a file (v1.8.0 H2,
+    // chip t), refuses then with the -shm named.
+    refuse_before_staging(backup, live)?;
+    let [_, shm_aside] = &asides;
     if std::fs::symlink_metadata(shm_aside).is_ok() {
         let _ = std::fs::remove_file(shm_aside);
     }
@@ -546,6 +530,32 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
         return Err(format!(
             "db_restore: failed to stage the backup (your data is unchanged): {e}"
         ));
+    }
+    Ok(())
+}
+
+/// Step 0's refusals, which read the files and change nothing. `stage_restore`
+/// runs them first, and `refuse_before_close` (db_restore_check) runs them
+/// again before the JS caller closes the pool (v1.8.0 H2, chip v).
+///   0a. Never restore FROM this module's own staging file (U1F-m9): step 1
+///       removes a leftover staging file before staging, so restoring FROM
+///       it would delete the file chosen.
+///   0b. Never overwrite a set-aside -wal an earlier restore left: it may
+///       hold that session's committed frames. The refusal names it and the
+///       calm next step (CR-U-20a, U1F-m1/m19).
+fn refuse_before_staging(backup: &Path, live: &Path) -> Result<(), String> {
+    let tmp = restore_tmp_path(live);
+    if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
+        if src == staging {
+            return Err(
+                "db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)"
+                    .to_string(),
+            );
+        }
+    }
+    let wal_aside = set_aside_path(&sidecar_paths(live)[0]);
+    if std::fs::symlink_metadata(&wal_aside).is_ok() {
+        return Err(leftover_refusal(&wal_aside));
     }
     Ok(())
 }
@@ -903,11 +913,7 @@ async fn restore_checked(source: &Path, live: &Path) -> Result<(), String> {
     }
 
     // 2. Never restore the live file onto itself.
-    if let (Ok(a), Ok(b)) = (source.canonicalize(), live.canonicalize()) {
-        if a == b {
-            return Err("db_restore: the selected backup IS the live database.".to_string());
-        }
-    }
+    refuse_self_restore(source, live)?;
 
     // 3. Swap the file; the old sidecars are set aside and put back if the
     //    swap fails. The live pool was closed by the JS caller before this
@@ -920,6 +926,36 @@ async fn restore_checked(source: &Path, live: &Path) -> Result<(), String> {
 /// the same way (v1.8.0 H2). Pinned by `live_db_url_is_pinned` and across the
 /// languages in tests/policy/ipc-parity.test.ts.
 pub const LIVE_DB_URL: &str = "sqlite:finance.db";
+
+/// Never restore the live file onto itself (the same file under another
+/// name included).
+fn refuse_self_restore(source: &Path, live: &Path) -> Result<(), String> {
+    if let (Ok(a), Ok(b)) = (source.canonicalize(), live.canonicalize()) {
+        if a == b {
+            return Err("db_restore: the selected backup IS the live database.".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Tauri command: `invoke('db_restore_check', { db, source })` (v1.8.0 H2,
+/// chip v). The refusals `db_restore` can make from the files alone — the
+/// chosen file IS the live file, or Cairn's own staging file, or a set-aside
+/// `-wal` from an earlier restore is next to the data — run BEFORE the JS
+/// caller closes the live pool, so a refusal leaves the session on its open
+/// pool and needs no reload. Reads only; `db_restore` runs every one of them
+/// again after the close.
+#[tauri::command]
+pub async fn db_restore_check(app: tauri::AppHandle, db: String, source: String) -> Result<(), String> {
+    let live_path = resolve_sqlite_path(&app, &db)?;
+    refuse_before_close(Path::new(&source), &live_path)
+}
+
+/// The testable core of `db_restore_check`.
+fn refuse_before_close(source: &Path, live: &Path) -> Result<(), String> {
+    refuse_self_restore(source, live)?;
+    refuse_before_staging(source, live)
+}
 
 /// The ONE database URL `db_sample_reset` may touch (W4 D-S8). Mirrored in TS
 /// as `EXPLORE_DB_URL` (src/lib/explore-mode.ts); pinned by
@@ -2337,6 +2373,43 @@ mod tests {
         assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the set-aside -wal is kept");
         assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back");
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// Chip v: the refusals db_restore can make from the files alone also run
+    /// BEFORE the JS caller closes the live pool (db_restore_check), so a
+    /// refusal leaves the session on its open pool, with no reload. Each is
+    /// the message db_restore gives, and the check touches nothing.
+    #[tokio::test]
+    async fn the_check_before_the_close_refuses_what_db_restore_would_and_touches_nothing() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        assert_eq!(refuse_before_close(&backup, &live), Ok(()));
+        assert_eq!(
+            refuse_before_close(&live, &live),
+            Err("db_restore: the selected backup IS the live database.".to_string())
+        );
+        let tmp = restore_tmp_path(&live);
+        std::fs::copy(&backup, &tmp).unwrap();
+        assert_eq!(
+            refuse_before_close(&tmp, &live),
+            Err("db_restore: the selected file is Cairn's own restore staging file, not a backup (your data is unchanged)".to_string())
+        );
+        std::fs::remove_file(&tmp).unwrap();
+        std::fs::write(aside(&shm), b"OLD-INDEX").unwrap();
+        assert_eq!(refuse_before_close(&backup, &live), Ok(()), "a -shm set-aside never refuses");
+        assert_eq!(std::fs::read(aside(&shm)).unwrap(), b"OLD-INDEX", "the check leaves it for db_restore to remove");
+        std::fs::write(aside(&wal), b"EARLIER").unwrap();
+        assert_eq!(
+            refuse_before_close(&backup, &live),
+            Err(format!(
+                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
+                aside(&wal).display()
+            ))
+        );
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"EARLIER");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX");
+        assert!(!tmp.exists());
     }
 
     /// A WAL-mode `finance.db` that another connection has open and has read
