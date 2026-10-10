@@ -69,7 +69,7 @@
 //! enforced in `src/lib/backup-restore.ts`.
 
 use serde::Serialize;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteLockingMode, SqlitePoolOptions};
 use sqlx::{ConnectOptions, Connection, Pool, Row, Sqlite};
 use std::path::{Path, PathBuf};
 use tauri::Manager;
@@ -305,9 +305,71 @@ async fn close_validator_connection(conn: sqlx::SqliteConnection) {
 /// (see put_back_or_report, CR-U-23c).
 pub async fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
     stage_restore(backup, live).await?;
+    // Just before anything moves (v1.8.0 H2, chip p): refuse while another
+    // connection has `live` open. The staged copy is removed; nothing else
+    // was touched.
+    if let Err(refusal) = refuse_if_open_elsewhere(live).await {
+        let _ = std::fs::remove_file(restore_tmp_path(live));
+        return Err(refusal);
+    }
     // The two seams are made after the last await: a `&mut dyn FnMut` held
     // across an await would make the db_restore command's future !Send.
     swap_staged(live, &mut swap_move(live), &mut |p: &Path| real_sync(p))
+}
+
+/// v1.8.0 H2 (chip p): refuse while another connection has `live` open — a
+/// second Cairn window (there is no single-instance guard, and the JS close
+/// drains only this window's pool) or another program. Renaming over a file
+/// another process holds leaves that process writing to a file that is no
+/// longer in the folder, and its writes are lost.
+///
+/// The proof is SQLite's own lock: every connection to a WAL-mode file holds
+/// a shared lock on it for as long as it is open, idle or not (Cairn opens
+/// the live file in WAL mode, src/db/tauri-adapter.ts). One connection in
+/// exclusive locking mode, with no busy wait, asks for the exclusive lock;
+/// SQLite answers SQLITE_BUSY at once while any other connection holds it,
+/// and then nothing was written. Any other answer — the file missing,
+/// unreadable or not a database — says nothing about other connections, so
+/// the restore goes ahead as before.
+///
+/// When nothing else holds the file, this connection is its last, and its
+/// close checkpoints a `-wal` into the file and removes it — the drain the
+/// JS close already performs on the Settings path. The data in the file is
+/// the same; a restore from a startup-failure screen, where no pool was
+/// loaded, then has no `-wal` left to set aside.
+async fn refuse_if_open_elsewhere(live: &Path) -> Result<(), String> {
+    let opts = SqliteConnectOptions::new()
+        .filename(live)
+        .create_if_missing(false)
+        .busy_timeout(std::time::Duration::ZERO)
+        .locking_mode(SqliteLockingMode::Exclusive);
+    let held = match opts.connect().await {
+        Err(e) => is_locked(&e),
+        Ok(mut conn) => {
+            let held = match sqlx::query("BEGIN EXCLUSIVE").execute(&mut conn).await {
+                Ok(_) => {
+                    let _ = sqlx::query("COMMIT").execute(&mut conn).await;
+                    false
+                }
+                Err(e) => is_locked(&e),
+            };
+            let _ = conn.close().await;
+            held
+        }
+    };
+    if held {
+        Err("db_restore: another Cairn window or another program has your data open. Close it, then restore again (your data is unchanged)".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+/// SQLITE_BUSY or SQLITE_LOCKED (any extended code of either).
+fn is_locked(e: &sqlx::Error) -> bool {
+    e.as_database_error()
+        .and_then(|d| d.code())
+        .and_then(|code| code.parse::<i32>().ok())
+        .is_some_and(|code| matches!(code & 0xff, 5 | 6))
 }
 
 /// The production `rename` seam of `swap_staged` (v1.8.0 H2, chip t): step 3
@@ -818,7 +880,8 @@ pub async fn db_validate_backup(path: String) -> Result<BackupValidation, String
 /// depth) and, only if valid, replaces the live database file, setting its
 /// WAL sidecars aside until the swap has succeeded (CR-U-15). On success the
 /// JS side reloads the webview to re-init on the restored database. Returns
-/// an error (and leaves the live DB untouched) if validation fails.
+/// an error (and leaves the live DB untouched) if validation fails, or while
+/// another connection has the live file open (v1.8.0 H2).
 #[tauri::command]
 pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Result<(), String> {
     let live_path = resolve_sqlite_path(&app, &db)?;
@@ -2276,6 +2339,161 @@ mod tests {
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
     }
 
+    /// A WAL-mode `finance.db` that another connection has open and has read
+    /// from (so it holds its lock), as a second Cairn window would.
+    async fn live_held_by_another_connection(dir: &Path) -> (PathBuf, Pool<Sqlite>) {
+        let live = dir.join("finance.db");
+        let other = seeded_pool(&live).await;
+        sqlx::query("PRAGMA journal_mode = WAL").execute(&other).await.unwrap();
+        sqlx::query("SELECT COUNT(*) FROM accounts").fetch_one(&other).await.unwrap();
+        (live, other)
+    }
+
+    fn data_files(live: &Path) -> [Option<Vec<u8>>; 3] {
+        ["", "-wal", "-shm"].map(|suffix| std::fs::read(format!("{}{suffix}", live.display())).ok())
+    }
+
+    const OPEN_ELSEWHERE_REFUSAL: &str =
+        "db_restore: another Cairn window or another program has your data open. Close it, then restore again (your data is unchanged)";
+
+    /// Chip p (U1-m5/m7/m35, U4 chip f): while another connection has the
+    /// live file open — a second Cairn window, or another program — the
+    /// restore refuses before anything moves. Renaming over a file another
+    /// process holds would leave that process writing to a file that is no
+    /// longer in the folder.
+    #[tokio::test]
+    async fn a_restore_refuses_while_another_connection_has_the_data_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let (live, other) = live_held_by_another_connection(dir.path()).await;
+        let seed = seeded_pool(&dir.path().join("seed.db")).await;
+        sqlx::query("INSERT INTO accounts (name) VALUES ('Only in the backup')").execute(&seed).await.unwrap();
+        let backup = dir.path().join("backup.db");
+        backup_to(&seed, &backup).await.unwrap();
+        seed.close().await;
+        let before = data_files(&live);
+        assert!(before[1].is_some() && before[2].is_some(), "the other connection keeps a -wal and a -shm");
+
+        let started = std::time::Instant::now();
+        let err = replace_database_file(&backup, &live).await.unwrap_err();
+        assert_eq!(err, OPEN_ELSEWHERE_REFUSAL);
+        assert!(started.elapsed() < std::time::Duration::from_secs(3), "refused at once, not after a busy wait");
+        assert_eq!(data_files(&live), before, "finance.db, its -wal and its -shm are byte-identical");
+        assert!(!restore_tmp_path(&live).exists(), "the staged copy is removed");
+        assert!(!aside(&dir.path().join("finance.db-wal")).exists() && !aside(&dir.path().join("finance.db-shm")).exists());
+        let n: i64 = sqlx::query("SELECT COUNT(*) FROM accounts").fetch_one(&other).await.unwrap().get(0);
+        assert_eq!(n, 2, "the other connection still reads its data");
+
+        other.close().await;
+        replace_database_file(&backup, &live).await.expect("restores once nothing else has the file open");
+        assert_eq!(count_rows(&live, "accounts").await, 3);
+    }
+
+    /// The check refuses only when SQLite reports the file locked: a file
+    /// that is missing, not a database, or that nothing else holds says
+    /// nothing about other connections, and the restore goes ahead as
+    /// before. None of them is changed by the check.
+    #[tokio::test]
+    async fn the_exclusivity_check_refuses_only_a_file_another_connection_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(refuse_if_open_elsewhere(&dir.path().join("missing.db")).await, Ok(()));
+        assert!(!dir.path().join("missing.db").exists(), "nothing is created");
+        let junk = dir.path().join("junk.db");
+        std::fs::write(&junk, b"ORIGINAL-LIVE-DB").unwrap();
+        assert_eq!(refuse_if_open_elsewhere(&junk).await, Ok(()));
+        assert_eq!(std::fs::read(&junk).unwrap(), b"ORIGINAL-LIVE-DB");
+        let pool = seeded_pool(&dir.path().join("seed.db")).await;
+        let alone = dir.path().join("alone.db");
+        backup_to(&pool, &alone).await.unwrap();
+        pool.close().await;
+        let bytes = std::fs::read(&alone).unwrap();
+        assert_eq!(refuse_if_open_elsewhere(&alone).await, Ok(()));
+        assert_eq!(std::fs::read(&alone).unwrap(), bytes);
+        let held = tempfile::tempdir().unwrap();
+        let (live, other) = live_held_by_another_connection(held.path()).await;
+        assert_eq!(refuse_if_open_elsewhere(&live).await, Err(OPEN_ELSEWHERE_REFUSAL.to_string()));
+        other.close().await;
+        assert_eq!(refuse_if_open_elsewhere(&live).await, Ok(()));
+
+        // Nothing else holds a file whose committed rows are all in its -wal
+        // (a startup-failure screen, where no pool was loaded): the check's
+        // close moves them into the file itself. Every row is still there.
+        let wal_dir = tempfile::tempdir().unwrap();
+        let src = raw_copy_of_an_open_wal_database(wal_dir.path(), false).await;
+        let content = db_content(&src).await;
+        assert_eq!(refuse_if_open_elsewhere(&src).await, Ok(()));
+        assert!(!PathBuf::from(format!("{}-wal", src.display())).exists(), "the -wal was checkpointed into the file");
+        assert_eq!(db_content(&src).await, content, "the same tables, rows and schema version");
+    }
+
+    /// The names in a folder, sorted.
+    fn names_in(dir: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    }
+
+    /// A live finance.db whose newest rows are only in its -wal (no pool
+    /// loaded, as on a startup-failure screen), and a backup to restore.
+    /// Returns (dir, backup, live, the folder live is in).
+    async fn an_undrained_live_and_a_backup() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let live = raw_copy_of_an_open_wal_database(dir.path(), true).await;
+        let folder = live.parent().unwrap().to_path_buf();
+        let seed = seeded_pool(&dir.path().join("seed.db")).await;
+        let backup = dir.path().join("backup.db");
+        backup_to(&seed, &backup).await.unwrap();
+        seed.close().await;
+        (dir, backup, live, folder)
+    }
+
+    /// This build's own crash point 1 (second-round review), in the
+    /// production order: stage, the exclusivity check, then step 2. The
+    /// check's close drains the -wal into finance.db, so step 2 sets aside
+    /// only the -shm, and a kill before step 3 leaves finance.db whole on its
+    /// own. The next launch removes the index set-aside and the staged copy.
+    #[tokio::test]
+    async fn an_interrupted_production_restore_between_steps_2_and_3_is_settled_at_the_next_launch() {
+        let (_dir, backup, live, folder) = an_undrained_live_and_a_backup().await;
+        let content = db_content(&live).await;
+
+        stage_restore(&backup, &live).await.expect("staged");
+        assert_eq!(refuse_if_open_elsewhere(&live).await, Ok(()));
+        crash_before_the_swap(&live);
+        assert_eq!(
+            names_in(&folder),
+            ["finance.db", "finance.db-shm.restore-old", "finance.db.restore-tmp"],
+            "the check drained the -wal, so only the -shm was set aside"
+        );
+
+        reconcile_interrupted_restore(&live);
+        assert_eq!(names_in(&folder), ["finance.db"]);
+        assert_eq!(db_content(&live).await, content, "finance.db alone holds every row");
+    }
+
+    /// This build's own crash point 2 (second-round review), in the same
+    /// order: a kill right after step 3. The restored file is in place with
+    /// only the -shm set-aside beside it, which the next launch removes.
+    #[tokio::test]
+    async fn an_interrupted_production_restore_between_steps_3_and_4_is_finished_at_the_next_launch() {
+        let (_dir, backup, live, folder) = an_undrained_live_and_a_backup().await;
+
+        stage_restore(&backup, &live).await.expect("staged");
+        assert_eq!(refuse_if_open_elsewhere(&live).await, Ok(()));
+        crash_right_after_the_swap(&live);
+        assert_eq!(
+            names_in(&folder),
+            ["finance.db", "finance.db-shm.restore-old"],
+            "the check drained the -wal, so only the -shm was set aside"
+        );
+
+        reconcile_interrupted_restore(&live);
+        assert_eq!(names_in(&folder), ["finance.db"]);
+        assert_eq!(db_content(&live).await, db_content(&backup).await, "the restored file, untouched");
+    }
+
     /// A simulated crash: the process stops inside a move, so nothing after
     /// it runs (no put-back, no clean-up). `swap_staged` is synchronous, so
     /// the stop is caught right here and the files are left as a kill would
@@ -2866,9 +3084,12 @@ mod tests {
         );
         assert_eq!(std::fs::read(aside(&shm)).unwrap(), b"ANOTHER-RESTORE-INDEX", "the file already set aside is never replaced");
         assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm stays where it was");
-        // The -wal was set aside first and went back through the production
-        // no-replace move (plan review R1-2/R2-4: its fate is pinned).
-        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal went back, byte-for-byte");
+        // The exclusivity check (Task 8) ran before step 2: nothing else held
+        // the file, so its close removed this -wal, which SQLite reads as
+        // zero frames (shorter than the 32-byte WAL header; probe P3). Step 2
+        // then had no -wal to set aside (plan review R1-2/R2-4: its fate is
+        // pinned, not hidden).
+        assert!(!wal.exists(), "the check removed the -wal SQLite reads as holding no frames");
         assert!(!aside(&wal).exists(), "no -wal is left set aside");
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
         assert!(!restore_tmp_path(&live).exists(), "no staging file left behind");
