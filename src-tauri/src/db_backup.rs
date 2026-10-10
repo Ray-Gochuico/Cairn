@@ -399,10 +399,7 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     //     replaces it anyway if that removal failed.
     let [wal_aside, shm_aside] = &asides;
     if std::fs::symlink_metadata(wal_aside).is_ok() {
-        return Err(format!(
-            "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
-            wal_aside.display()
-        ));
+        return Err(leftover_refusal(wal_aside));
     }
     if std::fs::symlink_metadata(shm_aside).is_ok() {
         let _ = std::fs::remove_file(shm_aside);
@@ -415,8 +412,15 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     //    empty. A failure here cannot corrupt `live`: it is never the copy
     //    target. VACUUM INTO refuses a non-empty target, so a staging file an
     //    interrupted restore left is removed first (`fs::copy` overwrote it;
-    //    step 0a refuses to restore FROM it).
-    let _ = std::fs::remove_file(&tmp);
+    //    step 0a refuses to restore FROM it). One Cairn cannot remove is
+    //    named, with the same next step as a set-aside -wal (v1.8.0 H2, chip
+    //    w): the staging failure it caused did not say which file was in the
+    //    way.
+    match std::fs::remove_file(&tmp) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(leftover_refusal(&tmp)),
+    }
     if let Err(e) = stage_through_sqlite(backup, &tmp).await {
         let _ = std::fs::remove_file(&tmp);
         return Err(format!(
@@ -442,6 +446,16 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// CR-U1-53 (as amended by CR-U-23d and CR-U-25): a file an earlier restore
+/// left next to the data, named with the calm next step. Step 0b gives it for
+/// a set-aside `-wal`; step 1 for a staging file it cannot remove (v1.8.0 H2).
+fn leftover_refusal(leftover: &Path) -> String {
+    format!(
+        "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
+        leftover.display()
+    )
 }
 
 /// Step 1's copy (v1.7.2, L1; CR-172-1): open `backup` read-only BY FILENAME
@@ -2085,6 +2099,29 @@ mod tests {
                 v.reason
             );
         }
+    }
+
+    /// Chip w, the naming half: a staging file an interrupted restore left,
+    /// which Cairn cannot remove, is named with the calm next step. Before,
+    /// the staging failure it caused did not say which file was in the way.
+    #[tokio::test]
+    async fn a_staging_file_cairn_cannot_remove_is_named() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let tmp = restore_tmp_path(&live);
+        std::fs::create_dir(&tmp).unwrap(); // remove_file cannot remove a folder
+        let err = replace_database_file(&backup, &live).await.unwrap_err();
+        assert_eq!(
+            err,
+            format!(
+                "db_restore: {} from an earlier restore is next to your data. Move it out of that folder, then restore again (your data is unchanged)",
+                tmp.display()
+            )
+        );
+        assert!(tmp.is_dir(), "the leftover stays where it is");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX");
+        assert!(!aside(&wal).exists() && !aside(&shm).exists(), "nothing was set aside");
     }
 
     /// v1.7.2 chip e, the Windows half (compiled only on Windows; it runs on
