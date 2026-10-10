@@ -415,13 +415,40 @@ fn swap_move(live: &Path) -> impl FnMut(&Path, &Path) -> std::io::Result<()> + '
 /// `AlreadyExists` when a file is there, and only then is the `from` name
 /// removed. If that removal fails, the new link is taken back, so the move
 /// either happened or did not.
+///
+/// A volume without hard links (FAT32 and exFAT, some network shares)
+/// refuses the link itself: macOS answers ENOTSUP, os error 45, which std
+/// reports as an uncategorized error. So when the link fails with anything
+/// but `AlreadyExists` or `NotFound`, and lstat finds nothing at `to` just
+/// before, the move falls back to `rename`, which replaces nothing that was
+/// there at that check (v1.8.0 H2 code review). The one residual: a file
+/// created at `to` between that check and the rename would be replaced, as
+/// every v1.7.2 move could.
 fn move_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    std::fs::hard_link(from, to)?;
+    if let Err(e) = hard_link(from, to) {
+        let refused_by_the_volume = !matches!(e.kind(), std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotFound);
+        if refused_by_the_volume
+            && matches!(std::fs::symlink_metadata(to), Err(ref absent) if absent.kind() == std::io::ErrorKind::NotFound)
+        {
+            return std::fs::rename(from, to);
+        }
+        return Err(e);
+    }
     if let Err(e) = std::fs::remove_file(from) {
         let _ = std::fs::remove_file(to);
         return Err(e);
     }
     Ok(())
+}
+
+/// `std::fs::hard_link`. Under test `LINK_FAILS` can make it fail with a
+/// chosen error, as a volume without hard links does.
+fn hard_link(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if let Some(error) = LINK_FAILS.with(|hook| *hook.borrow()) {
+        return Err(error(from, to));
+    }
+    std::fs::hard_link(from, to)
 }
 
 /// Test seam: the whole swap with `rename` injected, so a test can fail one
@@ -481,6 +508,9 @@ thread_local! {
     /// at, standing in for an lstat that fails with something other than
     /// NotFound (a permission, an I/O error) on one name alone.
     static LOOKUP_FAILS: std::cell::RefCell<Option<fn(&Path) -> bool>> = const { std::cell::RefCell::new(None) };
+    /// v1.8.0 H2 (code review): the error `hard_link` answers with, standing
+    /// in for a volume without hard links (macOS FAT32/exFAT: os error 45).
+    static LINK_FAILS: std::cell::RefCell<Option<fn(&Path, &Path) -> std::io::Error>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
@@ -3360,6 +3390,106 @@ mod tests {
         move_no_replace(&from, &to).expect("moves when the name is free");
         assert!(!from.exists());
         assert_eq!(std::fs::read(&to).unwrap(), b"FROM");
+    }
+
+    /// macOS answers a link on FAT32 or exFAT with ENOTSUP, os error 45,
+    /// which std reports as an uncategorized error (code review probe); a
+    /// link from a name that is not there is NotFound there too. This
+    /// stand-in answers ENOTSUP even with a file at `to`, the worst case for
+    /// the fallback's check (the probed volumes answer EEXIST first).
+    fn a_volume_without_hard_links(from: &Path, _to: &Path) -> std::io::Error {
+        match std::fs::symlink_metadata(from) {
+            Ok(_) => std::io::Error::from_raw_os_error(45),
+            Err(e) => e,
+        }
+    }
+
+    fn a_link_that_finds_nothing(_from: &Path, _to: &Path) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "simulated: the link finds nothing")
+    }
+
+    /// Code review: on a volume without hard links (FAT32, exFAT, some
+    /// network shares) the link itself is refused, so the move falls back to
+    /// a rename while nothing is at `to`.
+    #[test]
+    fn move_no_replace_falls_back_to_a_rename_on_a_volume_without_hard_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("from"), dir.path().join("to"));
+        std::fs::write(&from, b"FROM").unwrap();
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = Some(a_volume_without_hard_links));
+        let moved = move_no_replace(&from, &to);
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = None);
+        moved.expect("moves when the name is free");
+        assert!(!from.exists());
+        assert_eq!(std::fs::read(&to).unwrap(), b"FROM");
+    }
+
+    /// The fallback never replaces a file: with a file at `to`, the link's
+    /// own error comes back and both files are as they were.
+    #[test]
+    fn move_no_replace_never_replaces_a_file_on_a_volume_without_hard_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("from"), dir.path().join("to"));
+        std::fs::write(&from, b"FROM").unwrap();
+        std::fs::write(&to, b"TO").unwrap();
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = Some(a_volume_without_hard_links));
+        let moved = move_no_replace(&from, &to);
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(moved.unwrap_err().raw_os_error(), Some(45), "the link's own error");
+        assert_eq!(std::fs::read(&from).unwrap(), b"FROM");
+        assert_eq!(std::fs::read(&to).unwrap(), b"TO", "the file already there is untouched");
+    }
+
+    /// A link that answers NotFound says nothing about hard links, so no
+    /// rename is tried (here one would have moved the file).
+    #[test]
+    fn move_no_replace_does_not_fall_back_when_the_link_finds_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("from"), dir.path().join("to"));
+        std::fs::write(&from, b"FROM").unwrap();
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = Some(a_link_that_finds_nothing));
+        let moved = move_no_replace(&from, &to);
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = None);
+        assert_eq!(moved.unwrap_err().kind(), std::io::ErrorKind::NotFound);
+        assert_eq!(std::fs::read(&from).unwrap(), b"FROM", "nothing moved");
+        assert!(!to.exists());
+    }
+
+    /// Code review: a restore on a volume without hard links. The fallback
+    /// serves both sidecars: through the production entry point (its check
+    /// drains the fixture's -wal, so only the -shm is set aside), through the
+    /// seam (both are set aside and removed), and on a failed swap (both go
+    /// back). v1.8.0 before this fix refused every one of them at step 2.
+    #[tokio::test]
+    async fn a_restore_on_a_volume_without_hard_links_sets_aside_and_puts_back_both_sidecars() {
+        let (_d1, backup1, live1, wal1, shm1) = live_with_sidecars().await;
+        let (_d2, backup2, live2, wal2, shm2) = live_with_sidecars().await;
+        let (_d3, backup3, live3, wal3, shm3) = live_with_sidecars().await;
+        let live3_c = live3.clone();
+        let mut production_move = swap_move(&live3);
+        let mut final_rename_refused = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live3_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            production_move(from, to)
+        };
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = Some(a_volume_without_hard_links));
+        let production = replace_database_file(&backup1, &live1).await;
+        let seam = replace_database_file_with(&backup2, &live2, &mut swap_move(&live2)).await;
+        let failed = replace_database_file_with(&backup3, &live3, &mut final_rename_refused).await;
+        LINK_FAILS.with(|hook| *hook.borrow_mut() = None);
+
+        production.expect("the production restore goes through");
+        assert!(!aside(&wal1).exists() && !aside(&shm1).exists(), "no set-aside is left");
+        assert!(!wal1.exists() && !shm1.exists(), "nothing sits beside the restored file");
+        assert_eq!(db_content(&live1).await, db_content(&backup1).await);
+        seam.expect("the seam restore goes through");
+        assert!(!aside(&wal2).exists() && !aside(&shm2).exists(), "both set-asides were removed");
+        assert!(!wal2.exists() && !shm2.exists(), "nothing sits beside the restored file");
+        assert_eq!(db_content(&live2).await, db_content(&backup2).await);
+        let msg = failed.unwrap_err();
+        assert!(msg.contains("failed to finalize the restore (your data is unchanged)"), "{msg}");
+        assert_untouched(&live3, &wal3, &shm3);
     }
 
     /// Chip w, the naming half: a staging file an interrupted restore left,
