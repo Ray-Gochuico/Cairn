@@ -31,6 +31,8 @@ let all: Migration[];
 let FRESH: string[];
 /** Rows a fresh build's migrations seed, per table (reference data: tax_rules, categories, tickers, household, …). */
 let FRESH_ROWS: Record<string, number>;
+/** A fresh build's columns, per user table (v1.8.0 H1: the rows the content check reads after a chain are an upgraded file's). */
+let FRESH_COLUMNS: Record<string, string[]>;
 
 async function schemaOf(db: SqliteAdapter): Promise<string[]> {
   const rows = await db.select<{ type: string; name: string; tbl_name: string; sql: string | null }>(
@@ -63,6 +65,112 @@ function emptyTables(counts: Record<string, number>): string[] {
   return Object.entries(counts).filter(([, c]) => c === 0).map(([t]) => t);
 }
 
+/** One user table's rows with every column, and the columns that key them (v1.8.0 H1, post-release review L14). */
+interface TableRows {
+  pk: string[];
+  columns: string[];
+  rows: Record<string, unknown>[];
+}
+
+/** Every row of every user table. A table without a primary key fails here: the content check matches rows by it. */
+async function rowsOf(db: SqliteAdapter): Promise<Map<string, TableRows>> {
+  const out = new Map<string, TableRows>();
+  for (const t of await userTables(db)) {
+    const info = await db.select<{ name: string; pk: number }>(`SELECT name, pk FROM pragma_table_info('${t}') ORDER BY cid`);
+    const pk = info.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.name);
+    if (pk.length === 0) throw new Error(`${t} has no primary key, and the upgrade harness matches rows by primary key`);
+    out.set(t, { pk, columns: info.map((c) => c.name), rows: await db.select<Record<string, unknown>>(`SELECT * FROM "${t}"`) });
+  }
+  return out;
+}
+
+/** A rewrite a migration means to make to rows that existed before it ran: these columns, in these rows of this table, may change or go. */
+interface IntendedRewrite {
+  table: string;
+  /** The rows it rewrites, as a test of a pre-chain row (e.g. `(r) => r.id === 1`); the same columns of every other row must still read the same. */
+  rows: (row: Readonly<Record<string, unknown>>) => boolean;
+  /** The columns it rewrites in those rows; the hygiene check requires each to change when the migration is replayed alone. */
+  columns: readonly string[];
+  /** Columns it may also stamp whose value can stay the same (CURRENT_TIMESTAMP within the same second): exempt like `columns`, but not required to change. */
+  volatile?: readonly string[];
+}
+
+/**
+ * v1.8.0 H1 (post-release review L14): the INTENDED rewrites, per migration.
+ * The content check accepts a change to a listed column, in a row the entry's
+ * `rows` test selects, of a listed table, only on a chain that runs that
+ * migration (its ordinal is above the released schema the chain starts from);
+ * any other change to a row that existed before the chain fails the harness.
+ * There is no entry form for a row that goes. The user-row count check
+ * (CR-U3-8d) refuses a dropped user row or a dropped table, but it is neutral
+ * to the migrations' own seeds, so a migration that deletes a seeded row
+ * passes it; this check refuses that row ("the row is gone"). A migration that
+ * must delete pre-existing rows extends this harness on purpose (a row-drop
+ * form, its planted self-test and its mutant) in the same change; the house
+ * precedent for a data refresh is UPDATE in place (0031). Extend this list in
+ * the same change as the migration, with the reason.
+ */
+const INTENDED_REWRITES: Readonly<Record<string, readonly IntendedRewrite[]>> = {
+  // 0048 flips the Learn difficulty default on the singleton row (Wave 8) and stamps updated_at.
+  '0048_learning_preference_default': [{ table: 'learning_state', rows: (r) => r.id === 1, columns: ['difficulty_preference'], volatile: ['updated_at'] }],
+};
+
+/** The rewrites a chain from released schema `n` may make: the entries of the migrations it runs (ordinal > n). */
+function rewritesFrom(n: number, migrations: readonly Migration[], rewrites = INTENDED_REWRITES): IntendedRewrite[] {
+  return migrations.flatMap((m, i) => (i + 1 > n ? (rewrites[m.version] ?? []) : []));
+}
+
+/**
+ * Every change a chain made to the rows that existed before it, matched by
+ * primary key: a table, a column or a row that is gone, or a value that
+ * differs, apart from the `allowed` columns in the rows each entry selects (a
+ * column may go only if an entry lists it and selects every row). [] = every
+ * pre-chain row reads the same after the chain in every column that survives it.
+ */
+function contentChanges(before: Map<string, TableRows>, after: Map<string, TableRows>, allowed: readonly IntendedRewrite[] = []): string[] {
+  const covers = (a: IntendedRewrite, t: string, c: string) => a.table === t && (a.columns.includes(c) || (a.volatile ?? []).includes(c));
+  const isAllowed = (t: string, c: string, r: Record<string, unknown>) => allowed.some((a) => covers(a, t, c) && a.rows(r));
+  const cell = (v: unknown) => JSON.stringify(v);
+  const out: string[] = [];
+  for (const [t, was] of before) {
+    const now = after.get(t);
+    if (!now) {
+      out.push(`${t}: the table is gone`);
+      continue;
+    }
+    const keyOf = (r: Record<string, unknown>) => cell(was.pk.map((c) => r[c]));
+    const byKey = new Map(now.rows.map((r) => [keyOf(r), r]));
+    const mayGo = (c: string) => allowed.some((a) => covers(a, t, c)) && was.rows.every((r) => isAllowed(t, c, r));
+    for (const c of was.columns) if (!now.columns.includes(c) && !mayGo(c)) out.push(`${t}.${c}: the column is gone`);
+    const kept = was.columns.filter((c) => now.columns.includes(c));
+    for (const r of was.rows) {
+      const key = keyOf(r);
+      const r2 = byKey.get(key);
+      if (!r2) {
+        out.push(`${t} ${key}: the row is gone`);
+        continue;
+      }
+      for (const c of kept) if (!isAllowed(t, c, r) && cell(r[c]) !== cell(r2[c])) out.push(`${t} ${key} ${c}: ${cell(r[c])} → ${cell(r2[c])}`);
+    }
+  }
+  return out;
+}
+
+/** The failure text for contentChanges: the chain, each change, then what to do about an intended one. */
+function contentMessage(n: number, changes: readonly string[]): string {
+  return [
+    '',
+    `The chain from released schema ${n} changed rows that existed before it ran:`,
+    ...changes.map((c) => `  ${c}`),
+    '',
+    'An upgrade keeps the rows a user already has. If a migration means to rewrite one of these',
+    'columns, add its registry key, the table, the rows it rewrites and the columns to',
+    'INTENDED_REWRITES in tests/db/upgrade-path.test.ts in the same change, with the reason. A table rebuild that runs',
+    'with foreign keys on nulls or deletes child rows, and shows up here too (post-release review L13).',
+    '',
+  ].join('\n');
+}
+
 beforeAll(async () => {
   dir = mkdtempSync(path.join(tmpdir(), 'cairn-upgrade-'));
   all = await loadAllMigrations();
@@ -70,6 +178,7 @@ beforeAll(async () => {
   await runMigrations(fresh, all);
   FRESH = await schemaOf(fresh);
   FRESH_ROWS = await countsOf(fresh);
+  FRESH_COLUMNS = Object.fromEntries([...(await rowsOf(fresh))].map(([t, r]) => [t, r.columns])); // and every table has a primary key
   await fresh.close();
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -104,6 +213,8 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
   let before: Record<string, number>;
   let after: Record<string, number>;
   let seededAtN: Record<string, number>; // what the migrations alone seed by schema n (no user rows)
+  let rowsBefore: Map<string, TableRows>; // every row before the chain, every column (L14)
+  let rowsAfter: Map<string, TableRows>;
   let db: SqliteAdapter;
 
   beforeAll(async () => {
@@ -127,6 +238,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     at.disclosureOnDelete = (await one<{ on_delete: string }>(built, "SELECT on_delete FROM pragma_foreign_key_list('disclosure_acceptances')")).on_delete;
     await seedAtSchema(built, n);
     before = await countsOf(built);
+    rowsBefore = await rowsOf(built);
     const plain = new SqliteAdapter(':memory:');
     try {
       await runMigrations(plain, all.slice(0, n));
@@ -138,6 +250,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     db = new SqliteAdapter(file);
     await runMigrations(db, all);
     after = await countsOf(db);
+    rowsAfter = await rowsOf(db);
   });
   afterAll(async () => { await db.close(); });
 
@@ -190,6 +303,19 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     expect(userRows(before, seededAtN).filter(([t, c]) => !seededAtN[t] && c === 0)).toEqual([]);
   });
 
+  // v1.8.0 H1 (post-release review L14): the count above cannot see a value
+  // that changed. Every row that existed before the chain reads the same after
+  // it, matched by primary key, in every column, apart from the rewrites the
+  // chain's own migrations declare in INTENDED_REWRITES.
+  it('every pre-chain row is unchanged after the chain, by primary key, in every column (apart from the declared rewrites of the migrations the chain runs)', () => {
+    // Not vacuous: every table compared holds a row, and the rows read after the chain are the upgraded file's (a fresh build's columns).
+    expect([...rowsBefore].filter(([, r]) => r.rows.length === 0).map(([t]) => t)).toEqual([]);
+    expect(Object.fromEntries([...rowsAfter].map(([t, r]) => [t, r.columns]))).toEqual(FRESH_COLUMNS);
+    const changes = contentChanges(rowsBefore, rowsAfter, rewritesFrom(n, all));
+    if (changes.length > 0) throw new Error(contentMessage(n, changes));
+    expect(changes).toEqual([]);
+  });
+
   it('the upgraded schema is identical to a fresh build (normalized sqlite_master)', async () => {
     expect(await schemaOf(db)).toEqual(FRESH);
   });
@@ -233,6 +359,89 @@ describe.each(DISTINCT_RELEASED_SCHEMAS.filter((n) => n + 2 <= MAX_SCHEMA_VERSIO
     });
   },
 );
+
+describe('the content check is real (v1.8.0 H1, post-release review L14)', () => {
+  /** A file at the newest schema with the harness's rows; its rows are read, `planted` runs, and the changes are compared. */
+  async function plantedChanges(planted: Migration[], allowed: readonly IntendedRewrite[] = []): Promise<string[]> {
+    const db = new SqliteAdapter(':memory:');
+    try {
+      await runMigrations(db, all.slice(0, 29));
+      await seedBefore0030(db);
+      await runMigrations(db, all);
+      await seedAtSchema(db, MAX_SCHEMA_VERSION);
+      const was = await rowsOf(db);
+      await runMigrations(db, planted);
+      return contentChanges(was, await rowsOf(db), allowed);
+    } finally {
+      await db.close();
+    }
+  }
+
+  const ZERO_A_GOAL: Migration = { version: 'h1_plant_zero', sql: 'UPDATE goals SET target_amount = 0;' };
+
+  it('reports, by primary key, a value a migration zeroes, the rows a cascade nulls and deletes, and a column a migration drops (planted)', async () => {
+    const changes = await plantedChanges([
+      ZERO_A_GOAL,
+      // What a wrapped `DROP TABLE persons` does first (L13): its implicit DELETE, with foreign keys on.
+      { version: 'h1_plant_cascade', sql: 'DELETE FROM persons WHERE id = 1;' },
+      { version: 'h1_plant_drop_column', sql: 'ALTER TABLE housing_payments DROP COLUMN name;' },
+    ]);
+    expect(changes).toEqual(
+      expect.arrayContaining([
+        'goals [1] target_amount: 5000 → 0',
+        'persons [1]: the row is gone',
+        'equity_grants [1]: the row is gone', // ON DELETE CASCADE
+        'accounts [1] owner_person_id: 1 → null', // ON DELETE SET NULL
+        'transactions [1] person_id: 1 → null',
+        'housing_payments.name: the column is gone',
+      ]),
+    );
+  });
+
+  it('an intended rewrite is accepted only for its own table, rows and columns (a volatile stamp included), and only on a chain that runs its migration (planted)', async () => {
+    const everyRow = () => true;
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'goals', rows: everyRow, columns: ['target_amount'] }])).toEqual([]);
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'goals', rows: (r) => r.id === 1, columns: ['target_amount'] }])).toEqual([]);
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'goals', rows: (r) => r.id !== 1, columns: ['target_amount'] }])).toEqual(['goals [1] target_amount: 5000 → 0']);
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'goals', rows: everyRow, columns: [], volatile: ['target_amount'] }])).toEqual([]);
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'learning_state', rows: everyRow, columns: ['target_amount'] }])).toEqual(['goals [1] target_amount: 5000 → 0']);
+    expect(await plantedChanges([ZERO_A_GOAL], [{ table: 'goals', rows: everyRow, columns: ['name'] }])).toEqual(['goals [1] target_amount: 5000 → 0']);
+    const DROP_A_COLUMN: Migration = { version: 'h1_plant_drop_name', sql: 'ALTER TABLE housing_payments DROP COLUMN name;' };
+    expect(await plantedChanges([DROP_A_COLUMN], [{ table: 'housing_payments', rows: everyRow, columns: ['name'] }])).toEqual([]);
+    expect(await plantedChanges([DROP_A_COLUMN], [{ table: 'housing_payments', rows: (r) => r.id !== 1, columns: ['name'] }])).toEqual(['housing_payments.name: the column is gone']);
+    const planted = { h1_plant_zero: [{ table: 'goals', rows: everyRow, columns: ['target_amount'] }] };
+    const chain = [...all, ZERO_A_GOAL];
+    expect(rewritesFrom(all.length, chain, planted)).toEqual(planted.h1_plant_zero); // the chain runs it
+    expect(rewritesFrom(all.length + 1, chain, planted)).toEqual([]); // the file already had it
+  });
+
+  it('INTENDED_REWRITES hygiene: each entry names a migration a released chain runs and columns its table has before it runs; replayed alone, that migration rewrites or drops every listed column (volatile ones aside)', async () => {
+    for (const [version, rewrites] of Object.entries(INTENDED_REWRITES)) {
+      const ordinal = all.findIndex((m) => m.version === version) + 1;
+      expect(ordinal, `${version} is not a registry migration`).toBeGreaterThan(0);
+      expect(ordinal, `no released chain runs ${version}`).toBeGreaterThan(DISTINCT_RELEASED_SCHEMAS[0]);
+      // Replay to the schema just before it, with the harness's rows, and run it alone.
+      const db = await replayTo(path.join(dir, `rewrite-${version}.db`), ordinal - 1);
+      try {
+        await seedAtSchema(db, ordinal - 1);
+        const was = await rowsOf(db);
+        for (const { table, columns, volatile = [] } of rewrites) {
+          expect(was.get(table)?.columns, `${version}: ${table} before it runs`).toEqual(expect.arrayContaining([...columns, ...volatile]));
+        }
+        await runMigrations(db, all.slice(0, ordinal));
+        const changed = contentChanges(was, await rowsOf(db));
+        for (const { table, columns } of rewrites) {
+          for (const c of columns) {
+            const touches = (line: string) => (line.startsWith(`${table} `) && line.includes(` ${c}: `)) || line === `${table}.${c}: the column is gone`;
+            expect(changed.some(touches), `${version} does not rewrite ${table}.${c} (a stamp that may stay the same goes under volatile): ${changed.join('; ') || 'no change'}`).toBe(true);
+          }
+        }
+      } finally {
+        await db.close();
+      }
+    }
+  });
+});
 
 describe('0033 — shipped, self-managed, NOT edited: how "recorded" and "applied" disagree', () => {
   it('applied but NOT recorded (the crash window between its COMMIT and its audit row): the next run re-runs it cleanly — rows kept, schema identical to a fresh build', async () => {
