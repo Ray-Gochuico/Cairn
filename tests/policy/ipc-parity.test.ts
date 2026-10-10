@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MAX_SCHEMA_VERSION } from '@/db/migrations';
@@ -9,6 +9,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const SRC_DIR = path.join(ROOT, 'src');
 const RUST_LIB = path.join(ROOT, 'src-tauri', 'src', 'lib.rs');
 const RUST_DB_BACKUP = path.join(ROOT, 'src-tauri', 'src', 'db_backup.rs');
+const TS_BACKUP_RESTORE = path.join(ROOT, 'src', 'lib', 'backup-restore.ts');
+const TAURI_CONF = path.join(ROOT, 'src-tauri', 'tauri.conf.json');
 
 /** Commands registered in tauri::generate_handler![ … ] (idents, order-free). */
 function rustRegisteredCommands(): Set<string> {
@@ -88,5 +90,45 @@ describe('JS ↔ Rust IPC parity', () => {
     const m = rustSource.match(/pub const SAMPLE_DB_URL:\s*&str\s*=\s*"([^"]+)"\s*;/);
     if (!m) throw new Error('pub const SAMPLE_DB_URL not found in src-tauri/src/db_backup.rs');
     expect(m[1]).toBe(EXPLORE_DB_URL);
+  });
+
+  it('the live database URL matches across languages (v1.8.0 H2: the startup reconciliation settles the file the webview loads)', () => {
+    const rust = readFileSync(RUST_DB_BACKUP, 'utf8').match(/pub const LIVE_DB_URL:\s*&str\s*=\s*"([^"]+)"\s*;/);
+    if (!rust) throw new Error('pub const LIVE_DB_URL not found in src-tauri/src/db_backup.rs');
+    const ts = readFileSync(TS_BACKUP_RESTORE, 'utf8').match(/export const DB_URL = '([^']+)';/);
+    if (!ts) throw new Error('export const DB_URL not found in src/lib/backup-restore.ts');
+    expect(rust[1]).toBe(ts[1]);
+  });
+
+  it('an interrupted restore is settled in the setup hook, and no database is opened before it (v1.8.0 H2, chip r)', () => {
+    // The plugin opens a database only on the webview's plugin:sql|load, or
+    // at its own setup for a `plugins.sql.preload` entry — which would run
+    // BEFORE the app's setup hook. So no preload, and the hook calls the
+    // reconciliation.
+    const conf = JSON.parse(readFileSync(TAURI_CONF, 'utf8')) as { plugins?: Record<string, unknown> };
+    expect(conf.plugins?.sql).toBeUndefined();
+    const lib = stripComments(readFileSync(RUST_LIB, 'utf8'));
+    const setup = lib.match(/\.setup\(\|app\| \{([\s\S]*?)\}\)/);
+    expect(setup, '.setup(|app| { … }) in src-tauri/src/lib.rs').not.toBeNull();
+    expect(setup![1]).toContain('db_backup::reconcile_at_startup(app.handle());');
+    // Nor in a platform file Tauri merges over it (none today; plan review R3-5).
+    const platformConfs = readdirSync(path.join(ROOT, 'src-tauri')).filter((n) => /^tauri\.[a-z]+\.conf\.json$/.test(n));
+    for (const name of platformConfs) {
+      const platform = JSON.parse(readFileSync(path.join(ROOT, 'src-tauri', name), 'utf8')) as { plugins?: Record<string, unknown> };
+      expect(platform.plugins?.sql, name).toBeUndefined();
+    }
+    // The setup step resolves the live file as db_restore does and settles
+    // it: no test builds an AppHandle, so its body is pinned as text (plan
+    // review R2-3, as v1.7.2 L37 pins db_restore's).
+    const rust = readFileSync(RUST_DB_BACKUP, 'utf8');
+    const start = rust.indexOf('pub fn reconcile_at_startup<');
+    expect(start, 'pub fn reconcile_at_startup in src-tauri/src/db_backup.rs').toBeGreaterThan(-1);
+    const body = rust
+      .slice(start, rust.indexOf('\n}\n', start))
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    expect(body).toContain('if let Ok(live) = resolve_sqlite_path(app, LIVE_DB_URL) {');
+    expect(body.match(/reconcile_interrupted_restore\(&live\);/g)).toHaveLength(1);
   });
 });

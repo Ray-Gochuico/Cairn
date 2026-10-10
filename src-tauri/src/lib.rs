@@ -20,6 +20,14 @@ pub fn run() {
         // YahooState is a singleton (single reqwest cookie jar + shared crumb
         // cache) used by `yahoo_quote_summary`. See `src/yahoo.rs`.
         .manage(YahooState::new())
+        // v1.8.0 H2 (chip r): tidy what a restore an earlier run left between
+        // its steps BEFORE the webview can load finance.db. The plugin opens a
+        // database only on the webview's `plugin:sql|load` (no preload is
+        // configured), and setup runs before the event loop delivers it.
+        .setup(|app| {
+            db_backup::reconcile_at_startup(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             yahoo_quote_summary,
             db_execute_batch,
