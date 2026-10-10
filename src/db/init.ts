@@ -26,7 +26,7 @@ import {
 } from '@/lib/explore-mode';
 import { resetSampleDb } from '@/db/sample-reset';
 import { isTauriRuntime } from '@/lib/tauri-runtime';
-import { takePreUpdateCopy } from '@/lib/pre-update-copy';
+import { findOriginCopy, takePreUpdateCopy } from '@/lib/pre-update-copy';
 import { stashPostUpdateNotice, takeSkipOnce, takeUpdateHold } from '@/lib/boot-notices';
 import { UpdateHeldError, tagDatabaseInitError } from './boot-errors';
 import { parsePreUpdateCopyName } from '@/lib/pre-update-names';
@@ -119,7 +119,10 @@ async function initExploreDatabase(): Promise<void> {
  * names the origin (v1.7.1 U3 — per-migration stamps keep user_version equal
  * to `applied`), and a file a pre-U3 runner left partway still shows
  * 0 < user_version < applied. `skipCopy` is "Continue without a copy",
- * consumed by initDatabase at the start of the real branch (D-U1-13).
+ * consumed by initDatabase at the start of the real branch (D-U1-13). On a
+ * partway resume it still names the copy the chain started from when one
+ * exists and validates, looked up read-only (v1.8.0 H3, L6: no sweep, no
+ * write, no rotation); otherwise the boot has no copy, as before.
  *
  * A PreUpdateCopyError propagates: main.tsx renders the fail-closed choice
  * and nothing has been migrated.
@@ -159,7 +162,13 @@ export async function maybeTakePreUpdateCopy(
   // CR-U-23a: the schema before ANY attempt of this update.
   const chainOrigin = originFrom ?? applied;
   const chainTarget = migrations.length; // CR-U-24: the schema this update moves to
-  if (!isTauriRuntime() || opts.skipCopy) return { ...none, chainOrigin, chainTarget };
+  if (!isTauriRuntime()) return { ...none, chainOrigin, chainTarget };
+  if (opts.skipCopy) {
+    // L6/L29 (CR-H3-4): read-only; null leaves this boot exactly as before.
+    const originCopy = originFrom === undefined ? null : await findOriginCopy(originFrom);
+    if (originCopy === null) return { ...none, chainOrigin, chainTarget };
+    return { copyPath: originCopy, updating, copyIsFromBeforeUpdate: true, chainOrigin, chainTarget };
+  }
   const { path } = await takePreUpdateCopy({ from: applied, to: migrations.length, now: new Date(), originFrom });
   // U1-m9: the copy holds the data from before the update only when its
   // `from` is the chain's origin (the file's schema before ANY attempt).
