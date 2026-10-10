@@ -15,6 +15,10 @@
  * db_validate_backup (else remove + throw) → rotate the VALID family pool to
  * PRE_UPDATE_KEEP (after the write; best effort). Every failure surfaces as
  * PreUpdateCopyError, which the boot screen renders as the fail-closed choice.
+ *
+ * findOriginCopy (v1.8.0 H3, L6) is the read-only half of the reuse step, for
+ * "Continue without a copy" on a partway resume: no mkdir, no sweep, no
+ * write, no rotation, and it never throws.
  */
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
@@ -81,6 +85,42 @@ export interface TakePreUpdateCopyResult { path: string; reused: boolean }
 
 function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * v1.8.0 H3 (L6/L29): the copy a partway chain started from, for a boot that
+ * continues without a copy (src/db/init.ts). The reuse step's origin rule —
+ * the newest VALID copy whose `from` is `originFrom`, any day, any `to`
+ * (D-U1-17), newest by the same order as takeInner — found READ-ONLY
+ * (CR-H3-4): it lists and validates, and never creates, removes, writes or
+ * rotates anything. A copy the validator DEFINITIVELY rejects (CR-U-11) is
+ * passed over, as the sweep leaves it out of reuse. Null when there is none;
+ * when a newer candidate could not be opened or checked (a rejection that
+ * says nothing about the file), so it never names an OLDER copy past a newer
+ * one it could not check (L33); and wherever the copy step would have failed
+ * (the folder, the path API, a validator call that threw). The boot then goes
+ * on exactly as it did without a copy.
+ */
+export async function findOriginCopy(originFrom: number): Promise<string | null> {
+  try {
+    const dir = await backupsDirPath();
+    const entries = await readDir(dir);
+    const newestFirst = entries
+      .flatMap((e) => {
+        const parsed = e.isFile ? parsePreUpdateCopyName(e.name) : null;
+        return parsed !== null && parsed.schemaFrom === originFrom ? [parsed] : [];
+      })
+      .sort((a, b) => b.takenAt.getTime() - a.takenAt.getTime() || b.name.localeCompare(a.name));
+    for (const f of newestFirst) {
+      const path = await join(dir, f.name);
+      const v = await validateBackupFile(path);
+      if (v.ok) return path;
+      if (!isDefinitivelyInvalidCopy(v.reason)) return null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function takePreUpdateCopy(args: TakePreUpdateCopyArgs): Promise<TakePreUpdateCopyResult> {
