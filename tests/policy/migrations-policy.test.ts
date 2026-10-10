@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { loadAllMigrations, MAX_SCHEMA_VERSION } from '@/db/migrations';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadAllMigrations, MAX_SCHEMA_VERSION, runMigrations, type Migration } from '@/db/migrations';
+import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { LAST_RELEASED_SCHEMA } from '../db/released-schemas';
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', '..', 'src', 'db', 'migrations');
@@ -335,5 +336,274 @@ describe('released-migration immutability (v1.7.1 U3)', () => {
     expect(normalizeShippedSql('-- 0099_x.sql\n-- why: a reworded header\n\n   ALTER TABLE t ADD COLUMN c TEXT;   \n')).toBe(normalizeShippedSql(shipped));
     expect(normalizeShippedSql("ALTER TABLE t ADD COLUMN c TEXT DEFAULT 'a  b';")).not.toBe(normalizeShippedSql("ALTER TABLE t ADD COLUMN c TEXT DEFAULT 'a b';"));
     expect(normalizeShippedSql('ALTER TABLE t ADD COLUMN c TEXT;')).not.toBe(normalizeShippedSql('ALTER TABLE t ADD COLUMN c INTEGER;'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1.8.0 H1 (post-release review L13): what the runner's wrap does to the
+// foreign-keys PRAGMA, read from the batches the runner itself sends. Every
+// migration runs as ONE executeBatch, wrapped in the runner's transaction
+// unless its own statements open one (a statement-initial BEGIN: 0033).
+// SQLite ignores `PRAGMA foreign_keys` inside a transaction, so a wrapped
+// textbook table rebuild (foreign keys OFF, CREATE new, INSERT … SELECT, DROP
+// old, RENAME) runs with foreign keys ON: the DROP's implicit DELETE fires
+// every ON DELETE SET NULL / CASCADE into the child rows, while quick_check,
+// foreign_key_check and the upgrade harness's row counts all pass. A fresh
+// chain runs every registry migration, so watching it covers the registry,
+// with the runner's own statement split and its own self-managed test.
+// ---------------------------------------------------------------------------
+
+/** One migration's batch, as the runner sent it. */
+interface RunnerBatch {
+  version: string;
+  wrapped: boolean;
+  statements: string[];
+}
+
+/** The runner's audit row (src/db/migrations.ts); its parameter names the migration. */
+const AUDIT_INSERT = 'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)';
+
+/**
+ * Run `migrations` on a fresh in-memory file and record every batch the runner
+ * sends: the migration it belongs to (its audit row), whether the runner
+ * wrapped it, and its statements. `inspect` reads the file before it closes.
+ */
+async function observeRunner(migrations: Migration[], inspect?: (db: SqliteAdapter) => Promise<void>): Promise<RunnerBatch[]> {
+  const db = new SqliteAdapter(':memory:');
+  const batches: RunnerBatch[] = [];
+  const real = db.executeBatch.bind(db);
+  db.executeBatch = async (statements, options) => {
+    const audit = statements.find((st) => st.sql === AUDIT_INSERT);
+    batches.push({
+      version: String(audit?.params?.[0] ?? '(no audit row)'),
+      wrapped: options?.transaction ?? true,
+      statements: statements.map((st) => st.sql),
+    });
+    return real(statements, options);
+  };
+  try {
+    await runMigrations(db, migrations);
+    await inspect?.(db);
+  } finally {
+    await db.close();
+  }
+  return batches;
+}
+
+/** A statement's SQL with every block comment replaced by a space, trimmed: the runner strips only line comments (`--`), and SQLite reads a block comment as a space anywhere in a statement (a comment between PRAGMA and foreign_keys still turns foreign keys off, probed). */
+function withoutBlockComments(statement: string): string {
+  return statement.replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
+}
+
+/**
+ * A statement that sets the foreign-keys PRAGMA: any case, any spacing, an
+ * optional schema prefix, and either name bare or quoted ("…", `…`, […] or
+ * '…'; SQLite accepts each, probed), tested after withoutBlockComments, so a
+ * block comment anywhere in the statement reads as a space. Not
+ * `defer_foreign_keys`, which works inside a transaction.
+ */
+const FOREIGN_KEYS_PRAGMA = /^PRAGMA\b\s*(?:["'`\[]?\w+["'`\]]?\s*\.\s*)?["'`\[]?foreign_keys\b/i;
+
+/** A self-managed migration's own transaction statements, statement-initial (the runner's own BEGIN test is statement-initial too). */
+const OPENS_TRANSACTION = /^BEGIN\b/i;
+const CLOSES_TRANSACTION = /^(?:COMMIT|END)\b|^ROLLBACK(?:\s+TRANSACTION)?$/i;
+
+/** True when a foreign-keys PRAGMA in this batch runs inside a transaction: anywhere in a wrapped batch, or between a self-managed migration's own BEGIN and its COMMIT. */
+function setsForeignKeysInATransaction(b: RunnerBatch): boolean {
+  let open = b.wrapped;
+  for (const statement of b.statements) {
+    const st = withoutBlockComments(statement);
+    if (open && FOREIGN_KEYS_PRAGMA.test(st)) return true;
+    if (!b.wrapped && OPENS_TRANSACTION.test(st)) open = true;
+    if (!b.wrapped && CLOSES_TRANSACTION.test(st)) open = false;
+  }
+  return false;
+}
+
+/** The migrations whose foreign-keys PRAGMA runs inside a transaction (the runner's wrap, or the migration's own BEGIN), where SQLite ignores it (L13). */
+function wrappedForeignKeyPragmas(batches: readonly RunnerBatch[]): string[] {
+  return batches.filter(setsForeignKeysInATransaction).map((b) => b.version);
+}
+
+/** Planted tables for the self-tests: a parent with a SET NULL child and a CASCADE child, one row each. */
+const PLANT_TABLES: Migration = {
+  version: 'h1_plant_tables',
+  sql: [
+    'CREATE TABLE h1_parent (id INTEGER PRIMARY KEY, name TEXT NOT NULL);',
+    'CREATE TABLE h1_child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL);',
+    'CREATE TABLE h1_owned (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES h1_parent(id) ON DELETE CASCADE);',
+    "INSERT INTO h1_parent (id, name) VALUES (1, 'Ada');",
+    'INSERT INTO h1_child (id, parent_id) VALUES (1, 1);',
+    'INSERT INTO h1_owned (id, parent_id) VALUES (1, 1);',
+  ].join('\n'),
+};
+
+/** The textbook rebuild of h1_parent, opened by `pragmaOff`; `ownBegin` gives it its own BEGIN … COMMIT, as 0033 has. */
+function plantedRebuild(version: string, pragmaOff: string, ownBegin: boolean): Migration {
+  return {
+    version,
+    sql: [
+      `${pragmaOff};`,
+      ...(ownBegin ? ['BEGIN TRANSACTION;'] : []),
+      'CREATE TABLE h1_parent__new (id INTEGER PRIMARY KEY, name TEXT NOT NULL);',
+      'INSERT INTO h1_parent__new (id, name) SELECT id, name FROM h1_parent;',
+      'DROP TABLE h1_parent;',
+      'ALTER TABLE h1_parent__new RENAME TO h1_parent;',
+      ...(ownBegin ? ['COMMIT;'] : []),
+      'PRAGMA foreign_keys = ON;',
+    ].join('\n'),
+  };
+}
+
+/** What the planted tables hold after a run, and what the release gate's integrity checks say about them. */
+async function plantState(db: SqliteAdapter): Promise<Record<string, unknown>> {
+  return {
+    parent: await db.select('SELECT id, name FROM h1_parent'),
+    child: await db.select('SELECT id, parent_id FROM h1_child'),
+    owned: await db.select('SELECT id FROM h1_owned'),
+    quickCheck: await db.select('PRAGMA quick_check'),
+    foreignKeyCheck: await db.select('PRAGMA foreign_key_check'),
+  };
+}
+
+describe('the foreign-keys PRAGMA never runs inside the runner\'s wrap (v1.8.0 H1, post-release review L13)', () => {
+  let shipped: RunnerBatch[];
+  beforeAll(async () => {
+    shipped = await observeRunner(await loadAllMigrations());
+  });
+
+  it('a fresh chain sends one batch per registry migration, in order, each with its audit row (what these checks read)', async () => {
+    expect(shipped.map((b) => b.version)).toEqual((await loadAllMigrations()).map((m) => m.version));
+  });
+
+  it('no wrapped migration sets PRAGMA foreign_keys: a table rebuild that needs foreign keys off opens its own transaction between the two PRAGMAs, as 0033 does', () => {
+    const offenders = wrappedForeignKeyPragmas(shipped);
+    if (offenders.length > 0) {
+      throw new Error(
+        [
+          '',
+          `Wrapped migration(s) set PRAGMA foreign_keys: ${offenders.join(', ')}`,
+          '',
+          'The runner wraps a migration in one transaction unless the migration opens its own',
+          '(a statement-initial BEGIN), and SQLite ignores PRAGMA foreign_keys inside a transaction.',
+          'A table rebuild then runs with foreign keys ON, and its DROP TABLE nulls or deletes the',
+          'child rows (ON DELETE SET NULL / CASCADE) while every integrity check passes.',
+          'Put BEGIN TRANSACTION … COMMIT between the two PRAGMAs, as 0033 does: OFF before the BEGIN,',
+          'ON after the COMMIT (a PRAGMA after the migration\'s own BEGIN is ignored the same way, and is',
+          'reported here too). The self-managed ratchet below then names the migration (post-release',
+          'review L17).',
+          '',
+        ].join('\n'),
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('the check is real: a planted rebuild with PRAGMA foreign_keys = OFF and no BEGIN is reported, and on this engine it nulls and deletes the child rows while quick_check and foreign_key_check pass (planted)', async () => {
+    let state: Record<string, unknown> = {};
+    const batches = await observeRunner([PLANT_TABLES, plantedRebuild('h1_planted_rebuild', 'PRAGMA foreign_keys = OFF', false)], async (db) => {
+      state = await plantState(db);
+    });
+    expect(wrappedForeignKeyPragmas(batches)).toEqual(['h1_planted_rebuild']);
+    expect(state).toEqual({
+      parent: [{ id: 1, name: 'Ada' }],
+      child: [{ id: 1, parent_id: null }], // ON DELETE SET NULL fired
+      owned: [], // ON DELETE CASCADE fired
+      quickCheck: [{ quick_check: 'ok' }],
+      foreignKeyCheck: [],
+    });
+  });
+
+  it('any spelling is reported (lower case, no spaces, a schema prefix bare or quoted, the name in each of SQLite\'s four quotes, a block comment before or inside the statement), and so is one after a migration\'s own BEGIN, plain or BEGIN TRANSACTION, also after a ROLLBACK TO inside it; defer_foreign_keys, which works inside a transaction, is not (planted)', async () => {
+    const batches = await observeRunner([
+      { version: 'h1_planted_lower', sql: 'pragma foreign_keys=off;\nCREATE TABLE h1_lower (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_schema', sql: 'PRAGMA main.foreign_keys = 0;\nCREATE TABLE h1_schema (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_quoted', sql: 'PRAGMA "foreign_keys" = OFF;\nCREATE TABLE h1_quoted (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_bracket_schema', sql: 'PRAGMA [main].foreign_keys = 0;\nCREATE TABLE h1_bracket (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_block_comment', sql: '/* rebuild */ PRAGMA foreign_keys = OFF;\nCREATE TABLE h1_commented (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_in_own_tx', sql: 'BEGIN TRANSACTION;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_in_own_tx (id INTEGER PRIMARY KEY);\nCOMMIT;' },
+      { version: 'h1_planted_backtick', sql: 'PRAGMA `foreign_keys` = OFF;\nCREATE TABLE h1_backtick (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_single_quote', sql: "PRAGMA 'foreign_keys' = OFF;\nCREATE TABLE h1_single_quote (id INTEGER PRIMARY KEY);" },
+      { version: 'h1_planted_bracket_name', sql: 'PRAGMA [foreign_keys] = OFF;\nCREATE TABLE h1_bracket_name (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_quoted_schema', sql: 'PRAGMA "main"."foreign_keys" = 0;\nCREATE TABLE h1_quoted_schema (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_inner_comment', sql: 'PRAGMA /* x */ foreign_keys = OFF;\nCREATE TABLE h1_inner_comment (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_in_plain_begin', sql: 'BEGIN;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_in_plain_begin (id INTEGER PRIMARY KEY);\nCOMMIT;' },
+      { version: 'h1_planted_after_rollback_to', sql: 'BEGIN;\nSAVEPOINT h1_sp;\nROLLBACK TO SAVEPOINT h1_sp;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_after_rollback_to (id INTEGER PRIMARY KEY);\nCOMMIT;' },
+      { version: 'h1_planted_defer', sql: 'PRAGMA defer_foreign_keys = ON;\nCREATE TABLE h1_deferred (id INTEGER PRIMARY KEY);' },
+    ]);
+    expect(wrappedForeignKeyPragmas(batches)).toEqual([
+      'h1_planted_lower',
+      'h1_planted_schema',
+      'h1_planted_quoted',
+      'h1_planted_bracket_schema',
+      'h1_planted_block_comment',
+      'h1_planted_in_own_tx',
+      'h1_planted_backtick',
+      'h1_planted_single_quote',
+      'h1_planted_bracket_name',
+      'h1_planted_quoted_schema',
+      'h1_planted_inner_comment',
+      'h1_planted_in_plain_begin',
+      'h1_planted_after_rollback_to',
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// v1.8.0 H1 (post-release review L17): a self-managed migration runs without
+// the runner's wrap. If one of its statements fails, nothing rolls it back:
+// the connection keeps its open transaction, with foreign keys off. Its audit
+// row, chain marker and user_version stamp run after its own COMMIT, so a
+// force-quit in between re-runs it on every boot. For 0033: every upgrading
+// file already has it, a fresh install runs it on an empty file (no user rows
+// yet), and its rebuild re-runs cleanly (tests/db/upgrade-path.test.ts). The
+// no-ROLLBACK path stays open for first launches until the chip "Make the
+// runner safe for a second self-managed migration" lands. Until then, the set
+// is exactly 0033.
+// ---------------------------------------------------------------------------
+const SELF_MANAGED_MIGRATIONS: readonly string[] = ['0033_fix_disclosure_acceptance_fk_actions'];
+
+/** The migrations the runner ran self-managed: unwrapped, on their own BEGIN. */
+function selfManagedMigrations(batches: readonly RunnerBatch[]): string[] {
+  return batches.filter((b) => !b.wrapped).map((b) => b.version);
+}
+
+describe('the self-managed migrations are exactly 0033 (v1.8.0 H1, post-release review L17)', () => {
+  it('a fresh chain runs exactly 0033 unwrapped', async () => {
+    const selfManaged = selfManagedMigrations(await observeRunner(await loadAllMigrations()));
+    if (selfManaged.join('\n') !== SELF_MANAGED_MIGRATIONS.join('\n')) {
+      throw new Error(
+        [
+          '',
+          `The runner ran these migrations self-managed: ${selfManaged.join(', ') || '(none)'}.`,
+          `The ratchet allows exactly: ${SELF_MANAGED_MIGRATIONS.join(', ')}.`,
+          '',
+          'A self-managed migration (a statement-initial BEGIN) runs without the runner\'s wrap. If one',
+          'of its statements fails, nothing rolls it back: the connection keeps its open transaction,',
+          'with foreign keys off. Its audit row, chain marker and user_version stamp run after its own',
+          'COMMIT, so a force-quit in between re-runs it on every boot. Make the runner safe for it',
+          'first (post-release review L17), then extend SELF_MANAGED_MIGRATIONS in',
+          'tests/policy/migrations-policy.test.ts in the same change.',
+          '',
+        ].join('\n'),
+      );
+    }
+    expect(selfManaged).toEqual(SELF_MANAGED_MIGRATIONS);
+  });
+
+  it('the ratchet is real, and so is the remedy the PRAGMA check names: the planted rebuild with its own BEGIN runs unwrapped, is named here and not there, and keeps its child rows (planted)', async () => {
+    let state: Record<string, unknown> = {};
+    const batches = await observeRunner([PLANT_TABLES, plantedRebuild('h1_planted_own_begin', 'PRAGMA foreign_keys = OFF', true)], async (db) => {
+      state = await plantState(db);
+    });
+    expect(selfManagedMigrations(batches)).toEqual(['h1_planted_own_begin']);
+    expect(wrappedForeignKeyPragmas(batches)).toEqual([]);
+    expect(state).toEqual({
+      parent: [{ id: 1, name: 'Ada' }],
+      child: [{ id: 1, parent_id: 1 }],
+      owned: [{ id: 1 }],
+      quickCheck: [{ quick_check: 'ok' }],
+      foreignKeyCheck: [],
+    });
   });
 });
