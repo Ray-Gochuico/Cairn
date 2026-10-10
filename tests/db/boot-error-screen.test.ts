@@ -988,13 +988,22 @@ describe('v1.7.1 U1 — the fail-closed screen (CR-U-1)', () => {
   let root: HTMLElement;
   beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); root = document.createElement('div'); });
 
-  it('heading, "Your data was not changed.", the reason, and the three buttons in order', () => {
+  it('heading, "Your data was not changed.", the reason, and the three buttons in order', async () => {
     renderBootError(root, new PreUpdateCopyError('db_backup: VACUUM INTO failed: disk full'));
     expect(root.querySelector('h1')?.textContent).toBe("Cairn couldn't save a copy of your data before updating it");
     expect(root.textContent).toContain('Your data was not changed.');
     expect(root.querySelector('pre')?.textContent).toBe('db_backup: VACUUM INTO failed: disk full');
     expect(buttons(root)).toEqual(['Try again', 'Continue without a copy', 'Reveal backups in Finder']);
+    // v1.8.0 H3 (L34): the list hydrates after a lazy import, so a synchronous
+    // check cannot see it. Let every dynamic import settle, then give a
+    // wrongly-wired hydrator a tick, as the sibling screens do, and pin that
+    // nothing was listed (D-U1-9, CR-U-1).
+    await vi.dynamicImportSettled();
+    await new Promise((r) => setTimeout(r, 20));
     expect(mList).not.toHaveBeenCalled();                        // no restore list here (D-U1-9)
+    expect(root.textContent).not.toContain('Restore a copy');
+    expect(rows(root)).toHaveLength(0);
+    expect(buttons(root)).toEqual(['Try again', 'Continue without a copy', 'Reveal backups in Finder']);
   });
 
   it('Try again reloads WITHOUT setting the skip flag; Continue sets it, then reloads', () => {
