@@ -3237,6 +3237,21 @@ mod tests {
         assert!(started.elapsed() < std::time::Duration::from_secs(5), "no pause was taken");
     }
 
+    /// Code review (X31): a whole swap through the production moves with both
+    /// sidecars present (the seam runs no exclusivity check, so the -wal is
+    /// set aside too). Step 4 removes both set-asides, nothing sits beside
+    /// the restored file, and it holds exactly the backup's content.
+    #[tokio::test]
+    async fn a_swap_through_the_production_moves_leaves_only_the_restored_file() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        replace_database_file_with(&backup, &live, &mut swap_move(&live)).await.expect("restored");
+        assert!(!aside(&wal).exists(), "step 4 removed the -wal set-aside");
+        assert!(!aside(&shm).exists(), "step 4 removed the -shm set-aside");
+        assert!(!wal.exists() && !shm.exists(), "nothing sits beside the restored file");
+        assert!(!restore_tmp_path(&live).exists(), "no staging file left behind");
+        assert_eq!(db_content(&live).await, db_content(&backup).await);
+    }
+
     /// Chip t, step 2's half: setting a sidecar aside never replaces a
     /// set-aside file that appeared after step 0 looked (another restore's,
     /// meanwhile). Pinned through the production entry point.
