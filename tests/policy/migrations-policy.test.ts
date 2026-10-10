@@ -554,10 +554,12 @@ describe('the foreign-keys PRAGMA never runs inside the runner\'s wrap (v1.8.0 H
 // the runner's wrap. If one of its statements fails, nothing rolls it back:
 // the connection keeps its open transaction, with foreign keys off. Its audit
 // row, chain marker and user_version stamp run after its own COMMIT, so a
-// force-quit in between re-runs it on every boot. 0033 is safe on both counts:
-// every released file already has it, and its rebuild re-runs cleanly
-// (tests/db/upgrade-path.test.ts). Until the runner is safe for another one,
-// the set is exactly 0033.
+// force-quit in between re-runs it on every boot. For 0033: every upgrading
+// file already has it, a fresh install runs it on an empty file (no user rows
+// yet), and its rebuild re-runs cleanly (tests/db/upgrade-path.test.ts). The
+// no-ROLLBACK path stays open for first launches until the chip "Make the
+// runner safe for a second self-managed migration" lands. Until then, the set
+// is exactly 0033.
 // ---------------------------------------------------------------------------
 const SELF_MANAGED_MIGRATIONS: readonly string[] = ['0033_fix_disclosure_acceptance_fk_actions'];
 
