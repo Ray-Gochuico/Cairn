@@ -127,10 +127,11 @@ async function initExploreDatabase(): Promise<void> {
  * The one-boot update hold (CR-U-14, U1-m8), which a boot-screen restore of
  * the failed update's pre-update copy sets, is taken HERE — by the boot that
  * reaches this decision — not at the start of boot (CR-U-26): a boot that
- * fails earlier (load, integrity) leaves it for the next attempt. On an
- * updating boot it throws UpdateHeldError BEFORE any copy or migration, so
- * the restored data stays as it was (the hold screen offers the previous
- * version or a retry).
+ * fails earlier (load, integrity) leaves it for the next attempt, and so does
+ * a failed schema read here, which runs before the take (v1.8.0 H3, L5). A
+ * boot with nothing pending still takes it. On an updating boot it throws
+ * UpdateHeldError BEFORE any copy or migration, so the restored data stays as
+ * it was (the hold screen offers the previous version or a retry).
  */
 export async function maybeTakePreUpdateCopy(
   db: Database,
@@ -139,11 +140,14 @@ export async function maybeTakePreUpdateCopy(
 ): Promise<PreUpdateGate> {
   const { applied, pending } = await pendingMigrations(db, migrations);
   const updating = applied > 0 && pending.length > 0;
-  // CR-U-26: the boot that reaches the gate consumes the hold.
+  // L5: read the schema BEFORE taking the hold, so a failed read keeps it for
+  // the next attempt. Only an updating boot reads it here, as before.
+  const userVersion = updating ? await readUserVersion(db) : 0;
+  // CR-U-26: the boot that reaches the gate consumes the hold — taken ahead of
+  // the return below, so a boot with nothing pending consumes it too.
   const holdUpdate = takeUpdateHold();
   const none = { copyPath: null, updating, copyIsFromBeforeUpdate: false, chainOrigin: null, chainTarget: null };
   if (!updating) return none;
-  const userVersion = await readUserVersion(db);
   if (userVersion > MAX_SCHEMA_VERSION) return none;
   if (holdUpdate) throw new UpdateHeldError();
   // D-U1-17 × U3: the marker counts only for THIS update (its target is this
