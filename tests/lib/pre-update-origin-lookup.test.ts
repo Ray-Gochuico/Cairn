@@ -87,6 +87,14 @@ describe('findOriginCopy (v1.8.0 H3, L6)', () => {
     await expect(findOriginCopy(O)).resolves.toBeNull();
   });
 
+  it('only a copy whose `from` IS the origin counts: a valid copy from an earlier schema is never named in its place', async () => {
+    const EARLIER = `cairn-pre-update-${O - 1}-to-${O}-20260922-090000.db`;  // valid, newer than both origin copies, from O - 1
+    mockReadDir.mockResolvedValue([file(ORIGIN_OLD), file(ORIGIN_NEW), file(EARLIER)]);
+    wireInvoke({ [`${DIR}/${ORIGIN_NEW}`]: BAD, [`${DIR}/${ORIGIN_OLD}`]: BAD });
+    await expect(findOriginCopy(O)).resolves.toBeNull();
+    expect(validated()).not.toContain(`${DIR}/${EARLIER}`);
+  });
+
   it('null (never a throw) when the folder cannot be read or a check cannot run — and it never names an OLDER copy past one it could not check', async () => {
     mockReadDir.mockRejectedValueOnce('failed to read directory at path: x with error: Permission denied (os error 13)');
     await expect(findOriginCopy(O)).resolves.toBeNull();
