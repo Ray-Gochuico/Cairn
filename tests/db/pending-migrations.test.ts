@@ -30,22 +30,23 @@ describe('pendingMigrations (the pre-update copy trigger, D-U1-1)', () => {
     expect(t[0].n).toBe(0); // read-only: the runner creates it, this helper never does
   });
 
-  it('a schema-53 file: applied 53, pending = the two v1.5.0 migrations, in registry order', async () => {
+  it('a schema-53 file (v1.4.0): applied 53, pending = the two v1.5.0 migrations and every later one, in registry order', async () => {
     await runMigrations(db, all.slice(0, 53));
     const r = await pendingMigrations(db, all);
     expect(r.applied).toBe(53);
-    expect(r.pending.map((m) => m.version)).toEqual(['0054_vehicle_repair_categories', '0055_ticker_day_change']);
+    // v1.8.0 H1 (L15): the two v1.5.0 names stay literal; what a later release appends follows them.
+    expect(r.pending.map((m) => m.version)).toEqual(['0054_vehicle_repair_categories', '0055_ticker_day_change', ...all.slice(55).map((m) => m.version)]);
     expect(r.applied + r.pending.length).toBe(all.length);
   });
 
-  it('is keyed on NAMES, not user_version: a schema-53 file stamped 55 (what a pre-U3 runner wrote after a subset) still has two pending', async () => {
+  it(`is keyed on NAMES, not user_version: a schema-53 file stamped ${MAX_SCHEMA_VERSION} (what a pre-U3 runner wrote after a subset) still has every later migration pending`, async () => {
     await runMigrations(db, all.slice(0, 53));
     await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION}`); // pre-U3 runners stamped the constant; U3 stamps 53 here
     expect(await readUserVersion(db)).toBe(MAX_SCHEMA_VERSION); // 55 — user_version would say "nothing pending"
-    expect((await pendingMigrations(db, all)).pending).toHaveLength(2);
+    expect((await pendingMigrations(db, all)).pending).toHaveLength(all.length - 53); // v1.8.0 H1 (L15): 2 at schema 55
   });
 
-  it('fully migrated: applied 55, nothing pending', async () => {
+  it(`fully migrated: applied ${MAX_SCHEMA_VERSION}, nothing pending`, async () => {
     await runMigrations(db, all);
     const r = await pendingMigrations(db, all);
     expect(r).toEqual({ applied: all.length, pending: [] });

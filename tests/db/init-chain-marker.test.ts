@@ -13,10 +13,19 @@ vi.mock('@/market/run-market-data-refresh', () => ({ runMarketDataRefresh: vi.fn
 
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { initDatabase, maybeTakePreUpdateCopy } from '@/db/init';
-import { loadAllMigrations, pendingMigrations, readChainMarker, runMigrations, type Migration } from '@/db/migrations';
+import { MAX_SCHEMA_VERSION, loadAllMigrations, pendingMigrations, readChainMarker, runMigrations, type Migration } from '@/db/migrations';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
 
 const COPY = '/x/backups/cairn-pre-update-53-to-55-20260925-101500.db';
+
+/**
+ * v1.8.0 H1 (post-release review L15): the chain target, derived. Appending a
+ * migration moves it; MAX_SCHEMA_VERSION equals the registry length
+ * (tests/db/schema-version-guard.test.ts), so these pins follow the registry.
+ * A seed that is a released schema (53, 50) stays a literal; a seed that must
+ * sit a fixed distance from the target (a one-migration chain) is T - k.
+ */
+const T = MAX_SCHEMA_VERSION;
 
 /**
  * v1.7.1 U3 × U1 (CR-U3-2): the pre-update gate reads the chain marker. A file a
@@ -41,41 +50,41 @@ describe('maybeTakePreUpdateCopy × the chain marker', () => {
   });
   afterEach(async () => { await db.close(); });
 
-  async function partwayU3() {        // 53 → 55, 0054 committed, 0055 not yet
-    await runMigrations(db, all.slice(0, 54));
-    await db.execute('PRAGMA user_version = 54');   // per-migration stamping: user_version === applied
-    await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:53->55')");
+  async function partwayU3() {        // T - 2 → T: migration T - 1 committed, migration T not yet
+    await runMigrations(db, all.slice(0, T - 1));
+    await db.execute(`PRAGMA user_version = ${T - 1}`);   // per-migration stamping: user_version === applied
+    await db.execute(`INSERT INTO schema_migrations (version) VALUES ('chain:${T - 2}->${T}')`);
   }
 
-  it('a U3-partway file (user_version 54 === applied 54, marker 53→55) resumes from the ORIGIN copy: originFrom 53, chainOrigin 53', async () => {
+  it(`a U3-partway file (user_version ${T - 1} === applied ${T - 1}, marker ${T - 2}→${T}) resumes from the ORIGIN copy: originFrom ${T - 2}, chainOrigin ${T - 2}`, async () => {
     await partwayU3();
     const gate = await maybeTakePreUpdateCopy(db, all);
-    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: 55, now: expect.any(Date), originFrom: 53 });
-    expect(gate).toMatchObject({ updating: true, chainOrigin: 53, chainTarget: 55 });
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: T - 1, to: T, now: expect.any(Date), originFrom: T - 2 });
+    expect(gate).toMatchObject({ updating: true, chainOrigin: T - 2, chainTarget: T });
   });
 
   it('a marker for ANOTHER target is ignored (a stale row from a different update): the chain starts at applied', async () => {
     await runMigrations(db, all.slice(0, 54));
     await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:47->53')");
     const gate = await maybeTakePreUpdateCopy(db, all);
-    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: 55, now: expect.any(Date) });
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: T, now: expect.any(Date) });
     expect(gate.chainOrigin).toBe(54);
   });
 
   it('a marker whose origin is not below applied is ignored (the origin copy itself was restored)', async () => {
     await runMigrations(db, all.slice(0, 53));
-    await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:53->55')");
+    await db.execute(`INSERT INTO schema_migrations (version) VALUES ('chain:53->${T}')`); // the target is T, so only the origin rule can set it aside
     await maybeTakePreUpdateCopy(db, all);
-    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 53, to: 55, now: expect.any(Date) });
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 53, to: T, now: expect.any(Date) });
   });
 
   // Plan review R-4: only an UPDATE CHAIN carries a marker (origin > 0), so the
   // gate never reads origin 0 as "the schema before the update".
   it('a marker with origin 0 is ignored (only an update chain carries one): the chain starts at applied', async () => {
     await runMigrations(db, all.slice(0, 54));
-    await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:0->55')");
+    await db.execute(`INSERT INTO schema_migrations (version) VALUES ('chain:0->${T}')`); // the target is T, so only the origin-0 rule can set it aside
     const gate = await maybeTakePreUpdateCopy(db, all);
-    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: 55, now: expect.any(Date) });
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: T, now: expect.any(Date) });
     expect(gate.chainOrigin).toBe(54);
   });
 
@@ -83,7 +92,7 @@ describe('maybeTakePreUpdateCopy × the chain marker', () => {
     await runMigrations(db, all.slice(0, 54));
     await db.execute('PRAGMA user_version = 53');
     await maybeTakePreUpdateCopy(db, all);
-    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: 55, now: expect.any(Date), originFrom: 53 });
+    expect(takePreUpdateCopy).toHaveBeenCalledWith({ from: 54, to: T, now: expect.any(Date), originFrom: 53 });
   });
 
   // Code review CR-U3-7: the gate → runner → gate hand-off on a file a PRE-U3
@@ -106,11 +115,11 @@ describe('maybeTakePreUpdateCopy × the chain marker', () => {
     });
 
     await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', chainOrigin: 52, copyIsFromBeforeUpdate: false });
-    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 53, to: 55, now: expect.any(Date), originFrom: 52 });
-    expect(await readChainMarker(db)).toEqual({ origin: 52, target: 55 }); // 0054 committed WITH the marker; user_version is now 54
+    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 53, to: T, now: expect.any(Date), originFrom: 52 });
+    expect(await readChainMarker(db)).toEqual({ origin: 52, target: T }); // 0054 committed WITH the marker; user_version is now 54
 
     await expect(initDatabase()).rejects.toMatchObject({ name: 'MigrationFailedError', chainOrigin: 52, copyIsFromBeforeUpdate: false });
-    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: 55, now: expect.any(Date), originFrom: 52 });
+    expect(takePreUpdateCopy).toHaveBeenLastCalledWith({ from: 54, to: T, now: expect.any(Date), originFrom: 52 });
     expect(copies.map((c) => c.from)).toEqual([53, 54]); // the 53→55 copy (already partway) is never reused as the origin
   });
 

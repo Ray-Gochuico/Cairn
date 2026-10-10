@@ -1,12 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import {
+  MAX_SCHEMA_VERSION,
   loadAllMigrations,
   pendingMigrations,
   readChainMarker,
   runMigrations,
   type Migration,
 } from '@/db/migrations';
+
+/**
+ * v1.8.0 H1 (post-release review L15): the chain target, derived. Appending a
+ * migration moves it; MAX_SCHEMA_VERSION equals the registry length
+ * (tests/db/schema-version-guard.test.ts), so these pins follow the registry.
+ * A seed that is a released schema (53, 50) stays a literal; a seed that must
+ * sit a fixed distance from the target (a one-migration chain) is T - k.
+ */
+const T = MAX_SCHEMA_VERSION;
 
 /**
  * v1.7.1 U3 (U1 chip b) — the update-chain marker. Per-migration stamping makes
@@ -33,8 +43,8 @@ describe('the update-chain marker (runner side)', () => {
   it('an update chain that stops after its first migration leaves exactly one marker naming the origin and the target', async () => {
     await runMigrations(db, all.slice(0, 53));
     await expect(runMigrations(db, failAt(54))).rejects.toThrow(/u3_missing/);
-    expect(await markerRows()).toEqual(['chain:53->55']);
-    expect(await readChainMarker(db)).toEqual({ origin: 53, target: 55 });
+    expect(await markerRows()).toEqual([`chain:53->${T}`]);
+    expect(await readChainMarker(db)).toEqual({ origin: 53, target: T });
   });
 
   it('the marker commits WITH the first migration: a chain whose first migration fails leaves no marker and nothing applied', async () => {
@@ -47,9 +57,9 @@ describe('the update-chain marker (runner side)', () => {
   it('a resumed chain keeps the ORIGINAL origin, and the chain that finishes removes the marker', async () => {
     await runMigrations(db, all.slice(0, 50));
     await expect(runMigrations(db, failAt(52))).rejects.toThrow(/u3_missing/); // 0051, 0052 commit; 0053 fails
-    expect(await readChainMarker(db)).toEqual({ origin: 50, target: 55 });
+    expect(await readChainMarker(db)).toEqual({ origin: 50, target: T });
     await expect(runMigrations(db, failAt(53))).rejects.toThrow(/u3_missing/); // the resume: 0053 commits; 0054 fails
-    expect(await readChainMarker(db)).toEqual({ origin: 50, target: 55 });  // not 52
+    expect(await readChainMarker(db)).toEqual({ origin: 50, target: T });  // not 52
     await runMigrations(db, all);
     expect(await markerRows()).toEqual([]);
   });
@@ -92,7 +102,7 @@ describe('the update-chain marker (runner side)', () => {
   });
 
   it('a one-migration chain never writes a marker (it commits or it does not — nothing to resume)', async () => {
-    await runMigrations(db, all.slice(0, 54));
+    await runMigrations(db, all.slice(0, T - 1));
     expect(await markerInserts(() => runMigrations(db, all))).toEqual([]);
     expect(await markerRows()).toEqual([]);
   });
@@ -117,14 +127,14 @@ describe('the update-chain marker (runner side)', () => {
     await runMigrations(db, all.slice(0, 53));
     await db.execute('PRAGMA user_version = 52');
     await expect(runMigrations(db, failAt(54))).rejects.toThrow(/u3_missing/);
-    expect(await readChainMarker(db)).toEqual({ origin: 52, target: 55 });
-    for (const uv of [0, 55]) {   // a pre-guard dev file (0), and a pre-U3 runner's constant stamp after a subset (55)
+    expect(await readChainMarker(db)).toEqual({ origin: 52, target: T });
+    for (const uv of [0, 55]) {   // a pre-guard dev file (0), and a pre-U3 runner's constant stamp after a subset (55: v1.7.0's MAX, the highest a pre-U3 runner stamped; not the target)
       const other = new SqliteAdapter(':memory:');
       try {
         await runMigrations(other, all.slice(0, 53));
         await other.execute(`PRAGMA user_version = ${uv}`);
         await expect(runMigrations(other, failAt(54))).rejects.toThrow(/u3_missing/);
-        expect([uv, await readChainMarker(other)]).toEqual([uv, { origin: 53, target: 55 }]);
+        expect([uv, await readChainMarker(other)]).toEqual([uv, { origin: 53, target: T }]);
       } finally {
         await other.close();
       }
@@ -135,7 +145,7 @@ describe('the update-chain marker (runner side)', () => {
     await runMigrations(db, all.slice(0, 50));
     await db.execute("INSERT INTO schema_migrations (version) VALUES ('chain:47->53')");
     await expect(runMigrations(db, failAt(52))).rejects.toThrow(/u3_missing/);
-    expect(await markerRows()).toEqual(['chain:50->55']);
+    expect(await markerRows()).toEqual([`chain:50->${T}`]);
     await runMigrations(db, all);
     expect(await markerRows()).toEqual([]);
   });
