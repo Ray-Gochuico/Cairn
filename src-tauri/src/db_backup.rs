@@ -3237,6 +3237,32 @@ mod tests {
         assert!(started.elapsed() < std::time::Duration::from_secs(5), "no pause was taken");
     }
 
+    /// Code review (X2): a set-aside file that is gone (NotFound) does not
+    /// come back after a pause, so its put-back is tried once and the -wal
+    /// is reported where the swap left it.
+    #[tokio::test]
+    async fn a_put_back_of_a_set_aside_file_that_is_gone_is_tried_once() {
+        RETRY_PAUSES.with(|p| p.borrow_mut().clear());
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        let attempts = std::cell::Cell::new(0);
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            if to == wal_c.as_path() {
+                attempts.set(attempts.get() + 1);
+                return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "simulated: the set-aside file is gone"));
+            }
+            std::fs::rename(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
+        assert_eq!(attempts.get(), 1, "NotFound is reported at once");
+        assert!(RETRY_PAUSES.with(|p| p.borrow().is_empty()), "no pause was asked for");
+        assert!(msg.contains("could not be put back"), "{msg}");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back");
+    }
+
     /// Code review (X31): a whole swap through the production moves with both
     /// sidecars present (the seam runs no exclusivity check, so the -wal is
     /// set aside too). Step 4 removes both set-asides, nothing sits beside
