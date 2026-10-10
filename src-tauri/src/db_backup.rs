@@ -385,6 +385,11 @@ thread_local! {
     /// v1.8.0 H2 (v1.7.2 chip e): how many validator connections were closed
     /// and awaited, so a test can see that a refusal closes its connection too.
     static VALIDATOR_CLOSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// v1.8.0 H2 (chip v): every pause a put-back retry asked for. Under test
+    /// a pause is recorded and skipped, so the failure-path tests do not
+    /// sleep, unless `REAL_RETRY_PAUSES` is set (one test sleeps for real).
+    static RETRY_PAUSES: std::cell::RefCell<Vec<std::time::Duration>> = const { std::cell::RefCell::new(Vec::new()) };
+    static REAL_RETRY_PAUSES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
@@ -597,7 +602,7 @@ fn put_back_or_report(
     let mut stuck: Vec<String> = Vec::new();
     let mut wal_stuck = false;
     for (sidecar, aside) in moved.iter().rev() {
-        if let Err(back) = rename(aside, sidecar) {
+        if let Err(back) = put_back_one(rename, aside, sidecar) {
             if !sidecar.to_string_lossy().ends_with("-shm") {
                 wal_stuck = true;
             }
@@ -621,6 +626,47 @@ fn put_back_or_report(
             stuck.join("; ")
         )
     }
+}
+
+/// The pauses before the second and third try of a failed put-back (v1.8.0
+/// H2, chip v): a virus scanner or the indexer can hold a file for a moment.
+const PUT_BACK_RETRY_PAUSES: [std::time::Duration; 2] =
+    [std::time::Duration::from_millis(50), std::time::Duration::from_millis(200)];
+
+/// Move one set-aside sidecar back, trying again after each pause in
+/// `PUT_BACK_RETRY_PAUSES`. A file already at the sidecar's name
+/// (`AlreadyExists`) or a set-aside file that is gone (`NotFound`) does not
+/// change with a pause, so either is reported at once.
+fn put_back_one(
+    rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
+    aside: &Path,
+    sidecar: &Path,
+) -> std::io::Result<()> {
+    let mut result = rename(aside, sidecar);
+    for pause in PUT_BACK_RETRY_PAUSES {
+        match &result {
+            Err(e) if !matches!(e.kind(), std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotFound) => {
+                pause_before_retry(pause);
+                result = rename(aside, sidecar);
+            }
+            _ => break,
+        }
+    }
+    result
+}
+
+/// The pause before a put-back's next try. Under test it is recorded
+/// (`RETRY_PAUSES`) and slept only when `REAL_RETRY_PAUSES` is set, so the
+/// failure-path tests do not sleep and one test times the real pauses.
+fn pause_before_retry(pause: std::time::Duration) {
+    #[cfg(test)]
+    {
+        RETRY_PAUSES.with(|p| p.borrow_mut().push(pause));
+        if !REAL_RETRY_PAUSES.with(|r| r.get()) {
+            return;
+        }
+    }
+    std::thread::sleep(pause);
 }
 
 /// Where step 2 of `replace_database_file` sets an old sidecar aside.
@@ -2161,6 +2207,93 @@ mod tests {
         assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the set-aside -wal is kept");
         assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back");
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// Chip v: a put-back that fails for a moment (a scanner or the indexer
+    /// holding the file) is tried again after a short pause, so the -wal goes
+    /// back and "(your data is unchanged)" is true.
+    #[tokio::test]
+    async fn a_put_back_that_fails_for_a_moment_is_tried_again() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        let attempts = std::cell::Cell::new(0);
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            if to == wal_c.as_path() {
+                attempts.set(attempts.get() + 1);
+                if attempts.get() < 3 {
+                    return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: held for a moment"));
+                }
+            }
+            std::fs::rename(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
+        assert_eq!(attempts.get(), 3, "two retries after the first attempt");
+        assert_eq!(
+            RETRY_PAUSES.with(|p| p.borrow().clone()),
+            [std::time::Duration::from_millis(50), std::time::Duration::from_millis(200)],
+            "a pause of 50 ms, then of 200 ms, before the two retries"
+        );
+        assert!(msg.contains("failed to finalize the restore (your data is unchanged)"), "{msg}");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    /// Chip v: the pauses are real pauses (the other tests record them and
+    /// skip the sleep).
+    #[tokio::test]
+    async fn a_put_back_retry_really_pauses_between_its_tries() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        let attempts = std::cell::Cell::new(0);
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            if to == wal_c.as_path() {
+                attempts.set(attempts.get() + 1);
+                if attempts.get() < 3 {
+                    return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: held for a moment"));
+                }
+            }
+            std::fs::rename(from, to)
+        };
+        REAL_RETRY_PAUSES.with(|r| r.set(true));
+        let started = std::time::Instant::now();
+        let result = replace_database_file_with(&backup, &live, &mut rename).await;
+        let elapsed = started.elapsed();
+        REAL_RETRY_PAUSES.with(|r| r.set(false));
+        assert!(result.is_err());
+        assert_eq!(attempts.get(), 3, "two retries after the first attempt");
+        assert!(elapsed >= std::time::Duration::from_millis(250), "slept 50 ms + 200 ms, took {elapsed:?}");
+        assert_untouched(&live, &wal, &shm);
+    }
+
+    /// Chip v: a file already at the sidecar's name, or a set-aside file that
+    /// is gone, does not change with a pause, so that put-back is not retried.
+    #[tokio::test]
+    async fn a_put_back_onto_a_sidecar_created_meanwhile_is_tried_once() {
+        let (_dir, backup, live, wal, _shm) = live_with_sidecars().await;
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        let attempts = std::cell::Cell::new(0);
+        let mut production = swap_move(&live);
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                std::fs::write(&wal_c, b"A-NEWER-WAL").unwrap();
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            if to == wal_c.as_path() {
+                attempts.set(attempts.get() + 1);
+            }
+            production(from, to)
+        };
+        let started = std::time::Instant::now();
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
+        assert!(msg.contains("could not be put back"), "{msg}");
+        assert_eq!(attempts.get(), 1, "AlreadyExists is reported at once");
+        assert!(RETRY_PAUSES.with(|p| p.borrow().is_empty()), "no pause was asked for");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "no pause was taken");
     }
 
     /// Chip t, step 2's half: setting a sidecar aside never replaces a
