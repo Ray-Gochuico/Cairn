@@ -26,22 +26,29 @@ export async function seedBefore0030(db: SqliteAdapter): Promise<void> {
   for (const sql of rows) await db.execute(sql);
 }
 
-/** One row in every user table a released file at schema `n` can hold (every table exists by 47; interview_answers arrives in 0052). */
+/**
+ * One row in every user table a released file at schema `n` can hold (every
+ * table exists by 47; interview_answers arrives in 0052), and a value in every
+ * column that carries an ON DELETE action, so a cascade into it changes a row
+ * the harness compares (v1.8.0 H1: the 529 account's beneficiary, the home's
+ * loan, the transaction's category).
+ */
 export async function seedAtSchema(db: SqliteAdapter, n: number): Promise<void> {
   const rows = [
     "INSERT INTO dependents (household_id, name, date_of_birth, type) VALUES (1, 'Kid', '2015-01-01', 'CHILD')",
+    "INSERT INTO accounts (id, household_id, owner_person_id, beneficiary_dependent_id, name, type) VALUES (3, 1, 1, (SELECT MIN(id) FROM dependents), '529 plan', 'ACCOUNT_529')",
     "INSERT INTO contributions (account_id, person_id, date, amount, source) VALUES (1, 1, '2026-01-01', 100, 'MANUAL')",
     "INSERT INTO account_snapshots (account_id, snapshot_date, total_value, source) VALUES (1, '2026-01-01', 1000, 'MANUAL')",
     "INSERT INTO loans (id, household_id, obligor_person_id, name, type, original_amount, current_balance, interest_rate, term_months, first_payment_date, monthly_payment) VALUES (1, 1, 1, 'Car loan', 'AUTO', 10000, 8000, 0.05, 60, '2025-01-01', 200)",
     "INSERT INTO loan_payments (loan_id, payment_date, principal, interest, source) VALUES (1, '2026-01-01', 150, 50, 'AMORTIZATION')",
-    "INSERT INTO properties (id, household_id, owner_person_id, name, type, current_estimated_value) VALUES (1, 1, 1, 'Home', 'PRIMARY', 500000)",
+    "INSERT INTO properties (id, household_id, owner_person_id, name, type, current_estimated_value, linked_loan_id) VALUES (1, 1, 1, 'Home', 'PRIMARY', 500000, 1)",
     "INSERT INTO vehicles (id, household_id, owner_person_id, name, linked_loan_id) VALUES (1, 1, 1, 'Car', 1)",
     "INSERT INTO asset_value_snapshots (owner_type, owner_id, snapshot_date, value) VALUES ('PROPERTY', 1, '2026-01-01', 500000)",
     "INSERT INTO equity_grants (household_id, owner_person_id, name, grant_date, strike_price, total_shares, vesting_schedule) VALUES (1, 1, 'RSU grant', '2025-01-01', 0, 100, '[]')",
     "INSERT INTO goals (household_id, for_person_id, name, type, target_amount, target_date) VALUES (1, 1, 'Trip', 'SAVINGS', 5000, '2027-01-01')",
     "INSERT INTO housing_payments (household_id, owner_person_id, name, monthly_amount, start_date) VALUES (1, 1, 'Rent', 2000, '2025-01-01')",
     "INSERT INTO vehicle_leases (household_id, owner_person_id, name, monthly_amount, start_date) VALUES (1, 1, 'Lease', 300, '2025-01-01')",
-    "INSERT INTO transactions (household_id, date, merchant, amount, source_account_id, person_id, property_id, vehicle_id) VALUES (1, '2026-01-02', 'Store', -20, 1, 1, 1, 1)",
+    "INSERT INTO transactions (household_id, date, merchant, amount, source_account_id, person_id, property_id, vehicle_id, category_id) VALUES (1, '2026-01-02', 'Store', -20, 1, 1, 1, 1, (SELECT MIN(id) FROM categories))",
     "INSERT INTO merchant_category_overrides (household_id, merchant_pattern, category_id) VALUES (1, 'STORE', (SELECT MIN(id) FROM categories))",
     "INSERT INTO fund_holdings (fund_ticker, holding_ticker, weight, as_of_date) VALUES ('VTI', 'AAPL', 0.06, '2026-01-01')",
     "INSERT INTO fund_sectors (fund_ticker, sector, weight, as_of_date) VALUES ('VTI', 'Technology', 0.3, '2026-01-01')",

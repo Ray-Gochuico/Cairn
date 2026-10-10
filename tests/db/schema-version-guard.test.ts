@@ -116,12 +116,12 @@ describe('per-migration stamping (v1.7.1 U3): user_version commits WITH each mig
       batches.push({ sql: statements.map((s) => s.sql), transaction: options?.transaction });
       return real(statements, options);
     };
-    await runMigrations(db, all.slice(0, 53));
+    await runMigrations(db, all.slice(0, MAX_SCHEMA_VERSION - 2)); // v1.8.0 H1 (L15): the last two migrations, whatever the registry length
     await runMigrations(db, all);
     const AUDIT = 'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)';
     for (const b of batches.slice(-2)) expect(b.sql.indexOf(AUDIT)).toBeGreaterThan(-1);
-    expect(batches.at(-2)!.sql.at(-1)).toBe('PRAGMA user_version = 54');
-    expect(batches.at(-1)!.sql.at(-1)).toBe('PRAGMA user_version = 55');
+    expect(batches.at(-2)!.sql.at(-1)).toBe(`PRAGMA user_version = ${MAX_SCHEMA_VERSION - 1}`);
+    expect(batches.at(-1)!.sql.at(-1)).toBe(`PRAGMA user_version = ${MAX_SCHEMA_VERSION}`);
     expect(batches.at(-1)!.transaction).toBe(true);
     const i0033 = batches.findIndex((b) => b.sql.includes('ALTER TABLE disclosure_acceptances__new RENAME TO disclosure_acceptances'));
     expect(batches[i0033].sql.at(-1)).toBe('PRAGMA user_version = 33');
