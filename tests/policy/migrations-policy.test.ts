@@ -526,3 +526,60 @@ describe('the foreign-keys PRAGMA never runs inside the runner\'s wrap (v1.8.0 H
     expect(wrappedForeignKeyPragmas(batches)).toEqual(['h1_planted_lower', 'h1_planted_schema', 'h1_planted_quoted', 'h1_planted_bracket_schema', 'h1_planted_block_comment', 'h1_planted_in_own_tx']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// v1.8.0 H1 (post-release review L17): a self-managed migration runs without
+// the runner's wrap. If one of its statements fails, nothing rolls it back:
+// the connection keeps its open transaction, with foreign keys off. Its audit
+// row, chain marker and user_version stamp run after its own COMMIT, so a
+// force-quit in between re-runs it on every boot. 0033 is safe on both counts:
+// every released file already has it, and its rebuild re-runs cleanly
+// (tests/db/upgrade-path.test.ts). Until the runner is safe for another one,
+// the set is exactly 0033.
+// ---------------------------------------------------------------------------
+const SELF_MANAGED_MIGRATIONS: readonly string[] = ['0033_fix_disclosure_acceptance_fk_actions'];
+
+/** The migrations the runner ran self-managed: unwrapped, on their own BEGIN. */
+function selfManagedMigrations(batches: readonly RunnerBatch[]): string[] {
+  return batches.filter((b) => !b.wrapped).map((b) => b.version);
+}
+
+describe('the self-managed migrations are exactly 0033 (v1.8.0 H1, post-release review L17)', () => {
+  it('a fresh chain runs exactly 0033 unwrapped', async () => {
+    const selfManaged = selfManagedMigrations(await observeRunner(await loadAllMigrations()));
+    if (selfManaged.join('\n') !== SELF_MANAGED_MIGRATIONS.join('\n')) {
+      throw new Error(
+        [
+          '',
+          `The runner ran these migrations self-managed: ${selfManaged.join(', ') || '(none)'}.`,
+          `The ratchet allows exactly: ${SELF_MANAGED_MIGRATIONS.join(', ')}.`,
+          '',
+          'A self-managed migration (a statement-initial BEGIN) runs without the runner\'s wrap. If one',
+          'of its statements fails, nothing rolls it back: the connection keeps its open transaction,',
+          'with foreign keys off. Its audit row, chain marker and user_version stamp run after its own',
+          'COMMIT, so a force-quit in between re-runs it on every boot. Make the runner safe for it',
+          'first (post-release review L17), then extend SELF_MANAGED_MIGRATIONS in',
+          'tests/policy/migrations-policy.test.ts in the same change.',
+          '',
+        ].join('\n'),
+      );
+    }
+    expect(selfManaged).toEqual(SELF_MANAGED_MIGRATIONS);
+  });
+
+  it('the ratchet is real, and so is the remedy the PRAGMA check names: the planted rebuild with its own BEGIN runs unwrapped, is named here and not there, and keeps its child rows (planted)', async () => {
+    let state: Record<string, unknown> = {};
+    const batches = await observeRunner([PLANT_TABLES, plantedRebuild('h1_planted_own_begin', 'PRAGMA foreign_keys = OFF', true)], async (db) => {
+      state = await plantState(db);
+    });
+    expect(selfManagedMigrations(batches)).toEqual(['h1_planted_own_begin']);
+    expect(wrappedForeignKeyPragmas(batches)).toEqual([]);
+    expect(state).toEqual({
+      parent: [{ id: 1, name: 'Ada' }],
+      child: [{ id: 1, parent_id: 1 }],
+      owned: [{ id: 1 }],
+      quickCheck: [{ quick_check: 'ok' }],
+      foreignKeyCheck: [],
+    });
+  });
+});
