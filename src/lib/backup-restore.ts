@@ -287,7 +287,9 @@ export async function closeLiveDatabase(): Promise<void> {
  * `tolerateNotLoaded` (boot screens only) accepts the plugin's exact
  * not-loaded rejection as 'no pool to drain'. `onRestored` runs once, only
  * after `db_restore` succeeded and before the reload (best-effort; the boot
- * screens set the one-boot update hold with it, CR-U-14).
+ * screens pass `setUpdateHold` for the failed-migration screen's true
+ * pre-update copy, CR-U-14, and `clearUpdateHold` for every other restore,
+ * v1.7.2 L4; Settings passes none).
  */
 export async function restoreFromBackup(
   source: string,
