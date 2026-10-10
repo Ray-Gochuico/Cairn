@@ -3155,6 +3155,7 @@ mod tests {
     /// back and "(your data is unchanged)" is true.
     #[tokio::test]
     async fn a_put_back_that_fails_for_a_moment_is_tried_again() {
+        RETRY_PAUSES.with(|p| p.borrow_mut().clear());
         let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
         let (live_c, wal_c) = (live.clone(), wal.clone());
         let attempts = std::cell::Cell::new(0);
@@ -3215,6 +3216,7 @@ mod tests {
     /// is gone, does not change with a pause, so that put-back is not retried.
     #[tokio::test]
     async fn a_put_back_onto_a_sidecar_created_meanwhile_is_tried_once() {
+        RETRY_PAUSES.with(|p| p.borrow_mut().clear());
         let (_dir, backup, live, wal, _shm) = live_with_sidecars().await;
         let (live_c, wal_c) = (live.clone(), wal.clone());
         let attempts = std::cell::Cell::new(0);
@@ -3229,12 +3231,10 @@ mod tests {
             }
             production(from, to)
         };
-        let started = std::time::Instant::now();
         let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
         assert!(msg.contains("could not be put back"), "{msg}");
         assert_eq!(attempts.get(), 1, "AlreadyExists is reported at once");
         assert!(RETRY_PAUSES.with(|p| p.borrow().is_empty()), "no pause was asked for");
-        assert!(started.elapsed() < std::time::Duration::from_secs(5), "no pause was taken");
     }
 
     /// Code review (X2): a set-aside file that is gone (NotFound) does not
