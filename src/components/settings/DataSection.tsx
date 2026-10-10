@@ -71,14 +71,15 @@ export function DataSection() {
   // Round-3 S7: settled flag so the empty state can't render over a
   // not-yet-loaded list (the empty-state ratchet's isLoading token matches).
   const [isLoadingBackups, setIsLoadingBackups] = useState(true);
-  // v1.8.0 H3 (chip (a), D-H3-2): the last listing failed, so the list is
-  // unknown and "No backups yet" would contradict the note that says why.
-  const [listingFailed, setListingFailed] = useState(false);
+  // v1.8.0 H3 (chip (a), D-H3-2): why the last listing failed, on its own line
+  // in the Restore area until a listing succeeds — apart from `error`, so no
+  // other message clears it and it never hides or replaces the one-time
+  // restore-failure notice. While it is set the list is unknown, so "No
+  // backups yet" stays hidden.
+  const [listingError, setListingError] = useState<string | null>(null);
 
   // Load (and reload) the rotating backups list. Best-effort: a failure leaves
-  // the list as-is and surfaces a soft note rather than blocking the section;
-  // the note never replaces a notice already shown (the mount's one-time
-  // restore-failure notice lands first).
+  // the list as-is and surfaces a soft note rather than blocking the section.
   const refreshBackups = useCallback(async () => {
     // W4 review (MINOR 9): the list is of the user's REAL backups. Under a
     // banner that says "nothing here is yours" the dated rows read as the
@@ -91,10 +92,9 @@ export function DataSection() {
     }
     try {
       setBackups(await listBackups());
-      setListingFailed(false);
+      setListingError(null);
     } catch (e) {
-      setListingFailed(true);
-      setError((prev) => prev ?? `Could not read your backups: ${e instanceof Error ? e.message : String(e)}`);
+      setListingError(`Could not read your backups: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsLoadingBackups(false);
     }
@@ -352,7 +352,7 @@ export function DataSection() {
             ) : (
               tauri &&
               !isLoadingBackups &&
-              !listingFailed && (
+              listingError === null && (
                 <EmptyState
                   bare
                   icon={History}
@@ -360,6 +360,12 @@ export function DataSection() {
                   description="Click “Back up now” to create one."
                 />
               )
+            )}
+
+            {listingError && (
+              <p className="text-sm text-destructive-soft-foreground break-all" role="alert">
+                {listingError}
+              </p>
             )}
 
             <Button
