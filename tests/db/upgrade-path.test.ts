@@ -273,14 +273,17 @@ describe('the every-table-holds-a-row rule (D-U3-10) is real', () => {
     }
   });
 
-  it('…and so is its v1.8.0 H1 extension: an ON DELETE column that no row fills is reported, and only it (planted)', async () => {
+  it('…and so is its v1.8.0 H1 extension: an ON DELETE column (SET NULL, SET DEFAULT or CASCADE) that no row fills is reported, and only it (planted)', async () => {
     const probe = new SqliteAdapter(':memory:');
     try {
       await probe.execute('CREATE TABLE h1_parent (id INTEGER PRIMARY KEY)');
       await probe.execute('INSERT INTO h1_parent VALUES (1)');
-      await probe.execute('CREATE TABLE h1_child (id INTEGER PRIMARY KEY, filled INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, empty INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, plain INTEGER REFERENCES h1_parent(id))');
+      await probe.execute(
+        'CREATE TABLE h1_child (id INTEGER PRIMARY KEY, filled INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, empty INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, ' +
+          'empty_default INTEGER REFERENCES h1_parent(id) ON DELETE SET DEFAULT, empty_cascade INTEGER REFERENCES h1_parent(id) ON DELETE CASCADE, plain INTEGER REFERENCES h1_parent(id))',
+      );
       await probe.execute('INSERT INTO h1_child (id, filled) VALUES (1, 1)');
-      expect(await unseededActionColumns(probe)).toEqual(['h1_child.empty']); // `plain` has no ON DELETE action
+      expect(await unseededActionColumns(probe)).toEqual(['h1_child.empty', 'h1_child.empty_cascade', 'h1_child.empty_default']); // `plain` has no ON DELETE action
     } finally {
       await probe.close();
     }
@@ -480,12 +483,23 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
 
   const ZERO_A_GOAL: Migration = { version: 'h1_plant_zero', sql: 'UPDATE goals SET target_amount = 0;' };
 
-  it('reports, by primary key, a value a migration zeroes, the rows a cascade nulls and deletes, and a column a migration drops (planted)', async () => {
+  it('reports, by primary key, a value a migration zeroes, the rows a cascade nulls and deletes, a column and a table a migration drops, and a cell whose type alone changes (planted)', async () => {
     const changes = await plantedChanges([
       ZERO_A_GOAL,
       // What a wrapped `DROP TABLE persons` does first (L13): its implicit DELETE, with foreign keys on.
       { version: 'h1_plant_cascade', sql: 'DELETE FROM persons WHERE id = 1;' },
       { version: 'h1_plant_drop_column', sql: 'ALTER TABLE housing_payments DROP COLUMN name;' },
+      { version: 'h1_plant_drop_table', sql: 'DROP TABLE fund_sectors;' },
+      // The same number back as text, in a column re-added without a type: only the cell's type changes.
+      {
+        version: 'h1_plant_retype',
+        sql: [
+          'ALTER TABLE vehicle_leases RENAME COLUMN monthly_amount TO h1_was_amount;',
+          'ALTER TABLE vehicle_leases ADD COLUMN monthly_amount;',
+          'UPDATE vehicle_leases SET monthly_amount = CAST(CAST(h1_was_amount AS INTEGER) AS TEXT);',
+          'ALTER TABLE vehicle_leases DROP COLUMN h1_was_amount;',
+        ].join('\n'),
+      },
     ]);
     expect(changes).toEqual(
       expect.arrayContaining([
@@ -495,8 +509,21 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
         'accounts [1] owner_person_id: 1 → null', // ON DELETE SET NULL
         'transactions [1] person_id: 1 → null',
         'housing_payments.name: the column is gone',
+        'fund_sectors: the table is gone',
+        'vehicle_leases [1] monthly_amount: 300 → "300"',
       ]),
     );
+  });
+
+  it('rowsOf refuses a table without a primary key, naming it: the content check matches rows by primary key (planted)', async () => {
+    const probe = new SqliteAdapter(':memory:');
+    try {
+      await probe.execute('CREATE TABLE h1_keyed (id INTEGER PRIMARY KEY)');
+      await probe.execute('CREATE TABLE h1_keyless (v INTEGER)');
+      await expect(rowsOf(probe)).rejects.toThrow('h1_keyless has no primary key, and the upgrade harness matches rows by primary key');
+    } finally {
+      await probe.close();
+    }
   });
 
   it('an intended rewrite is accepted only for its own table, rows and columns (a volatile stamp included), and only on a chain that runs its migration (planted)', async () => {
