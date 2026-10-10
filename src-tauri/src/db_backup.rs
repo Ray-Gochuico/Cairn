@@ -551,17 +551,21 @@ fn swap_staged(
         ));
     }
 
-    // 2. Set the OLD sidecars aside (rename, never delete) so nothing can
-    //    shadow the restored file, while keeping them for a put-back.
+    // 2. Set the OLD sidecars aside (moved, never deleted) so nothing can
+    //    shadow the restored file, while keeping them for a put-back. On a
+    //    failure here or in step 3 the staged copy is removed only AFTER the
+    //    put-back has run (v1.8.0 H2, chip r): until then it is what tells
+    //    the next launch, after a crash, that the swap never ran.
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     for (sidecar, aside) in sidecars.iter().zip(asides.iter()) {
         match rename(sidecar, aside) {
             Ok(()) => moved.push((sidecar.clone(), aside.clone())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
                 let step = format!("could not set aside the WAL sidecar {}", sidecar.display());
-                return Err(put_back_or_report(&moved, rename, &step, &e));
+                let report = put_back_or_report(&moved, rename, &step, &e);
+                let _ = std::fs::remove_file(&tmp);
+                return Err(report);
             }
         }
     }
@@ -569,8 +573,9 @@ fn swap_staged(
     // 3. Atomic swap. Either `live` is the intact original (rename never ran) or
     //    it is the fully-restored backup (rename returned) — never a partial.
     if let Err(e) = rename(&tmp, live) {
+        let report = put_back_or_report(&moved, rename, "failed to finalize the restore", &e);
         let _ = std::fs::remove_file(&tmp);
-        return Err(put_back_or_report(&moved, rename, "failed to finalize the restore", &e));
+        return Err(report);
     }
 
     // 4. The swap succeeded: the set-aside sidecars belonged to the replaced
@@ -2207,6 +2212,71 @@ mod tests {
         assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the set-aside -wal is kept");
         assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back");
         assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// A simulated crash: the process stops inside a move, so nothing after
+    /// it runs (no put-back, no clean-up). `swap_staged` is synchronous, so
+    /// the stop is caught right here and the files are left as a kill would
+    /// leave them.
+    fn crash_inside(swap: impl FnOnce() -> Result<(), String>) {
+        let stopped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(swap));
+        assert!(stopped.is_err(), "the simulated crash stops the swap");
+    }
+
+    /// Chip r (U1F-m3): the staged copy is removed only AFTER the put-back
+    /// has run. A crash during the put-back then leaves it beside the
+    /// set-aside -wal, which tells the next launch that the swap never ran.
+    #[tokio::test]
+    async fn a_crash_during_a_put_back_leaves_the_staged_copy_for_the_next_launch() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        stage_restore(&backup, &live).await.expect("staged");
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        crash_inside(|| {
+            swap_staged(
+                &live,
+                &mut |from: &Path, to: &Path| -> std::io::Result<()> {
+                    if to == live_c.as_path() {
+                        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+                    }
+                    if to == wal_c.as_path() {
+                        panic!("simulated: the process stops during the put-back");
+                    }
+                    std::fs::rename(from, to)
+                },
+                &mut |p: &Path| real_sync(p),
+            )
+        });
+        assert!(restore_tmp_path(&live).exists(), "the staged copy is still there");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal is still set aside");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back first");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// The same for a failure in step 2: the -shm cannot be set aside, and
+    /// the process stops while the -wal goes back.
+    #[tokio::test]
+    async fn a_crash_during_a_step_2_put_back_leaves_the_staged_copy_too() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        stage_restore(&backup, &live).await.expect("staged");
+        let (wal_c, shm_aside) = (wal.clone(), aside(&shm));
+        crash_inside(|| {
+            swap_staged(
+                &live,
+                &mut |from: &Path, to: &Path| -> std::io::Result<()> {
+                    if to == shm_aside.as_path() {
+                        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the -shm is pinned"));
+                    }
+                    if to == wal_c.as_path() {
+                        panic!("simulated: the process stops during the put-back");
+                    }
+                    std::fs::rename(from, to)
+                },
+                &mut |p: &Path| real_sync(p),
+            )
+        });
+        assert!(restore_tmp_path(&live).exists(), "the staged copy is still there");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal is still set aside");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm never moved");
     }
 
     /// Chip v: a put-back that fails for a moment (a scanner or the indexer
