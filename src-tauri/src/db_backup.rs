@@ -36,13 +36,16 @@
 //!    and close the exact pool the app uses. After it resolves, no connection
 //!    holds a handle to the old inode or a dirty WAL. The closed pool stays in
 //!    the plugin's `DbInstances` map; step 4's reload replaces it.
-//! 3. `db_restore` re-validates (defence in depth) and then
+//! 3. `db_restore` re-validates (defence in depth), refuses while another
+//!    connection (a second Cairn window, another program) has the live file
+//!    open (v1.8.0 H2), and then
 //!    `replace_database_file` performs an ATOMIC swap that always leaves a valid
 //!    `finance.db` (full ordering + crash analysis on that function): it stages
 //!    the backup into a sibling temp file THROUGH SQLite (`VACUUM INTO`, so a
 //!    `-wal` beside the backup is read too — v1.7.2), sets the OLD `-wal`/`-shm` sidecars
-//!    ASIDE (renamed, put back if the swap fails, deleted only after it
-//!    succeeds — v1.7.1 CR-U-15), then `rename`s the temp file over `finance.db`.
+//!    ASIDE (moved, put back if the swap fails, deleted only after it
+//!    succeeds — v1.7.1 CR-U-15; neither move ever replaces a file, v1.8.0
+//!    H2), then `rename`s the temp file over `finance.db`.
 //!    The live file is NEVER the copy target, so the in-copy truncation window a
 //!    plain `fs::copy(backup, live)` would have is eliminated.
 //! 4. The JS side then ALWAYS `window.location.reload()`s (success or failure —
@@ -56,13 +59,25 @@
 //! CRASH SAFETY: see `replace_database_file` for the per-step analysis. Every
 //! failure point leaves `finance.db` either fully the original or fully the
 //! restored backup — there is no state that is a partially-written main file and
-//! none that leaves the restored file shadowed by a stale WAL.
+//! none that leaves the restored file shadowed by a stale WAL. Two exceptions,
+//! each named: a `-wal` the put-back reports it could not move back (it stays
+//! at its set-aside path, and the message says where, put_back_or_report),
+//! and a crash between steps 2 and 4, which leaves the sidecars set aside:
+//! the next launch removes the set-aside `-shm` (and the staged copy when no
+//! `-wal` was set aside) and keeps a set-aside `-wal` for the next restore to
+//! name (reconcile_interrupted_restore, v1.8.0 H2). The exclusivity check's
+//! close normally drains the `-wal` into finance.db first, so finance.db is
+//! whole on its own; a drain that stops part-way leaves it whole only
+//! together with that set-aside `-wal`.
 //!
 //! WHY THIS CAN'T CORRUPT EVEN IF THE JS CLOSE IS INCOMPLETE: `db_restore` only
 //! ever swaps the live file AFTER its own re-validation passes, and the JS flow
 //! awaits the plugin's `close` command (which resolves only once `pool.close()`
 //! has drained every connection AND checkpointed the WAL) before invoking this
-//! command. On the boot-screen path where no pool was ever loaded, no
+//! command. The close drains only this window's pool, so the swap also asks
+//! SQLite for the file's exclusive lock first and refuses while any other
+//! connection holds it (refuse_if_open_elsewhere, v1.8.0 H2). On the
+//! boot-screen path where no pool was ever loaded, no
 //! checkpoint ran, which is why step 3 sets the sidecars aside instead of
 //! deleting them: a failed swap puts them back, so the original data (file +
 //! WAL) survives. The close → invoke → reload contract is load-bearing and
@@ -111,8 +126,11 @@ pub struct BackupValidation {
 /// copy of the entire database (every table, every index — all ~30 tables) to a
 /// new file while the source stays open and writable. It runs in a single
 /// implicit transaction, so the copy is a point-in-time snapshot even if other
-/// connections are mid-write. `dest` MUST NOT already exist (VACUUM INTO errors
-/// if it does), so callers write to a fresh timestamped filename.
+/// connections are mid-write. `dest` must not exist, or must be an empty file:
+/// VACUUM INTO refuses any other file there (`output file already exists`, or
+/// `file is not a database`), so callers write to a fresh timestamped
+/// filename. "Save a copy…" therefore cannot replace a file the save dialog
+/// agreed to replace (post-release review L11; recorded for a chip).
 ///
 /// This is the testable core; the Tauri command is a thin wrapper that looks the
 /// pool up from plugin state and forwards here.
