@@ -65,6 +65,24 @@ function emptyTables(counts: Record<string, number>): string[] {
   return Object.entries(counts).filter(([, c]) => c === 0).map(([t]) => t);
 }
 
+/**
+ * Columns with an ON DELETE action (SET NULL, SET DEFAULT, CASCADE) that are
+ * NULL in every row: a cascade into them would change nothing the content
+ * check can see (v1.8.0 H1; planted below). [] = every such column holds a value.
+ */
+async function unseededActionColumns(db: SqliteAdapter): Promise<string[]> {
+  const out: string[] = [];
+  for (const t of await userTables(db)) {
+    const fks = await db.select<{ from: string; on_delete: string }>(`SELECT "from", on_delete FROM pragma_foreign_key_list('${t}')`);
+    for (const fk of fks) {
+      if (!['SET NULL', 'SET DEFAULT', 'CASCADE'].includes(fk.on_delete)) continue;
+      const held = (await db.select<{ n: number }>(`SELECT COUNT("${fk.from}") AS n FROM "${t}"`))[0].n;
+      if (held === 0) out.push(`${t}.${fk.from}`);
+    }
+  }
+  return out.sort();
+}
+
 /** One user table's rows with every column, and the columns that key them (v1.8.0 H1, post-release review L14). */
 interface TableRows {
   pk: string[];
@@ -205,6 +223,19 @@ describe('the every-table-holds-a-row rule (D-U3-10) is real', () => {
       await probe.close();
     }
   });
+
+  it('…and so is its v1.8.0 H1 extension: an ON DELETE column that no row fills is reported, and only it (planted)', async () => {
+    const probe = new SqliteAdapter(':memory:');
+    try {
+      await probe.execute('CREATE TABLE h1_parent (id INTEGER PRIMARY KEY)');
+      await probe.execute('INSERT INTO h1_parent VALUES (1)');
+      await probe.execute('CREATE TABLE h1_child (id INTEGER PRIMARY KEY, filled INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, empty INTEGER REFERENCES h1_parent(id) ON DELETE SET NULL, plain INTEGER REFERENCES h1_parent(id))');
+      await probe.execute('INSERT INTO h1_child (id, filled) VALUES (1, 1)');
+      expect(await unseededActionColumns(probe)).toEqual(['h1_child.empty']); // `plain` has no ON DELETE action
+    } finally {
+      await probe.close();
+    }
+  });
 });
 
 describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) => {
@@ -214,6 +245,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
   let after: Record<string, number>;
   let seededAtN: Record<string, number>; // what the migrations alone seed by schema n (no user rows)
   let rowsBefore: Map<string, TableRows>; // every row before the chain, every column (L14)
+  let unseeded: string[]; // ON DELETE columns no row fills before the chain
   let rowsAfter: Map<string, TableRows>;
   let db: SqliteAdapter;
 
@@ -239,6 +271,7 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
     await seedAtSchema(built, n);
     before = await countsOf(built);
     rowsBefore = await rowsOf(built);
+    unseeded = await unseededActionColumns(built);
     const plain = new SqliteAdapter(':memory:');
     try {
       await runMigrations(plain, all.slice(0, n));
@@ -278,6 +311,13 @@ describe.each(DISTINCT_RELEASED_SCHEMAS)('upgrade from released schema %i', (n) 
 
   it('every user table holds a row before the chain runs (so an ADD COLUMN NOT NULL without a default would fail here, not on a user)', () => {
     expect(emptyTables(before)).toEqual([]);
+  });
+
+  // v1.8.0 H1: a cascade sets NULL or deletes only where a row points at a
+  // parent, so the content check below sees one only if the rows fill every
+  // column that carries an ON DELETE action.
+  it('every column with an ON DELETE action holds a value in some row before the chain runs (so a cascade into it shows in the content check)', () => {
+    expect(unseeded).toEqual([]);
   });
 
   it(`→ ${MAX_SCHEMA_VERSION}: quick_check ok, no foreign-key violations, exactly the registry's names recorded, user_version ${MAX_SCHEMA_VERSION}, no chain marker`, async () => {
