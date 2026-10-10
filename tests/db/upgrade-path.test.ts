@@ -189,6 +189,46 @@ function contentMessage(n: number, changes: readonly string[]): string {
   ].join('\n');
 }
 
+/** A migration's own SQL sets this column to the clock (CURRENT_TIMESTAMP or datetime('now')): the only kind of column `volatile` may hold. */
+function clockStamp(column: string): RegExp {
+  return new RegExp(`\\b${column}\\s*=\\s*(?:CURRENT_TIMESTAMP|datetime\\('now'\\))`, 'i');
+}
+
+/**
+ * What is wrong with one INTENDED_REWRITES entry (v1.8.0 H1 code review), from
+ * its migration and the rows just before and just after that migration ran
+ * alone on the harness's rows. [] = the entry is real and tight: it lists at
+ * least one column; its table has every listed column before the migration
+ * runs; the migration rewrites or drops each listed column; every pre-chain
+ * row its `rows` test selects changes in at least one listed column; and the
+ * migration's own SQL (comments aside) sets each `volatile` column to the clock.
+ */
+function rewriteProblems(m: Migration, entry: IntendedRewrite, was: Map<string, TableRows>, now: Map<string, TableRows>): string[] {
+  const { table, columns, volatile = [] } = entry;
+  if (columns.length === 0) return [`${m.version}: the ${table} entry lists no columns (every entry lists at least one column its migration rewrites; a stamp alone is not a rewrite)`];
+  const before = was.get(table);
+  const missing = [...columns, ...volatile].filter((c) => !before?.columns.includes(c));
+  if (!before || missing.length > 0) return missing.map((c) => `${m.version}: ${table} has no column ${c} before it runs`);
+  const out: string[] = [];
+  const changed = contentChanges(was, now);
+  for (const c of columns) {
+    const touches = (line: string) => (line.startsWith(`${table} `) && line.includes(` ${c}: `)) || line === `${table}.${c}: the column is gone`;
+    if (!changed.some(touches)) out.push(`${m.version} does not rewrite ${table}.${c} when replayed alone: ${changed.join('; ') || 'no change'} (only a column its own SQL sets to CURRENT_TIMESTAMP or datetime('now') may go under volatile)`);
+  }
+  const after = now.get(table);
+  const cell = (v: unknown) => JSON.stringify(v);
+  const keyOf = (r: Record<string, unknown>) => cell(before.pk.map((c) => r[c]));
+  const byKey = new Map((after?.rows ?? []).map((r) => [keyOf(r), r]));
+  const untouched = before.rows.filter((r) => {
+    const r2 = byKey.get(keyOf(r));
+    return entry.rows(r) && r2 !== undefined && columns.every((c) => after!.columns.includes(c) && cell(r[c]) === cell(r2[c]));
+  }).length;
+  if (untouched > 0) out.push(`${m.version}: the ${table} entry's rows test selects ${untouched} pre-chain row(s) it does not rewrite in any listed column (scope its rows test to the rows the migration changes)`);
+  const sql = m.sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  for (const v of volatile) if (!clockStamp(v).test(sql)) out.push(`${m.version} does not set ${table}.${v} to the clock in its own SQL (only a column it sets to CURRENT_TIMESTAMP or datetime('now') may go under volatile)`);
+  return out;
+}
+
 beforeAll(async () => {
   dir = mkdtempSync(path.join(tmpdir(), 'cairn-upgrade-'));
   all = await loadAllMigrations();
@@ -401,8 +441,8 @@ describe.each(DISTINCT_RELEASED_SCHEMAS.filter((n) => n + 2 <= MAX_SCHEMA_VERSIO
 );
 
 describe('the content check is real (v1.8.0 H1, post-release review L14)', () => {
-  /** A file at the newest schema with the harness's rows; its rows are read, `planted` runs, and the changes are compared. */
-  async function plantedChanges(planted: Migration[], allowed: readonly IntendedRewrite[] = []): Promise<string[]> {
+  /** A file at the newest schema with the harness's rows: its rows before and after `planted` runs. */
+  async function plantedRows(planted: Migration[]): Promise<{ was: Map<string, TableRows>; now: Map<string, TableRows> }> {
     const db = new SqliteAdapter(':memory:');
     try {
       await runMigrations(db, all.slice(0, 29));
@@ -411,10 +451,22 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
       await seedAtSchema(db, MAX_SCHEMA_VERSION);
       const was = await rowsOf(db);
       await runMigrations(db, planted);
-      return contentChanges(was, await rowsOf(db), allowed);
+      return { was, now: await rowsOf(db) };
     } finally {
       await db.close();
     }
+  }
+
+  /** The changes `planted` makes to the harness's rows, apart from the `allowed` rewrites. */
+  async function plantedChanges(planted: Migration[], allowed: readonly IntendedRewrite[] = []): Promise<string[]> {
+    const { was, now } = await plantedRows(planted);
+    return contentChanges(was, now, allowed);
+  }
+
+  /** rewriteProblems for one entry of a planted migration, run alone on the harness's rows. */
+  async function plantedRewriteProblems(planted: Migration, entry: IntendedRewrite): Promise<string[]> {
+    const { was, now } = await plantedRows([planted]);
+    return rewriteProblems(planted, entry, was, now);
   }
 
   const ZERO_A_GOAL: Migration = { version: 'h1_plant_zero', sql: 'UPDATE goals SET target_amount = 0;' };
@@ -455,7 +507,7 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
     expect(rewritesFrom(all.length + 1, chain, planted)).toEqual([]); // the file already had it
   });
 
-  it('INTENDED_REWRITES hygiene: each entry names a migration a released chain runs and columns its table has before it runs; replayed alone, that migration rewrites or drops every listed column (volatile ones aside)', async () => {
+  it('INTENDED_REWRITES hygiene: each entry names a migration a released chain runs; replayed alone, that migration does what the entry says (at least one column; each listed column there before it and rewritten or dropped by it; every selected row changed; every volatile column set to the clock by its own SQL)', async () => {
     for (const [version, rewrites] of Object.entries(INTENDED_REWRITES)) {
       const ordinal = all.findIndex((m) => m.version === version) + 1;
       expect(ordinal, `${version} is not a registry migration`).toBeGreaterThan(0);
@@ -465,21 +517,49 @@ describe('the content check is real (v1.8.0 H1, post-release review L14)', () =>
       try {
         await seedAtSchema(db, ordinal - 1);
         const was = await rowsOf(db);
-        for (const { table, columns, volatile = [] } of rewrites) {
-          expect(was.get(table)?.columns, `${version}: ${table} before it runs`).toEqual(expect.arrayContaining([...columns, ...volatile]));
-        }
         await runMigrations(db, all.slice(0, ordinal));
-        const changed = contentChanges(was, await rowsOf(db));
-        for (const { table, columns } of rewrites) {
-          for (const c of columns) {
-            const touches = (line: string) => (line.startsWith(`${table} `) && line.includes(` ${c}: `)) || line === `${table}.${c}: the column is gone`;
-            expect(changed.some(touches), `${version} does not rewrite ${table}.${c} (a stamp that may stay the same goes under volatile): ${changed.join('; ') || 'no change'}`).toBe(true);
-          }
-        }
+        const now = await rowsOf(db);
+        const problems = rewrites.flatMap((entry) => rewriteProblems(all[ordinal - 1], entry, was, now));
+        if (problems.length > 0) throw new Error(['', 'INTENDED_REWRITES entries that do not match their migration:', ...problems.map((p) => `  ${p}`), ''].join('\n'));
+        expect(problems).toEqual([]);
       } finally {
         await db.close();
       }
     }
+  });
+
+  it('hygiene is real: a listed column its migration leaves alone is reported by name, next to one it rewrites (planted)', async () => {
+    expect(await plantedRewriteProblems(ZERO_A_GOAL, { table: 'goals', rows: () => true, columns: ['target_amount'] })).toEqual([]);
+    expect(await plantedRewriteProblems(ZERO_A_GOAL, { table: 'goals', rows: () => true, columns: ['target_amount', 'name'] })).toEqual([
+      "h1_plant_zero does not rewrite goals.name when replayed alone: goals [1] target_amount: 5000 → 0 (only a column its own SQL sets to CURRENT_TIMESTAMP or datetime('now') may go under volatile)",
+    ]);
+  });
+
+  it('hygiene is real (a): an entry that lists no columns is reported, even when its migration really stamps the volatile one (planted)', async () => {
+    const STAMP_ONLY: Migration = { version: 'h1_plant_stamp_only', sql: 'UPDATE goals SET updated_at = CURRENT_TIMESTAMP;' };
+    expect(await plantedRewriteProblems(STAMP_ONLY, { table: 'goals', rows: () => true, columns: [], volatile: ['updated_at'] })).toEqual([
+      'h1_plant_stamp_only: the goals entry lists no columns (every entry lists at least one column its migration rewrites; a stamp alone is not a rewrite)',
+    ]);
+  });
+
+  it("hygiene is real (b): a volatile column its migration's own SQL does not set to the clock is reported, a stamp in a comment does not count, and CURRENT_TIMESTAMP and datetime('now') stamps pass (planted)", async () => {
+    const entry: IntendedRewrite = { table: 'goals', rows: () => true, columns: ['target_amount'], volatile: ['updated_at'] };
+    expect(await plantedRewriteProblems({ version: 'h1_plant_stamped', sql: 'UPDATE goals SET target_amount = 0, updated_at = CURRENT_TIMESTAMP;' }, entry)).toEqual([]);
+    expect(await plantedRewriteProblems({ version: 'h1_plant_stamped_now', sql: "UPDATE goals SET target_amount = 0, updated_at = datetime('now');" }, entry)).toEqual([]);
+    const unstamped = "does not set goals.updated_at to the clock in its own SQL (only a column it sets to CURRENT_TIMESTAMP or datetime('now') may go under volatile)";
+    expect(await plantedRewriteProblems({ version: 'h1_plant_unstamped', sql: 'UPDATE goals SET target_amount = 0;' }, entry)).toEqual([`h1_plant_unstamped ${unstamped}`]);
+    expect(await plantedRewriteProblems({ version: 'h1_plant_comment_stamp', sql: '-- updated_at = CURRENT_TIMESTAMP\nUPDATE goals SET target_amount = 0;' }, entry)).toEqual([`h1_plant_comment_stamp ${unstamped}`]);
+  });
+
+  it('hygiene is real (c): an entry whose rows test selects rows its migration leaves alone is reported with their number; a scope of only the rewritten rows passes (planted)', async () => {
+    const ONE_BUDGET: Migration = { version: 'h1_plant_one_budget', sql: 'UPDATE categories SET monthly_budget = 250 WHERE id = 1;' };
+    const { was, now } = await plantedRows([ONE_BUDGET]);
+    const others = was.get('categories')!.rows.length - 1;
+    expect(others).toBeGreaterThan(0);
+    expect(rewriteProblems(ONE_BUDGET, { table: 'categories', rows: () => true, columns: ['monthly_budget'] }, was, now)).toEqual([
+      `h1_plant_one_budget: the categories entry's rows test selects ${others} pre-chain row(s) it does not rewrite in any listed column (scope its rows test to the rows the migration changes)`,
+    ]);
+    expect(rewriteProblems(ONE_BUDGET, { table: 'categories', rows: (r) => r.id === 1, columns: ['monthly_budget'] }, was, now)).toEqual([]);
   });
 });
 
