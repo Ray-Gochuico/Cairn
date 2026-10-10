@@ -175,46 +175,58 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
         }
     };
 
-    // quick_check: returns a single row 'ok' when structurally sound.
-    match sqlx::query("PRAGMA quick_check").fetch_one(&mut conn).await {
-        Ok(row) => {
-            let result: String = row.try_get::<String, _>(0).unwrap_or_default();
-            if result.to_ascii_lowercase() != "ok" {
-                return reject(format!(
-                    "The backup failed an integrity check (quick_check returned \"{result}\"). It may be corrupt."
-                ));
+    // The checks run inside one block, so the connection is closed and
+    // awaited on EVERY exit below, a refusal included (v1.8.0 H2, v1.7.2
+    // chip e): a connection that is only dropped is closed later on sqlx's
+    // worker thread, and on Windows SQLite's open handle (no
+    // FILE_SHARE_DELETE) can then refuse the removal of a staged file this
+    // check just refused.
+    let checked: Result<i64, BackupValidation> = async {
+        // quick_check: returns a single row 'ok' when structurally sound.
+        match sqlx::query("PRAGMA quick_check").fetch_one(&mut conn).await {
+            Ok(row) => {
+                let result: String = row.try_get::<String, _>(0).unwrap_or_default();
+                if result.to_ascii_lowercase() != "ok" {
+                    return Err(reject(format!(
+                        "The backup failed an integrity check (quick_check returned \"{result}\"). It may be corrupt."
+                    )));
+                }
             }
+            Err(e) => return Err(reject(format!("Integrity check could not run: {e}"))),
         }
-        Err(e) => return reject(format!("Integrity check could not run: {e}")),
-    }
 
-    // schema_migrations presence — proves this is a Cairn DB.
-    let has_migrations: i64 = match sqlx::query(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
-    )
-    .fetch_one(&mut conn)
-    .await
-    {
-        Ok(row) => row.try_get::<i64, _>(0).unwrap_or(0),
-        Err(e) => return reject(format!("Could not inspect the backup's tables: {e}")),
-    };
-    if has_migrations == 0 {
-        return reject(
-            "This does not look like a Cairn backup (no schema_migrations table).".to_string(),
-        );
-    }
-
-    // user_version downgrade guard.
-    let user_version: i64 = match sqlx::query("PRAGMA user_version")
+        // schema_migrations presence — proves this is a Cairn DB.
+        let has_migrations: i64 = match sqlx::query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'",
+        )
         .fetch_one(&mut conn)
         .await
-    {
-        Ok(row) => row.try_get::<i64, _>(0).unwrap_or(0),
-        Err(e) => return reject(format!("Could not read the backup's schema version: {e}")),
-    };
+        {
+            Ok(row) => row.try_get::<i64, _>(0).unwrap_or(0),
+            Err(e) => return Err(reject(format!("Could not inspect the backup's tables: {e}"))),
+        };
+        if has_migrations == 0 {
+            return Err(reject(
+                "This does not look like a Cairn backup (no schema_migrations table).".to_string(),
+            ));
+        }
 
-    // Best-effort close; ignore errors (we're only reading).
-    let _ = conn.close().await;
+        // user_version downgrade guard.
+        let user_version: i64 = match sqlx::query("PRAGMA user_version")
+            .fetch_one(&mut conn)
+            .await
+        {
+            Ok(row) => row.try_get::<i64, _>(0).unwrap_or(0),
+            Err(e) => return Err(reject(format!("Could not read the backup's schema version: {e}"))),
+        };
+        Ok(user_version)
+    }
+    .await;
+    close_validator_connection(conn).await;
+    let user_version = match checked {
+        Ok(v) => v,
+        Err(refused) => return refused,
+    };
 
     if user_version > MAX_SCHEMA_VERSION {
         return reject(format!(
@@ -228,6 +240,15 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
         max_supported_version: MAX_SCHEMA_VERSION,
         reason: None,
     }
+}
+
+/// Close the validator's connection and wait for it (errors ignored: the
+/// connection only read). A connection that is only dropped is closed later,
+/// on sqlx's worker thread.
+async fn close_validator_connection(conn: sqlx::SqliteConnection) {
+    let _ = conn.close().await;
+    #[cfg(test)]
+    VALIDATOR_CLOSES.with(|n| n.set(n.get() + 1));
 }
 
 /// Atomically replace `live` with the contents of `backup`, leaving a VALID
@@ -330,6 +351,9 @@ thread_local! {
     /// staging copy and its validation, to prove that what is swapped in is
     /// what was validated.
     static AFTER_STAGE: std::cell::RefCell<Option<fn(&Path)>> = const { std::cell::RefCell::new(None) };
+    /// v1.8.0 H2 (v1.7.2 chip e): how many validator connections were closed
+    /// and awaited, so a test can see that a refusal closes its connection too.
+    static VALIDATOR_CLOSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 /// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
@@ -2019,6 +2043,62 @@ mod tests {
         assert!(err.contains("(your data is unchanged)"), "{err}");
         assert!(!restore_tmp_path(&live).exists(), "the partial staging file is removed: {err}");
         assert_untouched(&live, &wal, &shm);
+    }
+
+    // ---- v1.8.0 H2 (chip v171-2): restore-swap hardening. ----
+
+    /// v1.7.2 chip e: the validator closes its connection on EVERY exit, a
+    /// refusal included. A connection that is only dropped is closed later on
+    /// sqlx's worker thread; on Windows SQLite's open handle (no
+    /// FILE_SHARE_DELETE) can then refuse the removal of a staged file the
+    /// check just refused (that half runs on v171-1's Windows cargo job).
+    #[tokio::test]
+    async fn the_validator_closes_its_connection_on_every_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let pool = seeded_pool(&dir.path().join("seed.db")).await;
+        let good = dir.path().join("good.db");
+        backup_to(&pool, &good).await.unwrap();
+        sqlx::query(&format!("PRAGMA user_version = {}", MAX_SCHEMA_VERSION + 5)).execute(&pool).await.unwrap();
+        let newer = dir.path().join("newer.db");
+        backup_to(&pool, &newer).await.unwrap();
+        pool.close().await;
+        let junk = dir.path().join("junk.db"); // quick_check cannot run
+        std::fs::write(&junk, vec![b'x'; 200]).unwrap();
+        let empty = dir.path().join("empty.db"); // no schema_migrations table
+        std::fs::write(&empty, b"").unwrap();
+        let mut garbled = std::fs::read(&good).unwrap(); // quick_check reports a problem
+        for b in garbled.iter_mut().skip(4096).take(2000) {
+            *b = 0x5a;
+        }
+        let bad = dir.path().join("garbled.db");
+        std::fs::write(&bad, &garbled).unwrap();
+
+        for (path, ok) in [(&good, true), (&junk, false), (&empty, false), (&bad, false), (&newer, false)] {
+            let before = VALIDATOR_CLOSES.with(|n| n.get());
+            let v = validate_backup_file(path).await;
+            assert_eq!(v.ok, ok, "{}: {:?}", path.display(), v.reason);
+            assert_eq!(
+                VALIDATOR_CLOSES.with(|n| n.get()),
+                before + 1,
+                "{}: the connection is closed before the verdict returns ({:?})",
+                path.display(),
+                v.reason
+            );
+        }
+    }
+
+    /// v1.7.2 chip e, the Windows half (compiled only on Windows; it runs on
+    /// v171-1's Windows cargo job): a file the validator refused can be
+    /// removed at once, because its connection was closed before the verdict
+    /// returned.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_validator_leaves_a_refused_file_removable_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty = dir.path().join("empty.db");
+        std::fs::write(&empty, b"").unwrap();
+        assert!(!validate_backup_file(&empty).await.ok);
+        std::fs::remove_file(&empty).expect("no handle is left open on the refused file");
     }
 
     /// M-3: pin the Rust schema-version constant to the literal so a one-sided
