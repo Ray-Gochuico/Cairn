@@ -472,6 +472,10 @@ thread_local! {
     /// sleep, unless `REAL_RETRY_PAUSES` is set (one test sleeps for real).
     static RETRY_PAUSES: std::cell::RefCell<Vec<std::time::Duration>> = const { std::cell::RefCell::new(Vec::new()) };
     static REAL_RETRY_PAUSES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// v1.8.0 H2 (code review): a name `name_lookup` reports it cannot look
+    /// at, standing in for an lstat that fails with something other than
+    /// NotFound (a permission, an I/O error) on one name alone.
+    static LOOKUP_FAILS: std::cell::RefCell<Option<fn(&Path) -> bool>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Test seam: `replace_database_file_with` plus a `sync` seam for the staged
@@ -560,7 +564,8 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
 ///       it would delete the file chosen.
 ///   0b. Never overwrite a set-aside -wal an earlier restore left: it may
 ///       hold that session's committed frames. The refusal names it and the
-///       calm next step (CR-U-20a, U1F-m1/m19).
+///       calm next step (CR-U-20a, U1F-m1/m19). A name Cairn cannot look
+///       up counts as there (may_exist, v1.8.0 H2 code review).
 fn refuse_before_staging(backup: &Path, live: &Path) -> Result<(), String> {
     let tmp = restore_tmp_path(live);
     if let (Ok(src), Ok(staging)) = (backup.canonicalize(), tmp.canonicalize()) {
@@ -572,7 +577,7 @@ fn refuse_before_staging(backup: &Path, live: &Path) -> Result<(), String> {
         }
     }
     let wal_aside = set_aside_path(&sidecar_paths(live)[0]);
-    if std::fs::symlink_metadata(&wal_aside).is_ok() {
+    if may_exist(&wal_aside) {
         return Err(leftover_refusal(&wal_aside));
     }
     Ok(())
@@ -794,15 +799,18 @@ pub fn reconcile_interrupted_restore(live: &Path) {
     let tmp = restore_tmp_path(live);
     let [wal, shm] = sidecar_paths(live);
     let (wal_aside, shm_aside) = (set_aside_path(&wal), set_aside_path(&shm));
-    let present = |p: &Path| std::fs::symlink_metadata(p).is_ok();
-    if !present(&wal_aside) && !present(&shm_aside) {
+    // A removal target is read as present only when its lookup succeeds; the
+    // -wal set-aside, which may hold data, whenever its lookup is not
+    // NotFound (may_exist).
+    let present = |p: &Path| name_lookup(p).is_ok();
+    if !may_exist(&wal_aside) && !present(&shm_aside) {
         return; // nothing was set aside: no restore stopped mid-swap
     }
     // The staged copy goes only when no -wal set-aside is beside it: nothing
     // that holds data was then set aside, so finance.db is whole on its own
     // at either crash point. Beside a kept -wal set-aside it stays, the sign
     // that step 3 never ran.
-    if present(&tmp) && !present(&wal_aside) {
+    if present(&tmp) && !may_exist(&wal_aside) {
         let _ = std::fs::remove_file(&tmp);
     }
     if present(&shm_aside) {
@@ -818,6 +826,25 @@ pub fn reconcile_at_startup<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     if let Ok(live) = resolve_sqlite_path(app, LIVE_DB_URL) {
         reconcile_interrupted_restore(&live);
     }
+}
+
+/// Whether a file may be at `p` (v1.8.0 H2, code review): only NotFound
+/// proves the name free. Any other lstat error (a permission, an I/O error)
+/// leaves a file possibly there, so a read that guards data, a `-wal`
+/// set-aside, takes it as present. Removal targets keep the plain
+/// `name_lookup(p).is_ok()`: reading one as absent only leaves it in place.
+fn may_exist(p: &Path) -> bool {
+    !matches!(name_lookup(p), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+}
+
+/// `symlink_metadata` reduced to its answer. Under test `LOOKUP_FAILS` can
+/// make it fail for a chosen name.
+fn name_lookup(p: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if LOOKUP_FAILS.with(|hook| hook.borrow().is_some_and(|fails| fails(p))) {
+        return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: this name cannot be looked at"));
+    }
+    std::fs::symlink_metadata(p).map(|_| ())
 }
 
 /// Where step 2 of `replace_database_file` sets an old sidecar aside.
@@ -3059,6 +3086,61 @@ mod tests {
         let before = listing(dir.path());
         reconcile_interrupted_restore(&live);
         assert_eq!(listing(dir.path()), before);
+    }
+
+    /// Code review (v1.8.0 H2): only NotFound proves a name is free. A -wal
+    /// set-aside whose name Cairn cannot look at (any other lstat error) is
+    /// read as there: the launch keeps the staged copy beside it, and the
+    /// check before the close and step 0b still refuse, naming it.
+    #[tokio::test]
+    async fn a_wal_set_aside_cairn_cannot_look_at_is_read_as_there() {
+        fn the_wal_set_aside(p: &Path) -> bool {
+            p.to_string_lossy().ends_with("-wal.restore-old")
+        }
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        stage_restore(&backup, &live).await.expect("staged");
+        crash_before_the_swap(&live);
+
+        LOOKUP_FAILS.with(|hook| *hook.borrow_mut() = Some(the_wal_set_aside));
+        reconcile_interrupted_restore(&live);
+        let kept_the_staged_copy = restore_tmp_path(&live).exists();
+        let checked = refuse_before_close(&backup, &live);
+        let staged = stage_restore(&backup, &live).await;
+        LOOKUP_FAILS.with(|hook| *hook.borrow_mut() = None);
+
+        assert!(kept_the_staged_copy, "the staged copy stays beside a -wal set-aside that may be there");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal set-aside is kept");
+        assert!(!aside(&shm).exists(), "the index set-aside is removed");
+        assert_eq!(checked, Err(leftover_refusal(&aside(&wal))), "the check before the close refuses");
+        assert_eq!(staged.unwrap_err(), leftover_refusal(&aside(&wal)), "step 0b refuses");
+    }
+
+    /// The same through the file system (unix): the folder lists its names
+    /// but nothing in it can be looked up, so lstat answers "permission
+    /// denied", not "not found". The -wal set-aside it holds still refuses
+    /// the check before the close and step 0b, and nothing is touched.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_wal_set_aside_in_a_folder_cairn_cannot_search_still_refuses() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (dir, backup, live, wal, _shm) = live_with_sidecars().await;
+        let elsewhere = tempfile::tempdir().unwrap();
+        let chosen = elsewhere.path().join("backup.db");
+        std::fs::copy(&backup, &chosen).unwrap();
+        std::fs::write(aside(&wal), b"EARLIER").unwrap();
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        let checked = refuse_before_close(&chosen, &live);
+        let staged = stage_restore(&chosen, &live).await;
+
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(checked, Err(leftover_refusal(&aside(&wal))), "the check before the close refuses");
+        assert_eq!(staged.unwrap_err(), leftover_refusal(&aside(&wal)), "step 0b refuses");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"EARLIER");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES");
+        assert!(!restore_tmp_path(&live).exists());
     }
 
     /// Mirror pin of the TS `DB_URL` (src/lib/backup-restore.ts); also pinned
