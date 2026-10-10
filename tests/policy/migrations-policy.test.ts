@@ -390,16 +390,17 @@ async function observeRunner(migrations: Migration[], inspect?: (db: SqliteAdapt
   return batches;
 }
 
-/** A statement's SQL after any leading block comments: the runner strips only line comments (`--`), and SQLite skips a leading block comment. */
-function leadingSql(statement: string): string {
-  return statement.replace(/^(?:\s*\/\*[\s\S]*?\*\/)*\s*/, '');
+/** A statement's SQL with every block comment replaced by a space, trimmed: the runner strips only line comments (`--`), and SQLite reads a block comment as a space anywhere in a statement (a comment between PRAGMA and foreign_keys still turns foreign keys off, probed). */
+function withoutBlockComments(statement: string): string {
+  return statement.replace(/\/\*[\s\S]*?\*\//g, ' ').trim();
 }
 
 /**
  * A statement that sets the foreign-keys PRAGMA: any case, any spacing, an
  * optional schema prefix, and either name bare or quoted ("…", `…`, […] or
- * '…'; SQLite accepts each, probed). Not `defer_foreign_keys`, which works
- * inside a transaction.
+ * '…'; SQLite accepts each, probed), tested after withoutBlockComments, so a
+ * block comment anywhere in the statement reads as a space. Not
+ * `defer_foreign_keys`, which works inside a transaction.
  */
 const FOREIGN_KEYS_PRAGMA = /^PRAGMA\b\s*(?:["'`\[]?\w+["'`\]]?\s*\.\s*)?["'`\[]?foreign_keys\b/i;
 
@@ -411,7 +412,7 @@ const CLOSES_TRANSACTION = /^(?:COMMIT|END)\b|^ROLLBACK(?:\s+TRANSACTION)?$/i;
 function setsForeignKeysInATransaction(b: RunnerBatch): boolean {
   let open = b.wrapped;
   for (const statement of b.statements) {
-    const st = leadingSql(statement);
+    const st = withoutBlockComments(statement);
     if (open && FOREIGN_KEYS_PRAGMA.test(st)) return true;
     if (!b.wrapped && OPENS_TRANSACTION.test(st)) open = true;
     if (!b.wrapped && CLOSES_TRANSACTION.test(st)) open = false;
@@ -513,7 +514,7 @@ describe('the foreign-keys PRAGMA never runs inside the runner\'s wrap (v1.8.0 H
     });
   });
 
-  it('any spelling is reported (lower case, no spaces, a schema prefix, a quoted name, a leading block comment), and so is one after a migration\'s own BEGIN; defer_foreign_keys, which works inside a transaction, is not (planted)', async () => {
+  it('any spelling is reported (lower case, no spaces, a schema prefix bare or quoted, the name in each of SQLite\'s four quotes, a block comment before or inside the statement), and so is one after a migration\'s own BEGIN, plain or BEGIN TRANSACTION, also after a ROLLBACK TO inside it; defer_foreign_keys, which works inside a transaction, is not (planted)', async () => {
     const batches = await observeRunner([
       { version: 'h1_planted_lower', sql: 'pragma foreign_keys=off;\nCREATE TABLE h1_lower (id INTEGER PRIMARY KEY);' },
       { version: 'h1_planted_schema', sql: 'PRAGMA main.foreign_keys = 0;\nCREATE TABLE h1_schema (id INTEGER PRIMARY KEY);' },
@@ -521,9 +522,30 @@ describe('the foreign-keys PRAGMA never runs inside the runner\'s wrap (v1.8.0 H
       { version: 'h1_planted_bracket_schema', sql: 'PRAGMA [main].foreign_keys = 0;\nCREATE TABLE h1_bracket (id INTEGER PRIMARY KEY);' },
       { version: 'h1_planted_block_comment', sql: '/* rebuild */ PRAGMA foreign_keys = OFF;\nCREATE TABLE h1_commented (id INTEGER PRIMARY KEY);' },
       { version: 'h1_planted_in_own_tx', sql: 'BEGIN TRANSACTION;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_in_own_tx (id INTEGER PRIMARY KEY);\nCOMMIT;' },
+      { version: 'h1_planted_backtick', sql: 'PRAGMA `foreign_keys` = OFF;\nCREATE TABLE h1_backtick (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_single_quote', sql: "PRAGMA 'foreign_keys' = OFF;\nCREATE TABLE h1_single_quote (id INTEGER PRIMARY KEY);" },
+      { version: 'h1_planted_bracket_name', sql: 'PRAGMA [foreign_keys] = OFF;\nCREATE TABLE h1_bracket_name (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_quoted_schema', sql: 'PRAGMA "main"."foreign_keys" = 0;\nCREATE TABLE h1_quoted_schema (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_inner_comment', sql: 'PRAGMA /* x */ foreign_keys = OFF;\nCREATE TABLE h1_inner_comment (id INTEGER PRIMARY KEY);' },
+      { version: 'h1_planted_in_plain_begin', sql: 'BEGIN;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_in_plain_begin (id INTEGER PRIMARY KEY);\nCOMMIT;' },
+      { version: 'h1_planted_after_rollback_to', sql: 'BEGIN;\nSAVEPOINT h1_sp;\nROLLBACK TO SAVEPOINT h1_sp;\nPRAGMA foreign_keys = OFF;\nCREATE TABLE h1_after_rollback_to (id INTEGER PRIMARY KEY);\nCOMMIT;' },
       { version: 'h1_planted_defer', sql: 'PRAGMA defer_foreign_keys = ON;\nCREATE TABLE h1_deferred (id INTEGER PRIMARY KEY);' },
     ]);
-    expect(wrappedForeignKeyPragmas(batches)).toEqual(['h1_planted_lower', 'h1_planted_schema', 'h1_planted_quoted', 'h1_planted_bracket_schema', 'h1_planted_block_comment', 'h1_planted_in_own_tx']);
+    expect(wrappedForeignKeyPragmas(batches)).toEqual([
+      'h1_planted_lower',
+      'h1_planted_schema',
+      'h1_planted_quoted',
+      'h1_planted_bracket_schema',
+      'h1_planted_block_comment',
+      'h1_planted_in_own_tx',
+      'h1_planted_backtick',
+      'h1_planted_single_quote',
+      'h1_planted_bracket_name',
+      'h1_planted_quoted_schema',
+      'h1_planted_inner_comment',
+      'h1_planted_in_plain_begin',
+      'h1_planted_after_rollback_to',
+    ]);
   });
 });
 
