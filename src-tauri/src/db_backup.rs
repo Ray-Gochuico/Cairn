@@ -58,8 +58,10 @@
 //!
 //! CRASH SAFETY: see `replace_database_file` for the per-step analysis. Every
 //! failure point leaves `finance.db` either fully the original or fully the
-//! restored backup — there is no state that is a partially-written main file and
-//! none that leaves the restored file shadowed by a stale WAL. Two exceptions,
+//! restored backup, and none leaves the restored file shadowed by a stale WAL;
+//! the one write into the original main file is the exclusivity check's
+//! close, which normally checkpoints the `-wal` into it first, and when it
+//! cannot, or stops part-way, step 2 sets that `-wal` aside. Two exceptions,
 //! each named: a `-wal` the put-back reports it could not move back (it stays
 //! at its set-aside path, and the message says where, put_back_or_report),
 //! and a crash between steps 2 and 4, which leaves the sidecars set aside:
@@ -77,10 +79,11 @@
 //! command. The close drains only this window's pool, so the swap also asks
 //! SQLite for the file's exclusive lock first and refuses while any other
 //! connection holds it (refuse_if_open_elsewhere, v1.8.0 H2). On the
-//! boot-screen path where no pool was ever loaded, no
-//! checkpoint ran, which is why step 3 sets the sidecars aside instead of
-//! deleting them: a failed swap puts them back, so the original data (file +
-//! WAL) survives. The close → invoke → reload contract is load-bearing and
+//! boot-screen path where no pool was ever loaded, the JS close checkpointed
+//! nothing: the exclusivity check's close normally checkpoints first, and
+//! when it cannot, or stops part-way, the swap's step 2 sets the `-wal`
+//! aside instead of deleting it, so a failed swap puts it back and the
+//! original data (file + WAL) survives. The close → invoke → reload contract is load-bearing and
 //! enforced in `src/lib/backup-restore.ts`.
 
 use serde::Serialize;
@@ -276,9 +279,11 @@ async fn close_validator_connection(conn: sqlx::SqliteConnection) {
 /// PRECONDITION (normal path): the live pool was closed by the JS step, so no
 /// connection holds `live` and `pool.close()` checkpointed the WAL. On the
 /// boot-screen path where the pool was never loaded (the tolerated not-loaded
-/// close in src/lib/backup-restore.ts) NO checkpoint ran: a leftover `-wal`
-/// may still hold committed frames. So the sidecars are SET ASIDE, never
-/// deleted, until the swap has succeeded (v1.7.1 CR-U-15, U1-m23/m32).
+/// close in src/lib/backup-restore.ts) the JS step checkpointed nothing: the
+/// exclusivity check's close normally checkpoints a leftover `-wal` first,
+/// and when it cannot, or stops part-way, step 2 sets that `-wal` aside. So
+/// the sidecars are SET ASIDE, never deleted, until the swap has succeeded
+/// (v1.7.1 CR-U-15, U1-m23/m32).
 ///
 /// ORDERING (every error return leaves the original data whole — except a
 /// REPORTED put-back failure of the `-wal`, which names where it is (see

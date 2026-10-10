@@ -236,7 +236,8 @@ function isNotLoadedRejection(e: unknown): boolean {
  * restoreFromBackup (step 1) and the macOS updater in Settings → Updates
  * (after the download, before the bundle swap). It drains only THIS process's
  * pool; db_restore itself refuses while another connection — a second Cairn
- * window, another program — has the file open (v1.8.0 H2, U1 chip p).
+ * window, another program — has the file open (v1.8.0 H2, U1 chip p;
+ * residuals: D-H2-1b).
  *
  * It rejects with the plugin's error unchanged — the only rejection in
  * tauri-plugin-sql 2.4.0 is the not-loaded one, before anything is closed —
