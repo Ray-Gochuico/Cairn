@@ -241,6 +241,10 @@ describe('listBackups — only a missing folder means "no backups" (v1.8.0 H3, L
   });
 
   it('an Error rejection is read by its message, like the first-run pin above', async () => {
+    // A missing-folder code in an Error's message is "no backups", so the
+    // message is what decides it, not the rejection's type.
+    mockReadDir.mockRejectedValueOnce(new Error('The system cannot find the path specified. (os error 3)'));
+    await expect(listBackups()).resolves.toEqual([]);
     mockReadDir.mockRejectedValueOnce(new Error('Permission denied (os error 13)'));
     await expect(listBackups()).rejects.toThrow('Permission denied (os error 13)');
   });
