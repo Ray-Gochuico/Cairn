@@ -71,6 +71,12 @@ export function DataSection() {
   // Round-3 S7: settled flag so the empty state can't render over a
   // not-yet-loaded list (the empty-state ratchet's isLoading token matches).
   const [isLoadingBackups, setIsLoadingBackups] = useState(true);
+  // v1.8.0 H3 (chip (a), D-H3-2): why the last listing failed, on its own line
+  // in the Restore area until a listing succeeds — apart from `error`, so no
+  // other message clears it and it never hides or replaces the one-time
+  // restore-failure notice. While it is set the list is unknown, so "No
+  // backups yet" stays hidden.
+  const [listingError, setListingError] = useState<string | null>(null);
 
   // Load (and reload) the rotating backups list. Best-effort: a failure leaves
   // the list as-is and surfaces a soft note rather than blocking the section.
@@ -86,8 +92,9 @@ export function DataSection() {
     }
     try {
       setBackups(await listBackups());
+      setListingError(null);
     } catch (e) {
-      setError(`Could not read your backups: ${e instanceof Error ? e.message : String(e)}`);
+      setListingError(`Could not read your backups: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsLoadingBackups(false);
     }
@@ -344,7 +351,8 @@ export function DataSection() {
               </ul>
             ) : (
               tauri &&
-              !isLoadingBackups && (
+              !isLoadingBackups &&
+              listingError === null && (
                 <EmptyState
                   bare
                   icon={History}
@@ -352,6 +360,12 @@ export function DataSection() {
                   description="Click “Back up now” to create one."
                 />
               )
+            )}
+
+            {listingError && (
+              <p className="text-sm text-destructive-soft-foreground break-all" role="alert">
+                {listingError}
+              </p>
             )}
 
             <Button

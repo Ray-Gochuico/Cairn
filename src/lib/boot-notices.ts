@@ -18,6 +18,9 @@
  *    swap succeeded; consumed by the next boot that reaches the pre-update
  *    gate (CR-U-26), which then holds the update for that one boot instead of
  *    re-running it. A boot that fails before the gate leaves it pending.
+ *    Every other boot-screen restore clears it once its swap succeeded
+ *    (v1.7.2, L4), the same copy restored from another screen included
+ *    (D-172-13); Settings → Data never meets a pending one.
  */
 export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
 export const PRE_UPDATE_NOTICE_KEY = 'cairn.preUpdateCopy.notice';

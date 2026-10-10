@@ -142,6 +142,21 @@ export interface BackupEntry {
 const BACKUP_NAME_RE = /^cairn-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
 
 /**
+ * v1.8.0 H3 (L26): true only for readDir's rejection of a folder that does
+ * not exist. tauri-plugin-fs 2.5.1 rejects with a plain string that ENDS with
+ * std's io error — `failed to read directory at path: {path} with error: No
+ * such file or directory (os error 2)` (src/commands.rs:487-492); Windows
+ * reports a missing folder as os error 3. The code is read at the end of the
+ * text, which no path can fake and no system language changes. Anything else
+ * (a permission, the plugin's `forbidden path: …`, a file in the folder's
+ * place) is not "no backups".
+ */
+function isMissingFolderRejection(e: unknown): boolean {
+  const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+  return /\(os error [23]\)$/.test(message);
+}
+
+/**
  * List the manual `cairn-*.db` backups AND the `cairn-pre-update-*` copies for
  * the in-app Restore lists, newest first. The hidden `backups/` folder (under the app config dir) is not
  * browsable in Finder, so the UI lists its contents directly instead of relying
@@ -150,17 +165,21 @@ const BACKUP_NAME_RE = /^cairn-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/
  * Each timestamp is parsed FROM the filename into a LOCAL-time Date — the exact
  * inverse of how `backupFilename` builds the name — so the displayed time
  * matches the wall clock when the backup was taken (no fs `stat`, no extra
- * capability). On the first run the folder doesn't exist yet, so a `readDir`
- * failure is treated as "no backups" and returns `[]`.
+ * capability). On the first run the folder doesn't exist yet, so that
+ * `readDir` failure is "no backups" and returns `[]`. Any other `readDir`
+ * failure is rethrown unchanged, so each list says why it is empty (v1.8.0
+ * H3, L26): the boot screens' "Could not read your backups: …" (CR-U1-22)
+ * and Settings → Data's note of the same words.
  */
 export async function listBackups(): Promise<BackupEntry[]> {
   const dir = await backupsDirPath();
   let entries: Awaited<ReturnType<typeof readDir>>;
   try {
     entries = await readDir(dir);
-  } catch {
+  } catch (e) {
     // First run (or the folder was removed): nothing to list, not an error.
-    return [];
+    if (isMissingFolderRejection(e)) return [];
+    throw e;
   }
   // Pass 1 — synchronous filter + parse. The flatMap's drop-semantics (return
   // [] for non-files / regex non-matches) stay sync; no path is built here
@@ -268,7 +287,9 @@ export async function closeLiveDatabase(): Promise<void> {
  * `tolerateNotLoaded` (boot screens only) accepts the plugin's exact
  * not-loaded rejection as 'no pool to drain'. `onRestored` runs once, only
  * after `db_restore` succeeded and before the reload (best-effort; the boot
- * screens set the one-boot update hold with it, CR-U-14).
+ * screens pass `setUpdateHold` for the failed-migration screen's true
+ * pre-update copy, CR-U-14, and `clearUpdateHold` for every other restore,
+ * v1.7.2 L4; Settings passes none).
  */
 export async function restoreFromBackup(
   source: string,

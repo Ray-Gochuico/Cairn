@@ -207,6 +207,49 @@ describe('listBackups', () => {
   });
 });
 
+describe('listBackups — only a missing folder means "no backups" (v1.8.0 H3, L26)', () => {
+  // The rejections tauri-plugin-fs 2.5.1 sends for readDir are PLAIN STRINGS:
+  // `failed to read directory at path: {path} with error: {std io error}`
+  // (src/commands.rs:487-492), or `forbidden path: {path}` from its scope
+  // check (src/commands.rs:1557-1576).
+  const DIR = '/Users/me/Library/Application Support/com.x.cairn/backups';
+  const readDirRejection = (ioError: string) => `failed to read directory at path: ${DIR} with error: ${ioError}`;
+
+  it('a folder that does not exist yet is "no backups": the macOS/Linux text (os error 2) and the Windows one (os error 3)', async () => {
+    mockReadDir.mockRejectedValueOnce(readDirRejection('No such file or directory (os error 2)'));
+    await expect(listBackups()).resolves.toEqual([]);
+    mockReadDir.mockRejectedValueOnce(readDirRejection('The system cannot find the path specified. (os error 3)'));
+    await expect(listBackups()).resolves.toEqual([]);
+  });
+
+  for (const [label, reason] of [
+    ['a permission refusal (os error 13)', readDirRejection('Permission denied (os error 13)')],
+    ['a macOS privacy refusal (os error 1)', readDirRejection('Operation not permitted (os error 1)')],
+    ["a file in the folder's place (os error 20)", readDirRejection('Not a directory (os error 20)')],
+    ["the plugin's scope refusal", `forbidden path: ${DIR}`],
+  ] as const) {
+    it(`any other failure reaches the caller unchanged: ${label}`, async () => {
+      mockReadDir.mockRejectedValueOnce(reason);
+      await expect(listBackups()).rejects.toBe(reason);
+    });
+  }
+
+  it('the os error code is read at the END of the text: a path that contains "(os error 2)" is not a missing folder', async () => {
+    const odd = 'failed to read directory at path: /Users/me/(os error 2)/backups with error: Permission denied (os error 13)';
+    mockReadDir.mockRejectedValueOnce(odd);
+    await expect(listBackups()).rejects.toBe(odd);
+  });
+
+  it('an Error rejection is read by its message, like the first-run pin above', async () => {
+    // A missing-folder code in an Error's message is "no backups", so the
+    // message is what decides it, not the rejection's type.
+    mockReadDir.mockRejectedValueOnce(new Error('The system cannot find the path specified. (os error 3)'));
+    await expect(listBackups()).resolves.toEqual([]);
+    mockReadDir.mockRejectedValueOnce(new Error('Permission denied (os error 13)'));
+    await expect(listBackups()).rejects.toThrow('Permission denied (os error 13)');
+  });
+});
+
 describe('Windows separators (mocked join — proves wiring, not OS behavior)', () => {
   // The Windows app-config dir Tauri resolves for our bundle identifier.
   // Trailing backslash on purpose: the join must not double the separator.
