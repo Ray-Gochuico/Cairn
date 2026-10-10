@@ -285,16 +285,18 @@ async fn close_validator_connection(conn: sqlx::SqliteConnection) {
 ///      failure here leaves `live` and its sidecars untouched (the temp file
 ///      is removed). `live` is never the copy target, so the in-copy
 ///      truncation window of a plain `fs::copy(backup, live)` does not exist.
-///   2. RENAME the old `-wal` / `-shm` aside to `<sidecar>.restore-old` (a
-///      missing sidecar is skipped). They must not sit next to the restored
-///      file — a stale WAL would be replayed over it on reopen — but they are
-///      only moved, so a failure here or in step 3 renames them back.
+///   2. MOVE the old `-wal` / `-shm` aside to `<sidecar>.restore-old` (a
+///      missing sidecar is skipped), never replacing a file already there
+///      (v1.8.0 H2, chip t). They must not sit next to the restored file — a
+///      stale WAL would be replayed over it on reopen — but they are only
+///      moved, so a failure here or in step 3 moves them back.
 ///   3. `rename(tmp, live)` — atomic on the same filesystem. Before it, `live`
 ///      is the intact original; after it, `live` IS the restored backup.
 ///   4. Only now delete the set-aside sidecars (they belonged to the replaced
 ///      file; best-effort).
 ///
-/// On a failure in steps 2–3 every moved sidecar is renamed back. Every
+/// On a failure in steps 2–3 every moved sidecar is moved back, never over a
+/// sidecar created in the meantime (chip t). Every
 /// sidecar that cannot go back is named with where it is (the file is kept).
 /// "(your data is unchanged)" is dropped, and "could not be put back" used,
 /// ONLY when the `-wal` is stuck; a stuck `-shm` alone is reported calmly
@@ -303,7 +305,36 @@ pub async fn replace_database_file(backup: &Path, live: &Path) -> Result<(), Str
     stage_restore(backup, live).await?;
     // The two seams are made after the last await: a `&mut dyn FnMut` held
     // across an await would make the db_restore command's future !Send.
-    swap_staged(live, &mut |from: &Path, to: &Path| std::fs::rename(from, to), &mut |p: &Path| real_sync(p))
+    swap_staged(live, &mut swap_move(live), &mut |p: &Path| real_sync(p))
+}
+
+/// The production `rename` seam of `swap_staged` (v1.8.0 H2, chip t): step 3
+/// (the staged copy over `live`) is the one move that replaces a file; every
+/// set-aside (step 2) and every put-back refuses to (`move_no_replace`).
+fn swap_move(live: &Path) -> impl FnMut(&Path, &Path) -> std::io::Result<()> + '_ {
+    move |from: &Path, to: &Path| {
+        if to == live {
+            std::fs::rename(from, to)
+        } else {
+            move_no_replace(from, to)
+        }
+    }
+}
+
+/// Move `from` to `to` without ever replacing a file at `to` (v1.8.0 H2,
+/// chip t, U1F-m7): `rename(2)` and Windows' replacing move both overwrite
+/// their destination, so a sidecar another connection created meanwhile
+/// would be lost. `to` is linked to `from`'s data first, which fails with
+/// `AlreadyExists` when a file is there, and only then is the `from` name
+/// removed. If that removal fails, the new link is taken back, so the move
+/// either happened or did not.
+fn move_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::hard_link(from, to)?;
+    if let Err(e) = std::fs::remove_file(from) {
+        let _ = std::fs::remove_file(to);
+        return Err(e);
+    }
+    Ok(())
 }
 
 /// Test seam: the whole swap with `rename` injected, so a test can fail one
@@ -395,8 +426,10 @@ async fn stage_restore(backup: &Path, live: &Path) -> Result<(), String> {
     //     hold that session's committed frames. The refusal names it and the
     //     calm next step (CR-U-20a, U1F-m1/m19). A leftover -shm set-aside is
     //     SQLite's rebuildable index and holds no data, so it never refuses
-    //     (CR-U-25): it is removed here best-effort, and step 2's rename
-    //     replaces it anyway if that removal failed.
+    //     (CR-U-25): it is removed here best-effort. One this removal cannot
+    //     delete could not be renamed over either (a locked file or folder
+    //     refuses both), so step 2, which no longer replaces a file (v1.8.0
+    //     H2, chip t), refuses then with the -shm named.
     let [wal_aside, shm_aside] = &asides;
     if std::fs::symlink_metadata(wal_aside).is_ok() {
         return Err(leftover_refusal(wal_aside));
@@ -481,8 +514,9 @@ async fn stage_through_sqlite(backup: &Path, tmp: &Path) -> Result<(), String> {
 
 /// The rest of `replace_database_file`, on the staged `<live>.restore-tmp`:
 /// step 1's permission fix and flush, then steps 2-4 (set the old sidecars
-/// aside, swap, clean up). Synchronous: `rename` and `sync` are the test
-/// seams.
+/// aside, swap, clean up). Synchronous: `rename` (the move seam: production
+/// passes `swap_move`, which replaces a file only at step 3) and `sync` are
+/// the test seams.
 fn swap_staged(
     live: &Path,
     rename: &mut dyn FnMut(&Path, &Path) -> std::io::Result<()>,
@@ -543,7 +577,8 @@ fn swap_staged(
     Ok(())
 }
 
-/// Rename every set-aside sidecar back (newest move first) and build the
+/// Move every set-aside sidecar back (newest move first; in production never
+/// over a file already there, chip t) and build the
 /// error. "(your data is unchanged)" is claimed unless the `-wal` could not
 /// go back; a sidecar that could not go back is named with where it is —
 /// kept, never deleted. The `-shm` is SQLite's rebuildable wal-index and
@@ -2099,6 +2134,77 @@ mod tests {
                 v.reason
             );
         }
+    }
+
+    /// Chip t (U1F-m7): a sidecar that appears while the old one is set
+    /// aside (another connection's fresh -wal) is never replaced by the
+    /// put-back: rename(2) replaces its destination, so v1.7.2 overwrote it
+    /// and still said "(your data is unchanged)". Now the -wal that cannot
+    /// go back is reported as stuck, and both files are kept.
+    #[tokio::test]
+    async fn a_put_back_never_replaces_a_sidecar_created_meanwhile() {
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        let (live_c, wal_c) = (live.clone(), wal.clone());
+        let mut production = swap_move(&live);
+        let mut rename = |from: &Path, to: &Path| -> std::io::Result<()> {
+            if to == live_c.as_path() {
+                std::fs::write(&wal_c, b"A-NEWER-WAL").unwrap(); // another connection, meanwhile
+                return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "simulated: the final rename is refused"));
+            }
+            production(from, to)
+        };
+        let msg = replace_database_file_with(&backup, &live, &mut rename).await.unwrap_err();
+        assert!(msg.contains("could not be put back"), "{msg}");
+        assert!(!msg.contains("your data is unchanged"), "{msg}");
+        assert!(msg.contains(&aside(&wal).display().to_string()), "the message names where the -wal is: {msg}");
+        assert_eq!(std::fs::read(&wal).unwrap(), b"A-NEWER-WAL", "the newer -wal is never replaced");
+        assert_eq!(std::fs::read(aside(&wal)).unwrap(), b"COMMITTED-WAL-FRAMES", "the set-aside -wal is kept");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm went back");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+    }
+
+    /// Chip t, step 2's half: setting a sidecar aside never replaces a
+    /// set-aside file that appeared after step 0 looked (another restore's,
+    /// meanwhile). Pinned through the production entry point.
+    #[tokio::test]
+    async fn a_set_aside_never_replaces_a_file_made_meanwhile() {
+        fn another_restores_index_appears(tmp: &Path) {
+            let live = tmp.to_string_lossy().trim_end_matches(".restore-tmp").to_string();
+            std::fs::write(format!("{live}-shm.restore-old"), b"ANOTHER-RESTORE-INDEX").unwrap();
+        }
+        let (_dir, backup, live, wal, shm) = live_with_sidecars().await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = Some(another_restores_index_appears));
+        let result = replace_database_file(&backup, &live).await;
+        AFTER_STAGE.with(|hook| *hook.borrow_mut() = None);
+        let msg = result.unwrap_err();
+        assert!(
+            msg.starts_with(&format!("db_restore: could not set aside the WAL sidecar {} (your data is unchanged): ", shm.display())),
+            "{msg}"
+        );
+        assert_eq!(std::fs::read(aside(&shm)).unwrap(), b"ANOTHER-RESTORE-INDEX", "the file already set aside is never replaced");
+        assert_eq!(std::fs::read(&shm).unwrap(), b"SHM-INDEX", "the -shm stays where it was");
+        // The -wal was set aside first and went back through the production
+        // no-replace move (plan review R1-2/R2-4: its fate is pinned).
+        assert_eq!(std::fs::read(&wal).unwrap(), b"COMMITTED-WAL-FRAMES", "the -wal went back, byte-for-byte");
+        assert!(!aside(&wal).exists(), "no -wal is left set aside");
+        assert_eq!(std::fs::read(&live).unwrap(), b"ORIGINAL-LIVE-DB");
+        assert!(!restore_tmp_path(&live).exists(), "no staging file left behind");
+    }
+
+    #[test]
+    fn move_no_replace_never_replaces_a_file_and_moves_when_the_name_is_free() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("from"), dir.path().join("to"));
+        std::fs::write(&from, b"FROM").unwrap();
+        std::fs::write(&to, b"TO").unwrap();
+        let e = move_no_replace(&from, &to).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&from).unwrap(), b"FROM");
+        assert_eq!(std::fs::read(&to).unwrap(), b"TO", "the file already there is untouched");
+        std::fs::remove_file(&to).unwrap();
+        move_no_replace(&from, &to).expect("moves when the name is free");
+        assert!(!from.exists());
+        assert_eq!(std::fs::read(&to).unwrap(), b"FROM");
     }
 
     /// Chip w, the naming half: a staging file an interrupted restore left,
