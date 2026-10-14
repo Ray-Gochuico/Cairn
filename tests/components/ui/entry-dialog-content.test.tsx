@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import {
@@ -92,5 +92,97 @@ describe('EntryDialogContent — outside never dismisses (CR-O-3)', () => {
     fireEvent.pointerDown(document.body);
     expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+const ASK = 'Discard unsaved entries?';
+
+/** The entry dialog, also while the question hides it from assistive tech
+ *  (the open question marks everything behind it aria-hidden). */
+function entryDialog(): Element | null {
+  return screen.queryByText('Add a thing')?.closest('[role="dialog"]') ?? null;
+}
+
+describe('EntryDialogContent — Escape asks once something is entered (CR-O-3)', () => {
+  it('Escape closes a pristine dialog at once, as before', async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('once a value is typed, Escape asks; Stay keeps every value and puts focus back on the field', async () => {
+    const { user, onOpenChange } = await openHarness();
+    const name = screen.getByLabelText('Name') as HTMLInputElement;
+    await user.type(name, 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    const ask = await screen.findByRole('dialog', { name: ASK });
+    expect(ask).toHaveTextContent(
+      "Anything entered here that hasn't been saved is discarded. Saved entries are not affected.",
+    );
+    expect(entryDialog()).not.toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    // The question opens on Stay, so Enter keeps everything too.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Stay' })));
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('Escape on the question is Stay: the select keeps its pick and its focus', async () => {
+    const { user, onOpenChange } = await openHarness();
+    const type = screen.getByLabelText('Type') as HTMLSelectElement;
+    await user.selectOptions(type, 'b');
+    type.focus();
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('b');
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Type')));
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("a pointer-down on the question's overlay is Stay too", async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await settleRadixListeners();
+    const overlays = document.querySelectorAll('[data-state="open"].fixed.inset-0');
+    expect(overlays).toHaveLength(2);
+    fireEvent.pointerDown(overlays[1]);
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('Discard entries closes it, the same way as the X', async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await user.click(screen.getByRole('button', { name: 'Discard entries' }));
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('the X closes at once, entries or not: it is an explicit discard', async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
