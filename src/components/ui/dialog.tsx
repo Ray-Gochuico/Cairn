@@ -72,6 +72,31 @@ const DialogContent = React.forwardRef<
 })
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
+/**
+ * v1.8.0 O2 (RC2, CR-O-3): the content of an ENTRY dialog, one the user types
+ * or picks values into (the onboarding "Add …" dialogs, the import preview,
+ * the PDF review). Entry dialogs opt in; DialogContent itself, and the confirm
+ * dialog built on it, keep closing on an overlay click.
+ *
+ * A pointer-down or focus outside never dismisses it (EditDrawer's W14 #2
+ * policy): a click on the dimmed page behind a half-filled form must not eat
+ * the user's typing.
+ */
+const EntryDialogContent = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ onInteractOutside, ...props }, ref) => (
+  <DialogContent
+    ref={ref}
+    {...props}
+    onInteractOutside={(event) => {
+      onInteractOutside?.(event)
+      event.preventDefault()
+    }}
+  />
+))
+EntryDialogContent.displayName = "EntryDialogContent"
+
 const DialogHeader = ({
   className,
   ...props
@@ -134,6 +159,7 @@ export {
   DialogTrigger,
   DialogClose,
   DialogContent,
+  EntryDialogContent,
   DialogHeader,
   DialogFooter,
   DialogTitle,
