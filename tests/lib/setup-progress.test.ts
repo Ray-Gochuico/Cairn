@@ -234,3 +234,28 @@ describe('setup-progress v2', () => {
     });
   });
 });
+
+describe("setup-progress v2 — 1b's answer shape (v1.8.0 O3, CL-O3-1)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it('a record saved before the answer shape existed (no drafts.marital) still parses, drafts intact', () => {
+    const older = {
+      ...defaultProgressV2(),
+      statuses: { about_you: 'completed', marital_filing: 'completed' },
+      drafts: {
+        you: { name: 'Alex Rivera', dateOfBirth: '1990-05-01' },
+        partner: { name: 'Jordan Lee', dateOfBirth: '1991-08-21' },
+      },
+    };
+    localStorage.setItem(SETUP_PROGRESS_V2_KEY, JSON.stringify(older));
+    const loaded = loadSetupProgress();
+    expect(loaded.statuses).toEqual(older.statuses);
+    expect(loaded.drafts).toEqual(older.drafts);
+  });
+
+  it('a stored answer shape survives a save and a load', () => {
+    const marital = { married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: 'HOH' as const };
+    saveSetupProgress({ ...defaultProgressV2(), drafts: { marital } });
+    expect(loadSetupProgress().drafts.marital).toEqual(marital);
+  });
+});

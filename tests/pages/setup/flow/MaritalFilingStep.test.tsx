@@ -190,3 +190,47 @@ describe('MaritalFilingStep (1b)', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('MaritalFilingStep re-entry — a complicated pick holds (v1.8.0 O3, RC4)', () => {
+  for (const [fs, label] of [['HOH', 'Head of Household'], ['SINGLE', 'Single']] as const) {
+    it(`re-entering after Yes → "It's more complicated" → ${label} shows that pick and the partner fields`, () => {
+      renderStep(
+        ctxWith({
+          household: makeHousehold({ filingStatus: fs }),
+          progress: {
+            ...defaultProgressV2(),
+            drafts: { partner: { name: 'Jordan Lee', dateOfBirth: '1991-08-21' } },
+          },
+        }),
+        { asked: true },
+      );
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" })).toBeChecked();
+      expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent(label);
+      expect(screen.getByLabelText("Your partner's name")).toHaveValue('Jordan Lee');
+      expect(screen.getByLabelText("Your partner's date of birth year")).toHaveValue('1991');
+      expect(screen.getByLabelText("Your partner's date of birth day")).toHaveValue('21');
+    });
+  }
+});
+
+describe('MaritalFilingStep re-entry — a partner-less complicated pick holds (v1.8.0 O3, CL-O3-1)', () => {
+  for (const [fs, label] of [['HOH', 'Head of Household'], ['SINGLE', 'Single']] as const) {
+    it(`re-entering after a partner-less Yes → "It's more complicated" → ${label} shows that pick`, () => {
+      renderStep(
+        ctxWith({
+          household: makeHousehold({ filingStatus: fs }),
+          progress: {
+            ...defaultProgressV2(),
+            drafts: { marital: { married: 'yes', filing: 'complicated', complicatedStatus: fs } },
+          },
+        }),
+        { asked: true },
+      );
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" })).toBeChecked();
+      expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent(label);
+      expect(screen.getByLabelText("Your partner's name")).toHaveValue('');
+    });
+  }
+});

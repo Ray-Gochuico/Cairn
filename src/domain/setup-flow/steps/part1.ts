@@ -1,6 +1,7 @@
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { FilingStatus } from '@/types/enums';
+import type { MaritalAnswer } from '@/lib/setup-progress';
 import { resolveBindings } from '../engine';
 import type { FlowCtx, StepSaveResult } from '../types';
 
@@ -86,11 +87,33 @@ export function prefillMaritalFiling(ctx: FlowCtx): MaritalFilingValues {
   const partnerFields = draft
     ? { partnerName: draft.name, partnerDob: draft.dateOfBirth }
     : {};
+  // v1.8.0 O3 (CL-O3-1): 1b's own answer, recorded at its save, re-reads a
+  // complicated pick verbatim, partner or not, while the saved status still
+  // matches it. A status changed elsewhere (Inputs → Household) wins, and
+  // progress saved before this build carries no answer: both fall through to
+  // the reading below. Jointly, Separately and No need no record — the saved
+  // status alone re-reads them.
+  const answer = ctx.progress.drafts.marital;
+  if (answer?.filing === 'complicated' && fs != null && answer.complicatedStatus === fs) {
+    return { ...EMPTY_MARITAL_VALUES, ...answer, ...partnerFields };
+  }
   if (fs === 'MFJ') {
     return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly', ...partnerFields };
   }
   if (fs === 'MFS') {
     return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'separately', ...partnerFields };
+  }
+  // v1.8.0 O3 (RC4, CR-O-5): a pending partner draft beside a Single or Head
+  // of Household status comes from Yes → "It's more complicated" → that
+  // status (a "No" save clears the draft), or from a status changed in
+  // Household while the draft pends. Either way re-entry re-reads Yes → "It's
+  // more complicated" with the draft, so an untouched Next keeps both. It
+  // used to re-read as "No", and that Next deleted the draft.
+  if (draft && (fs === 'SINGLE' || fs === 'HOH')) {
+    return {
+      ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'complicated', complicatedStatus: fs,
+      ...partnerFields,
+    };
   }
   if (fs === 'HOH') return { ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'hoh' };
   return { ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single' };
@@ -104,13 +127,26 @@ export async function saveMaritalFiling(
   // ONE household write — filing status only (D-WF15).
   await useHouseholdStore.getState().update({ filingStatus: fs });
   const { partner } = resolveBindings(ctx);
+  // v1.8.0 O3 (CL-O3-1): every save records 1b's own answer shape beside the
+  // status (progress only, device-local), so re-entry re-reads a complicated
+  // pick as picked (prefillMaritalFiling).
+  const answer: MaritalAnswer = values.married === 'yes'
+    ? {
+        married: 'yes', filing: values.filing,
+        complicatedStatus: values.filing === 'complicated' ? fs : null,
+      }
+    : { married: 'no', filing: null, complicatedStatus: null };
   if (values.married === 'yes') {
     if (partner?.id != null) {
       // Reuse the existing person 2 (CW-19): bind, never draft or create.
       const partnerId = partner.id;
       return {
         ok: true,
-        progressUpdate: (p) => ({ ...p, bindings: { ...p.bindings, partner: partnerId } }),
+        progressUpdate: (p) => ({
+          ...p,
+          bindings: { ...p.bindings, partner: partnerId },
+          drafts: { ...p.drafts, marital: answer },
+        }),
       };
     }
     if (values.partnerName.trim() !== '' || values.partnerDob !== '') {
@@ -121,17 +157,18 @@ export async function saveMaritalFiling(
           drafts: {
             ...p.drafts,
             partner: { name: values.partnerName, dateOfBirth: values.partnerDob },
+            marital: answer,
           },
         }),
       };
     }
-    return { ok: true };
+    return { ok: true, progressUpdate: (p) => ({ ...p, drafts: { ...p.drafts, marital: answer } }) };
   }
   // married: no — filingStatus only; person 2 is NEVER deleted (CW-18 renders
   // in the step UI); only the un-created partner DRAFT is cleared.
   return {
     ok: true,
-    progressUpdate: (p) => ({ ...p, drafts: { ...p.drafts, partner: undefined } }),
+    progressUpdate: (p) => ({ ...p, drafts: { ...p.drafts, partner: undefined, marital: answer } }),
   };
 }
 

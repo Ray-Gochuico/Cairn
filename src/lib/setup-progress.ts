@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FilingStatus } from '@/types/enums';
 
 /**
  * Shared setup progress (v2) — ONE progress state consumed by BOTH the worded
@@ -85,8 +86,17 @@ const PayDraftSchema = z.object({
   regularHoursPerWeek: z.number().nullable(),
   otThresholdHoursPerWeek: z.number().nullable(),
 });
+/** v1.8.0 O3 (CL-O3-1): 1b's own answer shape, recorded at its save, so a
+ *  complicated answer re-reads as picked (prefillMaritalFiling). Form state
+ *  like the drafts beside it; optional, so a record saved before it parses. */
+const MaritalAnswerSchema = z.object({
+  married: z.enum(['yes', 'no']),
+  filing: z.enum(['jointly', 'separately', 'complicated']).nullable(),
+  complicatedStatus: z.nativeEnum(FilingStatus).nullable(),
+});
 export type PersonDraft = z.infer<typeof PersonDraftSchema>;
 export type PayDraft = z.infer<typeof PayDraftSchema>;
+export type MaritalAnswer = z.infer<typeof MaritalAnswerSchema>;
 
 export const SetupProgressV2Schema = z.object({
   version: z.literal(2),
@@ -107,6 +117,7 @@ export const SetupProgressV2Schema = z.object({
     pay: z
       .object({ you: PayDraftSchema.optional(), partner: PayDraftSchema.optional() })
       .optional(),
+    marital: MaritalAnswerSchema.optional(),
   }),
   view: z.enum(['worded', 'form']),
   /** Which entry created this record (Wave A item 3). Revisit-origin records
