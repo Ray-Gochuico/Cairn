@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { nameForRole, savePay, saveRetirement, saveBenefits } from '@/domain/setup-flow/steps/part2';
+import { nameForRole, prefillPay, savePay, saveRetirement, saveBenefits } from '@/domain/setup-flow/steps/part2';
 import { usePersonsStore } from '@/stores/persons-store';
 import { defaultProgressV2, type SetupProgressV2 } from '@/lib/setup-progress';
 import { DEFAULT_PERSON } from '@/lib/entity-scaffolds';
@@ -141,6 +141,71 @@ describe('part2 save mappers', () => {
       pct401k: null, hsaContributes: false, hsaEligible: false, hsaMonthly: null, premiumMonthly: null,
     }, ctxWith({ persons: [clean] }));
     expect(r.ok).toBe(true);
+    expect(personsUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('2a — an untouched Next writes nothing to a bound person (v1.8.0 O3, CL-O3-2, D-O3-15)', () => {
+  // The shell saves every step on Next, dirty or not. An untouched Next
+  // re-submits the bound row's own prefill, so it now writes nothing: a
+  // legacy Hourly row (written before the shared contract) keeps its stored
+  // salary. Any real edit still saves through the one employment contract.
+  const LEGACY_HOURLY = makePerson({
+    id: 7, employmentType: 'HOURLY', annualSalaryPretax: 52000, hourlyRate: 25,
+    regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+  });
+
+  it('an untouched Next on a legacy Hourly row with a stale salary writes nothing, so the salary holds', async () => {
+    const ctx = ctxWith({ persons: [LEGACY_HOURLY] });
+    expect(await savePay('you', prefillPay(ctx, 'you'), ctx)).toEqual({ ok: true });
+    expect(personsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('an untouched Next writes nothing for each pay type, for you and for the partner', async () => {
+    const rows = [
+      makePerson({ id: 7, employmentType: 'SALARY_NO_OT', annualSalaryPretax: 95000, regularHoursPerWeek: 37.5 }),
+      makePerson({ id: 7, employmentType: 'HOURLY', annualSalaryPretax: 0, hourlyRate: 30, regularHoursPerWeek: 36 }),
+      makePerson({
+        id: 7, employmentType: 'SALARY_WITH_OT', annualSalaryPretax: 70000, hourlyRate: 40, otThresholdHoursPerWeek: 40,
+      }),
+    ];
+    for (const p of rows) {
+      const ctx = ctxWith({ persons: [p] });
+      expect(await savePay('you', prefillPay(ctx, 'you'), ctx)).toEqual({ ok: true });
+    }
+    const couple = ctxWith({
+      persons: [makePerson({ id: 1 }), makePerson({ id: 2, employmentType: 'SALARY_NO_OT', annualSalaryPretax: 88000 })],
+    });
+    expect(await savePay('partner', prefillPay(couple, 'partner'), couple)).toEqual({ ok: true });
+    expect(personsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('every edited field still saves through the one employment contract, which then zeroes the stale salary', async () => {
+    const ctx = ctxWith({ persons: [LEGACY_HOURLY] });
+    await savePay('you', { ...prefillPay(ctx, 'you'), hourlyRate: 26 }, ctx);
+    expect(personsUpdate).toHaveBeenCalledWith(7, {
+      employmentType: 'HOURLY', annualSalaryPretax: 0, hourlyRate: 26, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+    });
+    const ot = ctxWith({
+      persons: [makePerson({
+        id: 8, employmentType: 'SALARY_WITH_OT', annualSalaryPretax: 70000, hourlyRate: 40,
+        regularHoursPerWeek: 40, otThresholdHoursPerWeek: 40,
+      })],
+    });
+    const edits = [
+      { employmentType: 'SALARY_NO_OT' as const }, { annualSalaryPretax: '72000' }, { hourlyRate: 41 },
+      { regularHoursPerWeek: '45' }, { otThresholdHoursPerWeek: 42 },
+    ];
+    for (const edit of edits) {
+      personsUpdate.mockClear();
+      await savePay('you', { ...prefillPay(ot, 'you'), ...edit }, ot);
+      expect(personsUpdate, JSON.stringify(edit)).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('an untouched Next on a bound row the contract cannot accept is still refused (control)', async () => {
+    const ctx = ctxWith({ persons: [makePerson({ id: 7, employmentType: 'HOURLY', annualSalaryPretax: 52000, hourlyRate: null })] });
+    expect(await savePay('you', prefillPay(ctx, 'you'), ctx)).toEqual({ ok: false });
     expect(personsUpdate).not.toHaveBeenCalled();
   });
 });

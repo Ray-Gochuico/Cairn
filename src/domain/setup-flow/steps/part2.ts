@@ -44,6 +44,17 @@ export function prefillPay(ctx: FlowCtx, role: Role): EmploymentDraft {
   };
 }
 
+/** v1.8.0 O3 (CL-O3-2): the five pay fields of a draft, compared as entered. */
+function sameEmploymentDraft(a: EmploymentDraft, b: EmploymentDraft): boolean {
+  return (
+    a.employmentType === b.employmentType &&
+    a.annualSalaryPretax === b.annualSalaryPretax &&
+    a.hourlyRate === b.hourlyRate &&
+    a.regularHoursPerWeek === b.regularHoursPerWeek &&
+    a.otThresholdHoursPerWeek === b.otThresholdHoursPerWeek
+  );
+}
+
 export async function savePay(
   role: Role, draft: EmploymentDraft, ctx: FlowCtx,
 ): Promise<StepSaveResult> {
@@ -51,6 +62,11 @@ export async function savePay(
   if (!v.ok) return { ok: false };
   const bound = personForRole(ctx, role);
   if (bound?.id != null) {
+    // v1.8.0 O3 (CL-O3-2, D-O3-15): an untouched Next re-submits the bound
+    // row's own prefill, so it writes nothing — re-entry never rewrites a
+    // saved row (a legacy Hourly row keeps its stored salary). Any edit still
+    // saves through the one employment contract below.
+    if (sameEmploymentDraft(draft, prefillPay(ctx, role))) return { ok: true };
     await usePersonsStore.getState().update(
       bound.id,
       employmentPatchFromDraft(draft, bound.regularHoursPerWeek),
