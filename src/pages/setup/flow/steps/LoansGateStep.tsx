@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -56,7 +56,7 @@ export default function LoansGateStep({ ctx, onDirtyChange, submitRef }: StepCom
         />
       </GateQuestion>
       <Dialog open={dialogOpen} onOpenChange={(o) => !o && setDialogOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a loan</DialogTitle>
             <DialogDescription className="sr-only">
@@ -64,7 +64,7 @@ export default function LoansGateStep({ ctx, onDirtyChange, submitRef }: StepCom
             </DialogDescription>
           </DialogHeader>
           <LoanForm onSaved={() => setDialogOpen(false)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </>
   );

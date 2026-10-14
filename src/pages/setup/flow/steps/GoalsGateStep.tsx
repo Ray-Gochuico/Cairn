@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -46,7 +46,7 @@ export default function GoalsGateStep({ ctx, onDirtyChange, submitRef }: StepCom
         />
       </GateQuestion>
       <Dialog open={dialogOpen} onOpenChange={(o) => !o && setDialogOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a goal</DialogTitle>
             <DialogDescription className="sr-only">
@@ -54,7 +54,7 @@ export default function GoalsGateStep({ ctx, onDirtyChange, submitRef }: StepCom
             </DialogDescription>
           </DialogHeader>
           <GoalForm onSaved={() => setDialogOpen(false)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </>
   );

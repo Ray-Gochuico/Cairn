@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -51,7 +51,7 @@ export default function EquityGateStep({ ctx, onDirtyChange, submitRef }: StepCo
         />
       </GateQuestion>
       <Dialog open={dialogOpen} onOpenChange={(o) => !o && setDialogOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add an equity grant</DialogTitle>
             <DialogDescription className="sr-only">
@@ -70,7 +70,7 @@ export default function EquityGateStep({ ctx, onDirtyChange, submitRef }: StepCo
             onCancel={() => setDialogOpen(false)}
             submitLabel="Add Grant"
           />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </>
   );

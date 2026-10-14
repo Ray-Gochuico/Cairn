@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -63,7 +63,7 @@ export default function VehiclesGateStep({ ctx, onDirtyChange, submitRef }: Step
         </div>
       </GateQuestion>
       <Dialog open={dialog === 'vehicles'} onOpenChange={(o) => !o && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a vehicle</DialogTitle>
             <DialogDescription className="sr-only">
@@ -71,10 +71,10 @@ export default function VehiclesGateStep({ ctx, onDirtyChange, submitRef }: Step
             </DialogDescription>
           </DialogHeader>
           <VehicleForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog open={dialog === 'vehicle_leases'} onOpenChange={(o) => !o && setDialog(null)}>
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add vehicle lease</DialogTitle>
             <DialogDescription className="sr-only">
@@ -82,7 +82,7 @@ export default function VehiclesGateStep({ ctx, onDirtyChange, submitRef }: Step
             </DialogDescription>
           </DialogHeader>
           <VehicleLeaseForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </>
   );
