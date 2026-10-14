@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -254,5 +254,54 @@ describe('Household surfaces over the real database — a saved city holds (v1.8
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(async () => expect(await savedRow()).toMatchObject({ monthly_expense_baseline: 4100 }));
     expect(await savedRow()).toMatchObject({ state: 'NY', city: 'NY_NYC' });
+  });
+});
+
+describe('HouseholdForm — the city waits for a complete state (v1.8.0 O3, RC3, CR-O-4)', () => {
+  beforeEach(() => {
+    useTaxRulesStore.setState({
+      year: 2026, items: [NYC_RULE], isLoading: false, error: null, loadYear: async () => {},
+    } as never);
+  });
+
+  it('backspacing the state to one letter and retyping it keeps New York City and leaves the form clean', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm(SAVED_NY);
+    const stateInput = screen.getByLabelText('State');
+    await user.click(stateInput);
+    await user.keyboard('{End}{Backspace}');
+    expect(stateInput).toHaveValue('N');
+    await user.keyboard('Y');
+    expect(stateInput).toHaveValue('NY');
+    expect(citySelect().value).toBe('NY_NYC');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // A Filing status change then saves the city it kept.
+    await user.click(screen.getByRole('combobox', { name: 'Filing status' }));
+    await user.click(await screen.findByRole('option', { name: 'Married Filing Separately' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ state: 'NY', city: 'NY_NYC', filingStatus: FilingStatus.MFS });
+  });
+
+  it('while the state reads one letter, the select still shows the city the form holds', async () => {
+    const user = userEvent.setup();
+    renderForm(SAVED_NY);
+    await user.click(screen.getByLabelText('State'));
+    await user.keyboard('{End}{Backspace}');
+    expect(screen.getByLabelText('State')).toHaveValue('N');
+    expect(citySelect().value).toBe('NY_NYC');
+    expect(citySelect().selectedOptions[0]?.textContent).toBe('NYC');
+  });
+
+  it('a picked complete state the city does not match clears it at once (designed)', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm(SAVED_NY);
+    const stateInput = screen.getByLabelText('State');
+    // A datalist pick replaces the whole value in one input event.
+    fireEvent.change(stateInput, { target: { value: 'NJ' } });
+    expect(stateInput).toHaveValue('NJ');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ state: 'NJ', city: null });
   });
 });

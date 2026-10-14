@@ -160,21 +160,26 @@ export default function HouseholdForm({
   // an effect. The effect that used to do it ran at mount with the first
   // render's 'CA' default (RHF seeds the form from defaultValues before the
   // `values` reset), cleared every saved non-CA city and dirtied the untouched
-  // form, so the next Save of anything wrote city = null.
+  // form, so the next Save of anything wrote city = null. It waits for a
+  // complete two-letter state, so retyping one letter keeps the city.
   const clearMismatchedCity = () => {
     const next = form.getValues('state');
     const currentCity = form.getValues('city');
-    if (currentCity && !currentCity.startsWith(`${next}_`)) {
+    if (currentCity && next.length === 2 && !currentCity.startsWith(`${next}_`)) {
       form.setValue('city', null, { shouldDirty: true });
     }
   };
 
   // Filter to CITY rules scoped to the current state (SINGLE only to avoid duplicates).
+  // While the state is partial (mid-edit) the held city keeps its option, so
+  // the select shows the city the form still holds (v1.8.0 O3, D-O3-4).
+  const heldCity = form.watch('city');
   const cityRules = taxRulesItems.filter(
     (r) =>
       r.jurisdictionType === 'CITY' &&
       r.filingStatus === 'SINGLE' &&
-      r.jurisdictionCode.startsWith(`${state}_`),
+      (r.jurisdictionCode.startsWith(`${state}_`) ||
+        (state.length < 2 && r.jurisdictionCode === heldCity)),
   );
 
   const [justSaved, setJustSaved] = useState(false);
