@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -161,6 +161,14 @@ export default function HoldingForm({
       form.reset(values);
     },
   );
+
+  // The target check's message is about the account it ran against. The row
+  // now stays mounted through an account pick (v1.8.0 O1), so that message
+  // goes when the account changes; what the user typed stays, and the next
+  // submit checks it against the account the picker shows.
+  useEffect(() => {
+    form.clearErrors('targetAllocationPctPercent');
+  }, [form, initial.accountId]);
 
   return (
     <form
