@@ -111,6 +111,9 @@ const ENTRY_DISCARD_CONFIRM = {
  *   question) keeps every value and puts focus back where it was; "Discard
  *   entries" closes the dialog through its X.
  * - The X and the form's own Cancel stay immediate.
+ * - A field that uses Escape to cancel its own edit (the import preview's
+ *   cells) carries `data-escape-cancels-edit`: Escape there cancels only
+ *   that edit, and the dialog neither closes nor asks.
  *
  * "Entered" = an input event inside the dialog (typing, a native select, a
  * checkbox, a date field), or a change event once the user has pressed a key
@@ -182,6 +185,10 @@ const EntryDialogContent = React.forwardRef<
       },
       onEscapeKeyDown: (event) => {
         onEscapeKeyDown?.(event)
+        if (event.target instanceof Element && event.target.closest("[data-escape-cancels-edit]")) {
+          event.preventDefault()
+          return
+        }
         if (event.defaultPrevented || !(hasEntries ?? enteredRef.current)) return
         event.preventDefault()
         if (askingRef.current) return
