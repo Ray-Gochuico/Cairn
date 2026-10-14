@@ -349,8 +349,19 @@ export function PdfReviewModal({
                             className="border rounded px-1 py-0.5 text-xs"
                             onChange={(e) => {
                               const val = e.target.value === '' ? null : Number(e.target.value);
-                              const { propertyId, vehicleId } = defaultPropertyVehicle(val);
-                              updateRow(i, { categoryId: val, propertyId, vehicleId });
+                              // v1.8.0 O2 (O1 chip (d), CR-O-2): a property or vehicle
+                              // already picked is kept while the new category is still
+                              // in its family (Home, Vehicles); only a change of family
+                              // re-defaults it.
+                              const next = defaultPropertyVehicle(val);
+                              const cat = categories.find((c) => c.id === val);
+                              const stillHome = homeParent != null && cat?.parentCategoryId === homeParent.id;
+                              const stillVehicle = vehicleParent != null && cat?.parentCategoryId === vehicleParent.id;
+                              updateRow(i, {
+                                categoryId: val,
+                                propertyId: stillHome && row.propertyId != null ? row.propertyId : next.propertyId,
+                                vehicleId: stillVehicle && row.vehicleId != null ? row.vehicleId : next.vehicleId,
+                              });
                             }}
                           >
                             <option value="">— uncategorized —</option>

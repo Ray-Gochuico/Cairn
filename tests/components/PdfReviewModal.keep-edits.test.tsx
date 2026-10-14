@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
-import { setDatabase } from '@/db/db';
+import { getDatabase, setDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -14,7 +14,9 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
-import { Issuer } from '@/types/enums';
+import { Issuer, PropertyType } from '@/types/enums';
+import { PropertiesRepo } from '@/domain/properties';
+import { VehiclesRepo } from '@/domain/vehicles';
 import type { ParseResult } from '@/pdf/parse-statement';
 
 /**
@@ -139,5 +141,57 @@ describe('PdfReviewModal — keeps row edits (CR-O-3)', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+});
+
+describe('PdfReviewModal — a category change keeps a pick that still fits (O1 chip (d), CR-O-2)', () => {
+  async function seedTwoOfEach() {
+    const props = new PropertiesRepo(getDatabase());
+    for (const name of ['Main House', 'Lake Cabin']) {
+      await props.create({
+        householdId: 1, ownerPersonId: null, name, type: PropertyType.PRIMARY_RESIDENCE, address: null,
+        purchaseDate: null, purchasePrice: null, currentEstimatedValue: null, linkedLoanId: null, excludedFromNetWorth: false,
+      });
+    }
+    const cars = new VehiclesRepo(getDatabase());
+    for (const name of ['Daily', 'Weekend']) {
+      await cars.create({
+        householdId: 1, ownerPersonId: null, name, year: null, make: null, model: null,
+        purchaseDate: null, purchasePrice: null, currentEstimatedValue: null, linkedLoanId: null, excludedFromNetWorth: false,
+      });
+    }
+  }
+  const option = (select: HTMLElement, text: string) =>
+    within(select).getByRole('option', { name: text }) as HTMLOptionElement;
+
+  it('two properties: a picked property stays through a change to another Home category, and clears on a change of family', async () => {
+    await seedTwoOfEach();
+    const { user } = await renderModal();
+    const category = screen.getByRole('combobox', { name: 'Category for WHOLE FOODS MARKET' });
+    await user.selectOptions(category, option(category, 'Mortgage Interest'));
+    const property = screen.getByRole('combobox', { name: 'Property for WHOLE FOODS MARKET' }) as HTMLSelectElement;
+    expect(property.value).toBe('');
+    await user.selectOptions(property, option(property, 'Lake Cabin'));
+    await user.selectOptions(category, option(category, 'Utilities'));
+    expect((screen.getByRole('combobox', { name: 'Property for WHOLE FOODS MARKET' }) as HTMLSelectElement).selectedOptions[0].textContent).toBe('Lake Cabin');
+    await user.selectOptions(category, option(category, 'Gas/Fuel'));
+    expect(screen.queryByRole('combobox', { name: 'Property for WHOLE FOODS MARKET' })).toBeNull();
+    await user.selectOptions(category, option(category, 'Utilities'));
+    expect((screen.getByRole('combobox', { name: 'Property for WHOLE FOODS MARKET' }) as HTMLSelectElement).value).toBe('');
+  });
+
+  it('two vehicles: a picked vehicle stays through a change to another Vehicles category, and clears on a change of family', async () => {
+    await seedTwoOfEach();
+    const { user } = await renderModal();
+    const category = screen.getByRole('combobox', { name: 'Category for WHOLE FOODS MARKET' });
+    await user.selectOptions(category, option(category, 'Gas/Fuel'));
+    const vehicle = screen.getByRole('combobox', { name: 'Vehicle for WHOLE FOODS MARKET' });
+    await user.selectOptions(vehicle, option(vehicle, 'Weekend'));
+    await user.selectOptions(category, option(category, 'Auto Insurance'));
+    expect((screen.getByRole('combobox', { name: 'Vehicle for WHOLE FOODS MARKET' }) as HTMLSelectElement).selectedOptions[0].textContent).toBe('Weekend');
+    await user.selectOptions(category, option(category, 'Utilities'));
+    expect(screen.queryByRole('combobox', { name: 'Vehicle for WHOLE FOODS MARKET' })).toBeNull();
+    await user.selectOptions(category, option(category, 'Gas/Fuel'));
+    expect((screen.getByRole('combobox', { name: 'Vehicle for WHOLE FOODS MARKET' }) as HTMLSelectElement).value).toBe('');
   });
 });
