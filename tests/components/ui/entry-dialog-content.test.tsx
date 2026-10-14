@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useEffect, useState } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import {
   Dialog,
   DialogDescription,
@@ -266,6 +266,76 @@ describe('EntryDialogContent — what counts as entered (CR-O-3)', () => {
     fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pat Rivera' } });
     await user.keyboard('{Escape}');
     expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
+  });
+});
+
+/** The parent owns the field's value, so every keystroke re-renders the
+ *  component that renders EntryDialogContent (as a gate step re-renders on
+ *  a store update while its dialog is open). */
+function ControlledHarness() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Add manually
+      </button>
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <EntryDialogContent>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        </EntryDialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+describe('EntryDialogContent — every open starts pristine (CR-O-3)', () => {
+  it('after Discard entries, the reopened dialog is empty and Escape closes it at once', async () => {
+    const { user } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await user.click(screen.getByRole('button', { name: 'Discard entries' }));
+    expect(entryDialog()).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+
+  it("a press in an earlier open never lets the next open's hydration echo count", async () => {
+    const user = userEvent.setup();
+    render(<SelectHarness hydrateTo="b" />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.click(screen.getByText('Entry harness.'));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(entryDialog()).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+
+  it('a re-render while it is open keeps what was entered marked (StrictMode, as src/main.tsx)', async () => {
+    const user = userEvent.setup();
+    render(
+      <StrictMode>
+        <ControlledHarness />
+      </StrictMode>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
   });
 });

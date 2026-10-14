@@ -118,7 +118,9 @@ const ENTRY_DISCARD_CONFIRM = {
  * event from its hidden select. A form resetting its own values fires no
  * input event, and the Radix Select hydration echo (the change its hidden
  * select fires when RHF's `values` land, house gotcha) comes before the user
- * has pressed anything, so neither marks a fresh dialog as entered.
+ * has pressed anything, so neither marks a fresh dialog as entered. The marks
+ * reset when a NEW content node mounts, i.e. on every open (Radix re-attaches
+ * the same node's ref on each render, which must not reset them).
  */
 const EntryDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
@@ -129,9 +131,15 @@ const EntryDialogContent = React.forwardRef<
   const enteredRef = React.useRef(false)
   const askingRef = React.useRef(false)
   const nodeRef = React.useRef<HTMLDivElement | null>(null)
+  const openedNodeRef = React.useRef<HTMLDivElement | null>(null)
   const closeRef = React.useRef<HTMLButtonElement>(null)
   const setNode = React.useCallback(
     (node: HTMLDivElement | null) => {
+      if (node !== null && node !== openedNodeRef.current) {
+        openedNodeRef.current = node
+        pressedRef.current = false
+        enteredRef.current = false
+      }
       nodeRef.current = node
       if (typeof ref === "function") ref(node)
       else if (ref) ref.current = node
