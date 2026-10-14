@@ -81,8 +81,10 @@ export default function HoldingForm({ onSaved }: Props) {
             placeholder-only without them (W19). No margin hint here: the
             wizard has no allowMargin UI. */}
         <HoldingRowHeader />
+        {/* No key on the row (v1.8.0 O1, CR-O-2): a new account pick keeps
+            the same form, so what the user typed holds; onSave applies the
+            account picked at that moment. */}
         <HoldingFormImpl
-          key={selectedAccountId ?? 'none'}
           initial={initial}
           onSave={async (next) => {
             await create({

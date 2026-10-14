@@ -13,8 +13,13 @@ export type HoldingFormValues = Omit<Holding, 'id'>;
  * Form-shape schema: targetAllocationPct is shown to the user as a whole
  * number percent (0..100) for ergonomics — DB stays at 0..1 fraction.
  * The form converts × 100 on display and ÷ 100 on submit.
+ *
+ * accountId is not a field of the form (v1.8.0 O1, CR-O-2). No input shows
+ * it, and the callers change it from an account picker above the row; held
+ * in the form, a new pick reset the row through `values` and wiped what the
+ * user had typed. The submit reads it from the current `initial` instead.
  */
-const HoldingRowFormSchema = HoldingSchema.omit({ id: true, targetAllocationPct: true }).extend({
+const HoldingRowFormSchema = HoldingSchema.omit({ id: true, accountId: true, targetAllocationPct: true }).extend({
   targetAllocationPctPercent: z.number().min(0).max(100).nullable(),
 });
 type HoldingRowFormValues = z.infer<typeof HoldingRowFormSchema>;
@@ -26,7 +31,7 @@ function nullableNumber(v: unknown) {
 }
 
 function toForm(values: HoldingFormValues): HoldingRowFormValues {
-  const { targetAllocationPct, ...rest } = values;
+  const { targetAllocationPct, accountId: _accountId, ...rest } = values;
   return {
     ...rest,
     targetAllocationPctPercent:
@@ -34,10 +39,11 @@ function toForm(values: HoldingFormValues): HoldingRowFormValues {
   };
 }
 
-function fromForm(values: HoldingRowFormValues): HoldingFormValues {
+function fromForm(values: HoldingRowFormValues, accountId: number): HoldingFormValues {
   const { targetAllocationPctPercent, ...rest } = values;
   return {
     ...rest,
+    accountId,
     targetAllocationPct:
       targetAllocationPctPercent === null ? null : targetAllocationPctPercent / 100,
   };
@@ -125,11 +131,13 @@ export default function HoldingForm({
   // reference-compared. Per the conventions doc (Form sync with store):
   // `values` is the idiomatic way to keep RHF in lockstep with a store-
   // backed source and makes `isDirty` track "current vs. persisted",
-  // which is what the Save button gates on.
+  // which is what the Save button gates on. initial.accountId is left out on
+  // purpose: it is not a form field (see HoldingRowFormSchema), so an account
+  // pick never resets the row (v1.8.0 O1).
   const memoValues = useMemo<HoldingRowFormValues>(
     () => toForm(initial),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [initial.accountId, initial.ticker, initial.shareCount, initial.targetAllocationPct, initial.costBasis],
+    [initial.ticker, initial.shareCount, initial.targetAllocationPct, initial.costBasis],
   );
 
   const form = useForm<HoldingRowFormValues>({
@@ -141,7 +149,7 @@ export default function HoldingForm({
   // W10 M44: a rejected onSave used to escape as an unhandled rejection.
   const { onValid, submitting, submitError } = useFormSubmit(
     async (values: HoldingRowFormValues) => {
-      const dbValues = fromForm(values);
+      const dbValues = fromForm(values, initial.accountId);
       if (onValidateSubmit) {
         const err = onValidateSubmit(dbValues);
         if (err) {
