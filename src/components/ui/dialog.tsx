@@ -121,11 +121,22 @@ const ENTRY_DISCARD_CONFIRM = {
  * has pressed anything, so neither marks a fresh dialog as entered. The marks
  * reset when a NEW content node mounts, i.e. on every open (Radix re-attaches
  * the same node's ref on each render, which must not reset them).
+ *
+ * A caller that tracks its own entries (the import preview's row edits, the
+ * PDF review's) passes `hasEntries`, which is then the whole signal: an
+ * entry that fires no event (a removed row) counts, and the next file of a
+ * batch shown in the same open dialog starts pristine.
  */
+interface EntryDialogContentProps extends DialogContentProps {
+  /** The caller's own "something here is unsaved". When given, the dialog
+   *  asks on exactly this and stops watching input and change events. */
+  hasEntries?: boolean
+}
+
 const EntryDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  DialogContentProps
->(({ children, onInteractOutside, onEscapeKeyDown, onInputCapture, onChangeCapture, onKeyDownCapture, onPointerDownCapture, ...props }, ref) => {
+  EntryDialogContentProps
+>(({ hasEntries, children, onInteractOutside, onEscapeKeyDown, onInputCapture, onChangeCapture, onKeyDownCapture, onPointerDownCapture, ...props }, ref) => {
   const { confirm, dialog } = useConfirm()
   const pressedRef = React.useRef(false)
   const enteredRef = React.useRef(false)
@@ -171,7 +182,7 @@ const EntryDialogContent = React.forwardRef<
       },
       onEscapeKeyDown: (event) => {
         onEscapeKeyDown?.(event)
-        if (event.defaultPrevented || !enteredRef.current) return
+        if (event.defaultPrevented || !(hasEntries ?? enteredRef.current)) return
         event.preventDefault()
         if (askingRef.current) return
         askingRef.current = true

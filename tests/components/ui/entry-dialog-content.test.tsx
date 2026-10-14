@@ -339,3 +339,39 @@ describe('EntryDialogContent — every open starts pristine (CR-O-3)', () => {
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
   });
 });
+
+describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
+  function Known({ hasEntries }: { hasEntries: boolean }) {
+    const [open, setOpen] = useState(true);
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <EntryDialogContent hasEntries={hasEntries}>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <input aria-label="Name" />
+          <button type="button">Remove row 2</button>
+        </EntryDialogContent>
+      </Dialog>
+    );
+  }
+
+  it('an entry the caller knows of, with no input or change event behind it, makes Escape ask', async () => {
+    const user = userEvent.setup();
+    render(<Known hasEntries />);
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+  });
+
+  it("hasEntries is the whole signal: with it false, typing alone does not make Escape ask", async () => {
+    const user = userEvent.setup();
+    render(<Known hasEntries={false} />);
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+});
