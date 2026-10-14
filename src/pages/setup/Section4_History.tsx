@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -223,7 +223,7 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         open={dialog === 'snapshots'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add account snapshot</DialogTitle>
             <DialogDescription className="sr-only">
@@ -237,14 +237,14 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
               setDialog(null);
             }}
           />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
 
       <Dialog
         open={dialog === 'asset_snapshots'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add property / vehicle value snapshot</DialogTitle>
             <DialogDescription className="sr-only">
@@ -255,14 +255,14 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
             properties={properties}
             vehicles={vehicles}
           />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
 
       <Dialog
         open={dialog === 'contributions'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add contribution</DialogTitle>
             <DialogDescription className="sr-only">
@@ -276,14 +276,14 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
               setDialog(null);
             }}
           />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
 
       <Dialog
         open={dialog === 'goals'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a goal</DialogTitle>
             <DialogDescription className="sr-only">
@@ -291,7 +291,7 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
             </DialogDescription>
           </DialogHeader>
           <GoalForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </div>
   );

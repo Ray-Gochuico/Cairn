@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -209,7 +209,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         open={dialog === 'accounts'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add an account</DialogTitle>
             <DialogDescription className="sr-only">
@@ -217,13 +217,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <AccountForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'holdings'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a holding</DialogTitle>
             <DialogDescription className="sr-only">
@@ -231,13 +231,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <HoldingForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'properties'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a property</DialogTitle>
             <DialogDescription className="sr-only">
@@ -245,13 +245,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <PropertyForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'housing_payments'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add rent / housing payment</DialogTitle>
             <DialogDescription className="sr-only">
@@ -259,13 +259,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <HousingPaymentForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'vehicles'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a vehicle</DialogTitle>
             <DialogDescription className="sr-only">
@@ -273,13 +273,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <VehicleForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'vehicle_leases'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add vehicle lease</DialogTitle>
             <DialogDescription className="sr-only">
@@ -287,13 +287,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <VehicleLeaseForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'equity_grants'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add an equity grant</DialogTitle>
             <DialogDescription className="sr-only">
@@ -310,7 +310,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
             onCancel={() => setDialog(null)}
             submitLabel="Add Grant"
           />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </div>
   );
