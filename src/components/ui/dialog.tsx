@@ -112,14 +112,20 @@ const ENTRY_DISCARD_CONFIRM = {
  *   entries" closes the dialog through its X.
  * - The X and the form's own Cancel stay immediate.
  *
- * "Entered" = an input event inside the dialog: typing, a native select, a
- * checkbox, a date field. A form resetting its own values fires none.
+ * "Entered" = an input event inside the dialog (typing, a native select, a
+ * checkbox, a date field), or a change event once the user has pressed a key
+ * or a pointer in it: a Radix Select pick reaches the dialog only as a change
+ * event from its hidden select. A form resetting its own values fires no
+ * input event, and the Radix Select hydration echo (the change its hidden
+ * select fires when RHF's `values` land, house gotcha) comes before the user
+ * has pressed anything, so neither marks a fresh dialog as entered.
  */
 const EntryDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ children, onInteractOutside, onEscapeKeyDown, onInputCapture, ...props }, ref) => {
+>(({ children, onInteractOutside, onEscapeKeyDown, onInputCapture, onChangeCapture, onKeyDownCapture, onPointerDownCapture, ...props }, ref) => {
   const { confirm, dialog } = useConfirm()
+  const pressedRef = React.useRef(false)
   const enteredRef = React.useRef(false)
   const askingRef = React.useRef(false)
   const nodeRef = React.useRef<HTMLDivElement | null>(null)
@@ -139,9 +145,21 @@ const EntryDialogContent = React.forwardRef<
         onInteractOutside?.(event)
         event.preventDefault()
       },
+      onKeyDownCapture: (event) => {
+        onKeyDownCapture?.(event)
+        pressedRef.current = true
+      },
+      onPointerDownCapture: (event) => {
+        onPointerDownCapture?.(event)
+        pressedRef.current = true
+      },
       onInputCapture: (event) => {
         onInputCapture?.(event)
         enteredRef.current = true
+      },
+      onChangeCapture: (event) => {
+        onChangeCapture?.(event)
+        if (pressedRef.current) enteredRef.current = true
       },
       onEscapeKeyDown: (event) => {
         onEscapeKeyDown?.(event)

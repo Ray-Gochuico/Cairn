@@ -1,13 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogDescription,
   DialogTitle,
   EntryDialogContent,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 /**
  * v1.8.0 O2 (RC2, CR-O-3): EntryDialogContent, the opt-in content of an
@@ -184,5 +191,81 @@ describe('EntryDialogContent — Escape asks once something is entered (CR-O-3)'
     expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
     expect(onOpenChange).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+/** A form with a Radix Select (HouseholdForm's Filing status is the one in an
+ *  onboarding dialog). `hydrateTo` sets the value from an effect, as RHF's
+ *  `values` reset does after mount. Inside a <form>, Radix renders its hidden
+ *  select, which fires a change event on every value change. */
+function SelectHarness({ hydrateTo }: { hydrateTo?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Add manually
+      </button>
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <EntryDialogContent>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <SelectForm hydrateTo={hydrateTo} />
+        </EntryDialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function SelectForm({ hydrateTo }: { hydrateTo?: string }) {
+  const [value, setValue] = useState('a');
+  useEffect(() => {
+    if (hydrateTo) setValue(hydrateTo);
+  }, [hydrateTo]);
+  return (
+    <form>
+      <Select value={value} onValueChange={(v) => v !== '' && setValue(v)}>
+        <SelectTrigger aria-label="Filing status">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+          <SelectItem value="b">Beta</SelectItem>
+        </SelectContent>
+      </Select>
+    </form>
+  );
+}
+
+describe('EntryDialogContent — what counts as entered (CR-O-3)', () => {
+  it('a Radix Select pick counts, though it reaches the dialog only as a change event', async () => {
+    const user = userEvent.setup();
+    render(<SelectHarness />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.click(screen.getByRole('combobox', { name: 'Filing status' }));
+    await user.click(await screen.findByRole('option', { name: 'Beta' }));
+    expect(screen.getByRole('combobox', { name: 'Filing status' })).toHaveTextContent('Beta');
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    expect(entryDialog()).not.toBeNull();
+  });
+
+  it('a value the form sets itself (the Radix Select hydration echo) does not count', async () => {
+    const user = userEvent.setup();
+    render(<SelectHarness hydrateTo="b" />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    expect(screen.getByRole('combobox', { name: 'Filing status' })).toHaveTextContent('Beta');
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+
+  it('an entry made with no key or pointer press (autofill, dictation) still counts', async () => {
+    const { user } = await openHarness();
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pat Rivera' } });
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
   });
 });
