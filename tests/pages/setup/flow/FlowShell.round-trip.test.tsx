@@ -275,6 +275,19 @@ describe('worded flow round trip — Part 1 (v1.8.0 O3, CR-O-5)', () => {
     });
     expect(saved.rows.household[0]).toMatchObject({ monthly_expense_baseline: 4250 });
   });
+
+  it('1e expenses: $0 a month, over a saved figure', async () => {
+    const user = userEvent.setup();
+    await new HouseholdRepo(db).update({ monthlyExpenseBaseline: 4250 }); // e.g. entered in the form view
+    startAt('expenses', {
+      statuses: { about_you: 'completed', marital_filing: 'completed', state_city: 'completed', dependents_gate: 'skipped' },
+      drafts: { you: YOU },
+    });
+    const saved = await roundTrip(user, /^About you — step 5 of/, /^Work & pay — step 1 of/, async () => {
+      await user.type(screen.getByLabelText('About how much does your household spend in a month?'), '0');
+    });
+    expect(saved.rows.household[0]).toMatchObject({ monthly_expense_baseline: 0 });
+  });
 });
 
 describe('worded flow round trip — Part 2 (v1.8.0 O3, CR-O-5)', () => {
@@ -349,6 +362,43 @@ describe('worded flow round trip — Part 2 (v1.8.0 O3, CR-O-5)', () => {
     expect(saved.rows.persons[0]).toMatchObject({
       pretax_401k_pct: 0.065, hsa_eligible: 1, hsa_monthly_contribution: 150, health_insurance_monthly_premium: 210,
     });
+  });
+
+  it('2c benefits:you: a 0 % 401(k), HSA No and a $0 premium, over saved figures', async () => {
+    const user = userEvent.setup();
+    const you = await new PersonsRepo(db).create(withoutId(makePerson({ ...YOU, pretax401kPct: 0.05, healthInsuranceMonthlyPremium: 200 })));
+    startAt('benefits', { statuses: { ...PART1_DONE, 'pay:you': 'completed', 'retirement:you': 'completed' }, bindings: { you } }, 'you');
+    const saved = await roundTrip(user, /^Work & pay — step 3 of/, /^What you own — step 1 of/, async () => {
+      await user.clear(screen.getByLabelText(/401\(k\)/));
+      await user.type(screen.getByLabelText(/401\(k\)/), '0');
+      await user.click(screen.getByRole('radio', { name: 'No' }));
+      await user.clear(screen.getByLabelText(/health insurance/));
+      await user.type(screen.getByLabelText(/health insurance/), '0');
+    });
+    expect(saved.rows.persons[0]).toMatchObject({
+      pretax_401k_pct: 0, hsa_eligible: 0, hsa_monthly_contribution: 0, health_insurance_monthly_premium: 0,
+    });
+  });
+
+  it('2c benefits:you: HSA No over a saved contribution (the honest zero)', async () => {
+    const user = userEvent.setup();
+    const you = await new PersonsRepo(db).create(withoutId(makePerson({ ...YOU, hsaEligible: true, hsaMonthlyContribution: 150 })));
+    startAt('benefits', { statuses: { ...PART1_DONE, 'pay:you': 'completed', 'retirement:you': 'completed' }, bindings: { you } }, 'you');
+    const saved = await roundTrip(user, /^Work & pay — step 3 of/, /^What you own — step 1 of/, async () => {
+      await user.click(screen.getByRole('radio', { name: 'No' }));
+    });
+    expect(saved.rows.persons[0]).toMatchObject({ hsa_eligible: 1, hsa_monthly_contribution: 0 });
+  });
+
+  it('2c benefits:you: HSA Yes on an HSA-qualified plan, with no amount', async () => {
+    const user = userEvent.setup();
+    const you = await new PersonsRepo(db).create(withoutId(makePerson(YOU)));
+    startAt('benefits', { statuses: { ...PART1_DONE, 'pay:you': 'completed', 'retirement:you': 'completed' }, bindings: { you } }, 'you');
+    const saved = await roundTrip(user, /^Work & pay — step 3 of/, /^What you own — step 1 of/, async () => {
+      await user.click(screen.getByRole('radio', { name: 'Yes' }));
+      await user.click(screen.getByRole('checkbox'));
+    });
+    expect(saved.rows.persons[0]).toMatchObject({ hsa_eligible: 1, hsa_monthly_contribution: 0 });
   });
 
   it('2a pay:partner, before the partner exists (a pay draft): Salary', async () => {
