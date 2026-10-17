@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -166,6 +166,30 @@ describe('v1.8.0 O1 (RC1, D-O1-1): the Manage new-holding row keeps what was typ
       targetAllocationPct: 0.6,
       costBasis: 1500,
     });
+  });
+
+  // The cap-message effect clears only when the account changes. A panel
+  // re-render on the same account (here a holdings reload) keeps the message
+  // and the typed row (code review, MINOR: pins against over-clearing).
+  it('a holdings reload on the same account keeps a target-check message and the typed row', async () => {
+    const a = await seedAccount(db, 'Account A');
+    await seedHolding(db, a, 'VTI', 0.5);
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsPanel /></MemoryRouter>);
+    await waitFor(() => expect(screen.getAllByLabelText(/^ticker$/)).toHaveLength(2));
+    await typeAddRow(user);
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+    expect(
+      await screen.findByText(/Target allocations sum to 110\.0% \(cap: 100%\)/),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      await useHoldingsStore.getState().load();
+    });
+
+    expect(screen.getByText(/Target allocations sum to 110\.0% \(cap: 100%\)/)).toBeInTheDocument();
+    expectTypedAddRow();
+    expect(useHoldingsStore.getState().holdings).toHaveLength(1);
   });
 
   it('deleting a listed holding keeps the typed new-holding row', async () => {
