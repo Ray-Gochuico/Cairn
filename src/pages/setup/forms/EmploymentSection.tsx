@@ -25,18 +25,21 @@ interface Props {
 // this section, and the flow.
 type PersonDraft = EmploymentDraft;
 
-/** v1.8.0 O2: saving this draft would write exactly what is stored for that
- *  person, so nothing in it is unsaved. Compared after the save's own
- *  normalising (an HOURLY save stores salary 0, blank hours keep the stored
- *  value, numbers parse), so a saved person never counts as unsaved. */
+/** v1.8.0 O2: saving this draft would write what saving that person's
+ *  stored row untouched would write, so nothing in it is unsaved. Both sides
+ *  go through the save's own normalising (an HOURLY save stores salary 0,
+ *  blank hours keep the stored value, numbers parse), so neither a saved
+ *  person nor an untouched one counts as unsaved, including a row stored
+ *  before that contract (an Hourly person who kept a hidden salary). */
 function draftIsSaved(d: PersonDraft, p: EmploymentPersonFields): boolean {
   const w = employmentPatchFromDraft(d, p.regularHoursPerWeek);
+  const s = employmentPatchFromDraft(employmentDraftFromPerson(p), p.regularHoursPerWeek);
   return (
-    w.employmentType === p.employmentType &&
-    w.annualSalaryPretax === p.annualSalaryPretax &&
-    w.hourlyRate === p.hourlyRate &&
-    w.regularHoursPerWeek === p.regularHoursPerWeek &&
-    w.otThresholdHoursPerWeek === p.otThresholdHoursPerWeek
+    w.employmentType === s.employmentType &&
+    w.annualSalaryPretax === s.annualSalaryPretax &&
+    w.hourlyRate === s.hourlyRate &&
+    w.regularHoursPerWeek === s.regularHoursPerWeek &&
+    w.otThresholdHoursPerWeek === s.otThresholdHoursPerWeek
   );
 }
 

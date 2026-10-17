@@ -171,6 +171,32 @@ describe('Section 1 Employment dialog — one Save per person (CR-O-3)', () => {
     expect(salary(2).value).toBe('88000');
   });
 
+  // A partner saved as Hourly by the PersonForm that kept the hidden salary
+  // (src/lib/employment-fields.ts:4-7), before the shared save contract.
+  const legacyHourly = () =>
+    makePerson({ id: 2, name: 'Bob', employmentType: 'HOURLY', annualSalaryPretax: 50000, hourlyRate: 25, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null });
+
+  it("an untouched partner stored as Hourly with a leftover salary counts as saved: person 1's Save closes the dialog", async () => {
+    seedPersons([salaried(1, 'Alice'), legacyHourly()]);
+    const { user, salary, save } = await openEmployment();
+    await user.clear(salary(1));
+    await user.type(salary(1), '120000');
+    await user.click(save(1));
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Employment' })).toBeNull();
+  });
+
+  it("that partner's typed hourly rate still keeps the dialog open through person 1's Save", async () => {
+    seedPersons([salaried(1, 'Alice'), legacyHourly()]);
+    const { user, salary, save } = await openEmployment();
+    await user.type(screen.getByLabelText('Hourly rate', { selector: '#hourlyRate-2' }), '5');
+    await user.clear(salary(1));
+    await user.type(salary(1), '120000');
+    await user.click(save(1));
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog', { name: 'Employment' })).toBeInTheDocument();
+  });
+
   it('one person: Save closes the dialog, as before', async () => {
     seedPersons([salaried(1, 'Alice')]);
     const { user, salary, save } = await openEmployment();
