@@ -340,6 +340,51 @@ describe('EntryDialogContent — every open starts pristine (CR-O-3)', () => {
   });
 });
 
+/** The caller closes the dialog itself, as a gate's onSaved does when a
+ *  Save that was in flight resolves while the question is up. */
+function CallerClosesHarness({ caller }: { caller: { close: () => void } }) {
+  const [open, setOpen] = useState(false);
+  caller.close = () => setOpen(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Add manually
+      </button>
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <EntryDialogContent>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <input aria-label="Name" />
+        </EntryDialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+describe('EntryDialogContent — a question never outlives what it asked about (CR-O-3)', () => {
+  it('the caller closing the dialog while its question is up drops the question: the next open is pristine', async () => {
+    const user = userEvent.setup();
+    const caller = { close: () => {} };
+    render(<CallerClosesHarness caller={caller} />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await act(async () => {
+      caller.close();
+    });
+    expect(entryDialog()).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByText('Add a thing');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+  });
+});
+
 describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
   function Known({ hasEntries }: { hasEntries: boolean }) {
     const [open, setOpen] = useState(true);

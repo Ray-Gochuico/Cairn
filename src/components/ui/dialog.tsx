@@ -3,7 +3,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useConfirm } from "@/components/ui/confirm-dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 const Dialog = DialogPrimitive.Root
 
@@ -97,6 +97,14 @@ const ENTRY_DISCARD_CONFIRM = {
   cancelLabel: "Stay",
 }
 
+/** Calls `onUnmount` when it unmounts. Rendered inside an entry dialog's
+ *  content, which unmounts when the dialog closes while EntryDialogContent
+ *  itself (and its state) stays mounted under the caller's <Dialog>. */
+function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
+  React.useEffect(() => onUnmount, [onUnmount])
+  return null
+}
+
 /**
  * v1.8.0 O2 (RC2, CR-O-3): the content of an ENTRY dialog, one the user types
  * or picks values into (the onboarding "Add …" dialogs, the import preview,
@@ -107,9 +115,12 @@ const ENTRY_DISCARD_CONFIRM = {
  *   policy): a click on the dimmed page behind a half-filled form must not
  *   eat the user's typing.
  * - Escape closes it at once while nothing has been entered. Once something
- *   has, Escape asks first (the house useConfirm). "Stay" (or Escape on the
- *   question) keeps every value and puts focus back where it was; "Discard
- *   entries" closes the dialog through its X.
+ *   has, Escape asks first (the house ConfirmDialog, the one useConfirm
+ *   renders). "Stay" (or Escape on the question) keeps every value and puts
+ *   focus back where it was; "Discard entries" closes the dialog through its
+ *   X. The question goes with the open it was asked in: if the dialog closes
+ *   some other way while it is up (a Save that was in flight closing it),
+ *   the question is dropped, and the next open starts without it.
  * - The X and the form's own Cancel stay immediate.
  * - A field that uses Escape to cancel its own edit (the import preview's
  *   cells) carries `data-escape-cancels-edit`: Escape there cancels only
@@ -140,10 +151,11 @@ const EntryDialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   EntryDialogContentProps
 >(({ hasEntries, children, onInteractOutside, onEscapeKeyDown, onInputCapture, onChangeCapture, onKeyDownCapture, onPointerDownCapture, ...props }, ref) => {
-  const { confirm, dialog } = useConfirm()
+  const [asking, setAsking] = React.useState(false)
   const pressedRef = React.useRef(false)
   const enteredRef = React.useRef(false)
   const askingRef = React.useRef(false)
+  const returnToRef = React.useRef<HTMLElement | null>(null)
   const nodeRef = React.useRef<HTMLDivElement | null>(null)
   const openedNodeRef = React.useRef<HTMLDivElement | null>(null)
   const closeRef = React.useRef<HTMLButtonElement>(null)
@@ -160,6 +172,24 @@ const EntryDialogContent = React.forwardRef<
     },
     [ref]
   )
+  // The user's answer. Both run once the question has closed, so it no
+  // longer traps focus: Stay puts focus back where it was, Discard entries
+  // closes the dialog through its X.
+  const answer = React.useCallback((discard: boolean) => {
+    if (!askingRef.current) return
+    askingRef.current = false
+    setAsking(false)
+    const returnTo = returnToRef.current
+    void Promise.resolve().then(() => {
+      if (discard) closeRef.current?.click()
+      else (returnTo?.isConnected ? returnTo : nodeRef.current)?.focus()
+    })
+  }, [])
+  // The content the question was asked in has unmounted: drop it unanswered.
+  const drop = React.useCallback(() => {
+    askingRef.current = false
+    setAsking(false)
+  }, [])
   return dialogContentElement(
     {
       ...props,
@@ -193,17 +223,19 @@ const EntryDialogContent = React.forwardRef<
         event.preventDefault()
         if (askingRef.current) return
         askingRef.current = true
-        const returnTo = document.activeElement instanceof HTMLElement ? document.activeElement : null
-        void confirm(ENTRY_DISCARD_CONFIRM).then((discard) => {
-          askingRef.current = false
-          if (discard) closeRef.current?.click()
-          else (returnTo?.isConnected ? returnTo : nodeRef.current)?.focus()
-        })
+        returnToRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        setAsking(true)
       },
       children: (
         <>
           {children}
-          {dialog}
+          <ConfirmDialog
+            open={asking}
+            {...ENTRY_DISCARD_CONFIRM}
+            onConfirm={() => answer(true)}
+            onCancel={() => answer(false)}
+          />
+          <OnContentUnmount onUnmount={drop} />
         </>
       ),
     },

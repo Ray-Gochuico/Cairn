@@ -184,6 +184,29 @@ describe('worded gate dialogs — the RC2 repro shapes', () => {
     expect((within(still).getByLabelText('Type') as HTMLSelectElement).value).toBe(picked);
   });
 
+  it("Accounts: Escape while Add Account is still saving, then the save closes the dialog — the next open shows no leftover question", async () => {
+    let release: () => void = () => {};
+    createSpy.mockImplementationOnce(() => new Promise<number>((r) => { release = () => r(7); }));
+    const { user, dialog } = await openGateDialog(CASES[0]);
+    await user.type(within(dialog).getByLabelText('Name'), 'Joint checking');
+    await user.click(within(dialog).getByRole('button', { name: 'Add Account' }));
+    await waitFor(() => expect(createSpy).toHaveBeenCalledTimes(1));
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(screen.queryByText('Add an account')).toBeNull());
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByText('Add an account');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    const fresh = screen.getByRole('dialog', { name: 'Add an account' });
+    expect((within(fresh).getByLabelText('Name') as HTMLInputElement).value).toBe('');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByText('Add an account')).toBeNull();
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('Discard entries closes the dialog; Add manually opens an empty one', async () => {
     const { user, dialog } = await openGateDialog(CASES[1]);
     await user.type(within(dialog).getByLabelText('Name'), 'Pat Rivera');
