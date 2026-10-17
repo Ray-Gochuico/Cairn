@@ -285,8 +285,12 @@ describe('worded flow round trip — Part 1 (v1.8.0 O3, CR-O-5)', () => {
     });
     const saved = await roundTrip(user, /^About you — step 5 of/, /^Work & pay — step 1 of/, async () => {
       await user.type(screen.getByLabelText('About how much does your household spend in a month?'), '0');
+    }, () => {
+      // The answer re-reads as given: a saved 0 alone reads as never answered.
+      expect(screen.getByLabelText('About how much does your household spend in a month?')).toHaveValue('0');
     });
     expect(saved.rows.household[0]).toMatchObject({ monthly_expense_baseline: 0 });
+    expect(saved.progress.drafts.expenses).toEqual({ zero: true });
   });
 });
 

@@ -132,6 +132,10 @@ export const SetupProgressV2Schema = z.object({
     benefits: z
       .object({ you: BenefitsAnswerSchema.optional(), partner: BenefitsAnswerSchema.optional() })
       .optional(),
+    /** v1.8.0 O3 (code review, CR-O-5): 1e's monthly figure was typed as 0,
+     *  which reads the same as a household that never answered once saved
+     *  (prefillExpenses). A fact about the answer, never a figure. */
+    expenses: z.object({ zero: z.literal(true) }).optional(),
   }),
   view: z.enum(['worded', 'form']),
   /** Which entry created this record (Wave A item 3). Revisit-origin records

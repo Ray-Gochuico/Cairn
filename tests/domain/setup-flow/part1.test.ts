@@ -3,6 +3,7 @@ import {
   prefillAboutYou, saveAboutYou, maritalConflict, filingStatusFromValues,
   prefillMaritalFiling, saveMaritalFiling, saveStateCity, saveExpenses,
   EMPTY_MARITAL_VALUES,
+  prefillExpenses,
 } from '@/domain/setup-flow/steps/part1';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -284,5 +285,39 @@ describe("1b answer shape — a complicated answer re-reads verbatim (v1.8.0 O3,
     });
     expect(prefillMaritalFiling(withStatus('MFJ'))).toEqual({ ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly' });
     expect(prefillMaritalFiling(withStatus('SINGLE'))).toEqual({ ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single' });
+  });
+});
+
+describe('1e answer record — a typed $0 re-reads as given (v1.8.0 O3 code review, CR-O-5)', () => {
+  // A saved 0 reads the same as a household that never answered 1e, so 1e
+  // records a typed 0 in the progress record (never a figure) and re-reads
+  // it while the saved figure is still 0.
+  const recorded = { ...defaultProgressV2(), drafts: { expenses: { zero: true as const } } };
+  const after = async (monthly: number | null, ctx: FlowCtx) => {
+    const r = await saveExpenses({ monthly }, ctx);
+    return r.ok && r.progressUpdate ? r.progressUpdate(ctx.progress).drafts.expenses : 'no update';
+  };
+
+  it('saveExpenses records a typed 0, and a later figure or a cleared field drops the record', async () => {
+    expect(await after(0, ctxWith())).toEqual({ zero: true });
+    expect(householdUpdate).toHaveBeenCalledWith({ monthlyExpenseBaseline: 0 });
+    expect(await after(4000, ctxWith({ progress: recorded }))).toBeUndefined();
+    householdUpdate.mockClear();
+    expect(await after(null, ctxWith({ progress: recorded }))).toBeUndefined();
+    expect(householdUpdate).not.toHaveBeenCalled(); // nothing entered still writes nothing (D-WF18)
+  });
+
+  it('prefillExpenses re-reads a recorded 0 while the saved figure is still 0, and its untouched re-save keeps both', async () => {
+    const reentry = ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 0 }), progress: recorded });
+    expect(prefillExpenses(reentry)).toBe(0);
+    expect(await after(prefillExpenses(reentry), reentry)).toEqual({ zero: true });
+    expect(householdUpdate).toHaveBeenCalledWith({ monthlyExpenseBaseline: 0 });
+    // No record: a saved 0 reads as never answered, as before.
+    expect(prefillExpenses(ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 0 }) }))).toBeNull();
+  });
+
+  it('a figure saved since wins over a recorded 0 (control)', () => {
+    expect(prefillExpenses(ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 2500 }), progress: recorded })))
+      .toBe(2500);
   });
 });

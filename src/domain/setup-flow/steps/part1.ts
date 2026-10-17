@@ -3,7 +3,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import type { FilingStatus } from '@/types/enums';
 import type { MaritalAnswer } from '@/lib/setup-progress';
 import { resolveBindings } from '../engine';
-import type { FlowCtx, StepSaveResult } from '../types';
+import type { FlowCtx, ProgressUpdate, StepSaveResult } from '../types';
 
 // ── 1a — about you ──────────────────────────────────────────────────────────
 export interface AboutYouValues { name: string; dateOfBirth: string }
@@ -196,10 +196,21 @@ export async function saveStateCity(values: StateCityValues, _ctx: FlowCtx): Pro
 }
 
 // ── 1e — expenses ───────────────────────────────────────────────────────────
+/** 1e's seed (CW-22): the saved monthly figure. v1.8.0 O3 (code review,
+ *  CR-O-5): a typed 0 saves as the same 0 a household that never answered
+ *  holds, so 1e records it (progress only) and re-reads it while the saved
+ *  figure is still 0; a figure saved since wins. */
+export function prefillExpenses(ctx: FlowCtx): number | null {
+  return ctx.household?.monthlyExpenseBaseline || (ctx.progress.drafts.expenses?.zero ? 0 : null);
+}
+
 export async function saveExpenses(
   values: { monthly: number | null }, _ctx: FlowCtx,
 ): Promise<StepSaveResult> {
-  if (values.monthly == null) return { ok: true }; // nothing entered → writes NOTHING (D-WF18)
+  const progressUpdate: ProgressUpdate = (p) => ({
+    ...p, drafts: { ...p.drafts, expenses: values.monthly === 0 ? { zero: true } : undefined },
+  });
+  if (values.monthly == null) return { ok: true, progressUpdate }; // nothing entered → writes NOTHING (D-WF18)
   await useHouseholdStore.getState().update({ monthlyExpenseBaseline: values.monthly });
-  return { ok: true };
+  return { ok: true, progressUpdate };
 }
