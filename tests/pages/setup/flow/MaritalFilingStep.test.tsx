@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { createRef } from 'react';
@@ -188,5 +188,106 @@ describe('MaritalFilingStep (1b)', () => {
         "This sets which IRS brackets and caps the estimates use — it doesn't file anything. You can change it any time in Household.",
       ),
     ).toBeInTheDocument();
+  });
+});
+
+describe('MaritalFilingStep re-entry — a complicated pick holds (v1.8.0 O3, RC4)', () => {
+  for (const [fs, label] of [['HOH', 'Head of Household'], ['SINGLE', 'Single']] as const) {
+    it(`re-entering after Yes → "It's more complicated" → ${label} shows that pick and the partner fields`, () => {
+      renderStep(
+        ctxWith({
+          household: makeHousehold({ filingStatus: fs }),
+          progress: {
+            ...defaultProgressV2(),
+            drafts: { partner: { name: 'Jordan Lee', dateOfBirth: '1991-08-21' } },
+          },
+        }),
+        { asked: true },
+      );
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" })).toBeChecked();
+      expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent(label);
+      expect(screen.getByLabelText("Your partner's name")).toHaveValue('Jordan Lee');
+      expect(screen.getByLabelText("Your partner's date of birth year")).toHaveValue('1991');
+      expect(screen.getByLabelText("Your partner's date of birth day")).toHaveValue('21');
+    });
+  }
+});
+
+describe('MaritalFilingStep re-entry — a partner-less complicated pick holds (v1.8.0 O3, CL-O3-1)', () => {
+  for (const [fs, label] of [['HOH', 'Head of Household'], ['SINGLE', 'Single']] as const) {
+    it(`re-entering after a partner-less Yes → "It's more complicated" → ${label} shows that pick`, () => {
+      renderStep(
+        ctxWith({
+          household: makeHousehold({ filingStatus: fs }),
+          progress: {
+            ...defaultProgressV2(),
+            drafts: { marital: { married: 'yes', filing: 'complicated', complicatedStatus: fs } },
+          },
+        }),
+        { asked: true },
+      );
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" })).toBeChecked();
+      expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent(label);
+      expect(screen.getByLabelText("Your partner's name")).toHaveValue('');
+    });
+  }
+});
+
+describe('MaritalFilingStep — the filing status select is controlled from its first render (v1.8.0 O3)', () => {
+  const switchWarnings = (warn: { mock: { calls: unknown[][] } }) =>
+    warn.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('is changing from uncontrolled to controlled'));
+
+  it('a pick after "It\'s more complicated" logs no uncontrolled-to-controlled switch', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderStep(ctxWith());
+    await user.click(screen.getByRole('radio', { name: 'Yes' }));
+    await user.click(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" }));
+    await user.click(screen.getByRole('combobox', { name: /filing status/i }));
+    await user.click(await screen.findByRole('option', { name: 'Head of Household' }));
+    expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent('Head of Household');
+    expect(switchWarnings(warn)).toEqual([]);
+  });
+
+  it('the conflict-mode pick logs no switch either', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderStep(
+      ctxWith({
+        household: makeHousehold({ filingStatus: 'SINGLE' }),
+        persons: [makePerson({ id: 1 }), makePerson({ id: 2 })],
+      }),
+      { router: true },
+    );
+    await user.click(screen.getByRole('combobox', { name: /filing status/i }));
+    await user.click(await screen.findByRole('option', { name: 'Married Filing Jointly' }));
+    expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent('Married Filing Jointly');
+    expect(switchWarnings(warn)).toEqual([]);
+  });
+
+  it("an empty-value echo from Radix's hidden select never clears the pick (the '' guard stays)", async () => {
+    // Inside a <form> Radix renders a hidden native <select> mirror; a form
+    // reset there echoes onValueChange('') (the house Radix+RHF gotcha).
+    const householdUpdate = vi.fn(async () => {});
+    useHouseholdStore.setState({ update: householdUpdate } as never);
+    const user = userEvent.setup();
+    const submitRef = createRef<(() => Promise<StepSaveResult>) | null>() as
+      React.MutableRefObject<(() => Promise<StepSaveResult>) | null>;
+    const { container } = render(
+      <form>
+        <MaritalFilingStep ctx={ctxWith()} asked={false} onDirtyChange={vi.fn()} submitRef={submitRef} />
+      </form>,
+    );
+    await user.click(screen.getByRole('radio', { name: 'Yes' }));
+    await user.click(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" }));
+    await user.click(screen.getByRole('combobox', { name: /filing status/i }));
+    await user.click(await screen.findByRole('option', { name: 'Head of Household' }));
+    const mirror = container.querySelector('select[aria-hidden="true"]') as HTMLSelectElement;
+    fireEvent.change(mirror, { target: { value: '' } });
+    expect(screen.getByRole('combobox', { name: /filing status/i })).toHaveTextContent('Head of Household');
+    expect((await submitRef.current!()).ok).toBe(true);
+    expect(householdUpdate).toHaveBeenCalledWith({ filingStatus: 'HOH' });
   });
 });

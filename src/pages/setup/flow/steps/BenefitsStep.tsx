@@ -4,10 +4,9 @@ import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/ui/money-input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
-import { fractionToPercent } from '@/lib/percent-fields';
 import {
   nameForRole,
-  personForRole,
+  prefillBenefits,
   saveBenefits,
   type BenefitsValues,
 } from '@/domain/setup-flow/steps/part2';
@@ -17,24 +16,9 @@ import type { StepComponentProps } from '../step-props';
  *  entered-fields-only writes (D-WF18); skip handled by the shell (CW-29). */
 export default function BenefitsStep({ ctx, role = 'you', onDirtyChange, submitRef }: StepComponentProps) {
   const name = nameForRole(ctx, role);
-  // Review M5 (D-W4): a bound person's saved cells prefill regardless of the
-  // asked flag — Settings → Revisit setup opens with progress cleared.
-  // Review m4: the HSA yes/no seeds from the CONTRIBUTION only — after an
-  // explicit-No save wrote the honest zero, eligibility alone must not flip
-  // the control back to Yes.
-  const [seed] = useState<BenefitsValues>(() => {
-    const bound = personForRole(ctx, role);
-    if (!bound) {
-      return { pct401k: null, hsaContributes: null, hsaEligible: false, hsaMonthly: null, premiumMonthly: null };
-    }
-    return {
-      pct401k: bound.pretax401kPct > 0 ? fractionToPercent(bound.pretax401kPct) : null,
-      hsaContributes: bound.hsaMonthlyContribution > 0 ? true : null,
-      hsaEligible: bound.hsaEligible,
-      hsaMonthly: bound.hsaMonthlyContribution || null,
-      premiumMonthly: bound.healthInsuranceMonthlyPremium || null,
-    };
-  });
+  // The seed (review M5 and m4, and 2c's own answer record) lives in
+  // prefillBenefits, beside the save it must round-trip with (v1.8.0 O3).
+  const [seed] = useState<BenefitsValues>(() => prefillBenefits(ctx, role));
   const [values, setValues] = useState<BenefitsValues>(seed);
   const [saveError, setSaveError] = useState(false);
   const patch = (p: Partial<BenefitsValues>) => setValues((v) => ({ ...v, ...p }));

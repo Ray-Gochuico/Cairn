@@ -234,3 +234,66 @@ describe('setup-progress v2', () => {
     });
   });
 });
+
+describe("setup-progress v2 — 1b's answer shape (v1.8.0 O3, CL-O3-1)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it('a record saved before the answer shape existed (no drafts.marital) still parses, drafts intact', () => {
+    const older = {
+      ...defaultProgressV2(),
+      statuses: { about_you: 'completed', marital_filing: 'completed' },
+      drafts: {
+        you: { name: 'Alex Rivera', dateOfBirth: '1990-05-01' },
+        partner: { name: 'Jordan Lee', dateOfBirth: '1991-08-21' },
+      },
+    };
+    localStorage.setItem(SETUP_PROGRESS_V2_KEY, JSON.stringify(older));
+    const loaded = loadSetupProgress();
+    expect(loaded.statuses).toEqual(older.statuses);
+    expect(loaded.drafts).toEqual(older.drafts);
+  });
+
+  it('every answer shape 1b saves survives a save and a load — No, Jointly, Separately and a complicated pick', () => {
+    // A shape the schema rejected would fail the whole record's parse, and
+    // loadSetupProgress would then return a fresh default (statuses, drafts
+    // and bindings gone): the statuses check proves the record parsed.
+    const shapes = [
+      { married: 'no' as const, filing: null, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'jointly' as const, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'separately' as const, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: 'HOH' as const },
+    ];
+    for (const marital of shapes) {
+      saveSetupProgress({ ...defaultProgressV2(), statuses: { about_you: 'completed' }, drafts: { marital } });
+      const loaded = loadSetupProgress();
+      expect(loaded.statuses).toEqual({ about_you: 'completed' });
+      expect(loaded.drafts.marital).toEqual(marital);
+    }
+  });
+});
+
+describe("setup-progress v2 — 2c's answer record (v1.8.0 O3 code review, CR-O-5)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("a stored 2c record survives a save and a load, for you and for the partner", () => {
+    const benefits = {
+      you: { personId: 1, hsa: 'no' as const, zeros: ['pct401k' as const, 'premiumMonthly' as const] },
+      partner: { personId: 2, hsa: 'yes' as const, zeros: ['hsaMonthly' as const] },
+    };
+    saveSetupProgress({ ...defaultProgressV2(), statuses: { about_you: 'completed' }, drafts: { benefits } });
+    const loaded = loadSetupProgress();
+    expect(loaded.statuses).toEqual({ about_you: 'completed' });
+    expect(loaded.drafts.benefits).toEqual(benefits);
+  });
+});
+
+describe("setup-progress v2 — 1e's answer record (v1.8.0 O3 code review, CR-O-5)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it('a stored 1e record survives a save and a load', () => {
+    saveSetupProgress({ ...defaultProgressV2(), statuses: { about_you: 'completed' }, drafts: { expenses: { zero: true } } });
+    const loaded = loadSetupProgress();
+    expect(loaded.statuses).toEqual({ about_you: 'completed' });
+    expect(loaded.drafts.expenses).toEqual({ zero: true });
+  });
+});

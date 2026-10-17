@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FilingStatus } from '@/types/enums';
 
 /**
  * Shared setup progress (v2) — ONE progress state consumed by BOTH the worded
@@ -85,8 +86,28 @@ const PayDraftSchema = z.object({
   regularHoursPerWeek: z.number().nullable(),
   otThresholdHoursPerWeek: z.number().nullable(),
 });
+/** v1.8.0 O3 (CL-O3-1): 1b's own answer shape, recorded at its save, so a
+ *  complicated answer re-reads as picked (prefillMaritalFiling). Form state
+ *  like the drafts beside it; optional, so a record saved before it parses. */
+const MaritalAnswerSchema = z.object({
+  married: z.enum(['yes', 'no']),
+  filing: z.enum(['jointly', 'separately', 'complicated']).nullable(),
+  complicatedStatus: z.nativeEnum(FilingStatus).nullable(),
+});
+/** v1.8.0 O3 (code review, CR-O-5): what a 2c answer says that the saved
+ *  person row cannot — an HSA "Yes" or "No" while the saved contribution is
+ *  0, and the fields typed as 0, which read the same as fields never
+ *  answered. Facts about the answer, never a figure; one per role, for the
+ *  person it was given for (prefillBenefits). Optional, like the drafts. */
+const BenefitsAnswerSchema = z.object({
+  personId: z.number(),
+  hsa: z.enum(['yes', 'no']).nullable(),
+  zeros: z.array(z.enum(['pct401k', 'hsaMonthly', 'premiumMonthly'])),
+});
 export type PersonDraft = z.infer<typeof PersonDraftSchema>;
 export type PayDraft = z.infer<typeof PayDraftSchema>;
+export type MaritalAnswer = z.infer<typeof MaritalAnswerSchema>;
+export type BenefitsAnswer = z.infer<typeof BenefitsAnswerSchema>;
 
 export const SetupProgressV2Schema = z.object({
   version: z.literal(2),
@@ -107,6 +128,14 @@ export const SetupProgressV2Schema = z.object({
     pay: z
       .object({ you: PayDraftSchema.optional(), partner: PayDraftSchema.optional() })
       .optional(),
+    marital: MaritalAnswerSchema.optional(),
+    benefits: z
+      .object({ you: BenefitsAnswerSchema.optional(), partner: BenefitsAnswerSchema.optional() })
+      .optional(),
+    /** v1.8.0 O3 (code review, CR-O-5): 1e's monthly figure was typed as 0,
+     *  which reads the same as a household that never answered once saved
+     *  (prefillExpenses). A fact about the answer, never a figure. */
+    expenses: z.object({ zero: z.literal(true) }).optional(),
   }),
   view: z.enum(['worded', 'form']),
   /** Which entry created this record (Wave A item 3). Revisit-origin records

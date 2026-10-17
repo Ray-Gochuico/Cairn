@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { MoneyInput } from '@/components/ui/money-input';
-import { saveExpenses } from '@/domain/setup-flow/steps/part1';
+import { prefillExpenses, saveExpenses } from '@/domain/setup-flow/steps/part1';
 import { isSetupDismissed } from '@/lib/setup-dismissal';
 import type { StepComponentProps } from '../step-props';
 
 /** 1e — CW-22. Skippable; an empty value writes NOTHING (D-WF18). The shell
  *  renders the CW-7 skip control + CW-23 consequence. */
 export default function ExpensesStep({ ctx, asked, onDirtyChange, submitRef }: StepComponentProps) {
-  // Review M5 (D-W4): post-finish, Revisit setup prefills the household cells.
+  // Review M5 (D-W4): post-finish, Revisit setup prefills the household cells
+  // (prefillExpenses also re-reads a typed 0 from 1e's record, v1.8.0 O3).
   const [seed] = useState<number | null>(() =>
-    (asked || isSetupDismissed()) && ctx.household
-      ? ctx.household.monthlyExpenseBaseline || null
-      : null,
+    (asked || isSetupDismissed()) && ctx.household ? prefillExpenses(ctx) : null,
   );
   const [monthly, setMonthly] = useState<number | null>(seed);
   const [saveError, setSaveError] = useState(false);
