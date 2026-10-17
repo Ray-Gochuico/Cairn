@@ -13,7 +13,7 @@ vi.mock('@/lib/statements-archive', () => ({
   resolveArchivePath: vi.fn(),
 }));
 
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import FlowShell from '@/pages/setup/flow/FlowShell';
@@ -33,7 +33,7 @@ import { PropertiesRepo } from '@/domain/properties';
 import { VehiclesRepo } from '@/domain/vehicles';
 import { LoansRepo } from '@/domain/loans';
 import { useHouseholdStore } from '@/stores/household-store';
-import { SETUP_DISMISSED_KEY } from '@/lib/setup-dismissal';
+import { SETUP_DISMISSED_KEY, finishSetup } from '@/lib/setup-dismissal';
 import {
   makeAccount, makeDependent, makeLoan, makePerson, makeProperty, makeVehicle,
 } from '../../../factories';
@@ -523,6 +523,38 @@ describe('worded flow round trip — the paths plan review added (v1.8.0 O3, CR-
     const after = await savedData();
     expect(after.rows).toEqual(before.rows);
     expect(after.progress.drafts.partner).toEqual(JORDAN);
+  });
+
+  it("1b marital, Revisit setup after Finish: a partner-less It's more complicated → Head of Household re-reads from the saved status as No, and an untouched Next keeps HOH", async () => {
+    const user = userEvent.setup();
+    const you = await new PersonsRepo(db).create(withoutId(makePerson(YOU)));
+    // The first run: Yes → It's more complicated → Head of Household, no partner.
+    startAt('marital_filing', { statuses: { about_you: 'completed' }, bindings: { you } });
+    await screen.findByRole('heading', { name: /^About you — step 2 of/ });
+    await user.click(screen.getByRole('radio', { name: 'Yes' }));
+    await user.click(screen.getByRole('radio', { name: "It's more complicated / I'm not sure" }));
+    await user.click(screen.getByRole('combobox', { name: /filing status/i }));
+    await user.click(await screen.findByRole('option', { name: 'Head of Household' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: /^About you — step 3 of/ });
+    expect(loadSetupProgress().drafts.marital).toEqual({ married: 'yes', filing: 'complicated', complicatedStatus: 'HOH' });
+    cleanup();
+    // Finish clears the progress record, and the recorded answer with it
+    // (CX-O3-2 holds within a setup run; after Finish, 1b re-reads from the
+    // saved status alone).
+    finishSetup(() => {});
+    expect(localStorage.getItem(SETUP_PROGRESS_V2_KEY)).toBeNull();
+    // Settings → Revisit setup: a fresh revisit-origin record at 1b.
+    startAt('marital_filing', { origin: 'revisit' });
+    let before: Rows | undefined;
+    const saved = await roundTrip(user, /^About you — step 2 of/, /^About you — step 3 of/, async () => {
+      expect(screen.getByRole('radio', { name: 'No' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'I pay more than half the cost of a home for a qualifying dependent' })).toBeChecked();
+      before = (await savedData()).rows; // untouched: the first Next is itself a round trip
+    });
+    expect(saved.rows).toEqual(before);
+    expect(filingOf(saved)).toBe('HOH');
+    expect(saved.progress.drafts.marital).toEqual({ married: 'no', filing: null, complicatedStatus: null });
   });
 
   it('1c state and city, Revisit setup (after finish, step not yet asked): an untouched Next keeps New York with New York City', async () => {
