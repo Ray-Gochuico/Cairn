@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { ImportPreviewModal } from '@/components/import/ImportPreviewModal';
+import { commitSnapshotImport } from '@/lib/import/commit';
 import type { ParseResultLite } from '@/stores/import-preview-store';
 
 vi.mock('@/lib/import/commit', () => ({
@@ -189,6 +191,55 @@ describe('ImportPreviewModal — keeps row edits (CR-O-3)', () => {
     expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
     expect(onOpenChange).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('Escape while file 1 is still committing: the commit moving the batch on to file 2 closes the question, and file 2 is not skipped', async () => {
+    let release: () => void = () => {};
+    vi.mocked(commitSnapshotImport).mockImplementationOnce(
+      () => new Promise((r) => { release = () => r({ inserted: 1, updated: 0, skipped: 0 } as never); }) as never,
+    );
+    const skipped: string[] = [];
+    const committed: string[] = [];
+    const fileB: ParseResultLite = { ...twoRows, rows: [{ account: 'Fidelity 401k', snapshot_date: '2024-01-31', total_value: '77777' }] };
+    /** The ImportCsvButton / TransactionsSectionImporter queue: one modal
+     *  instance, no key; a save and a dismissal both advance the queue. */
+    function Queue() {
+      const [queue, setQueue] = useState([
+        { name: 'a.csv', parsed: twoRows },
+        { name: 'b.csv', parsed: fileB },
+      ]);
+      const current = queue[0];
+      const advance = () => setQueue((q) => q.slice(1));
+      if (!current) return <p>queue empty</p>;
+      return (
+        <ImportPreviewModal
+          entity="snapshot"
+          parsed={current.parsed}
+          ctx={{ accounts } as never}
+          open
+          onOpenChange={(o) => { if (!o) { skipped.push(current.name); advance(); } }}
+          queuePosition={{ current: 3 - queue.length, total: 2 }}
+          queueLength={queue.length}
+          onCancelAll={() => setQueue([])}
+          onSaved={() => { committed.push(current.name); advance(); }}
+        />
+      );
+    }
+    const user = userEvent.setup();
+    render(<Queue />);
+    await user.click(screen.getAllByRole('button', { name: 'Remove row' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Commit (1 rows)' }));
+    await waitFor(() => expect(commitSnapshotImport).toHaveBeenCalledTimes(1));
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await act(async () => {
+      release();
+    });
+    await screen.findByText('77777');
+    expect(committed).toEqual(['a.csv']);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: ASK })).toBeNull());
+    expect(skipped).toEqual([]);
+    expect(screen.getByRole('dialog', { name: 'Import account snapshots from CSV' })).toBeInTheDocument();
   });
 
   it('Skip this file stays an immediate, explicit skip', async () => {

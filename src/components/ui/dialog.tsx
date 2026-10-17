@@ -118,9 +118,10 @@ function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
  *   has, Escape asks first (the house ConfirmDialog, the one useConfirm
  *   renders). "Stay" (or Escape on the question) keeps every value and puts
  *   focus back where it was; "Discard entries" closes the dialog through its
- *   X. The question goes with the open it was asked in: if the dialog closes
+ *   X. The question goes with what it asked about: if the dialog closes
  *   some other way while it is up (a Save that was in flight closing it),
- *   the question is dropped, and the next open starts without it.
+ *   the question is dropped, and the next open starts without it; if the
+ *   caller's `hasEntries` turns false while it is up, it is answered as Stay.
  * - The X and the form's own Cancel stay immediate.
  * - A field that uses Escape to cancel its own edit (the import preview's
  *   cells) carries `data-escape-cancels-edit`: Escape there cancels only
@@ -190,6 +191,12 @@ const EntryDialogContent = React.forwardRef<
     askingRef.current = false
     setAsking(false)
   }, [])
+  // The caller's own signal turned false while the question is up (the next
+  // file of an import batch, shown in the same open dialog): nothing here is
+  // unsaved any more, so the question is answered as Stay.
+  React.useEffect(() => {
+    if (hasEntries === false) answer(false)
+  }, [hasEntries, answer])
   return dialogContentElement(
     {
       ...props,

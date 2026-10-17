@@ -410,6 +410,21 @@ describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
     expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
   });
 
+  it("hasEntries turning false while the question is up (the next file of a batch) answers it as Stay: focus goes back, and the dialog stays open, pristine", async () => {
+    const user = userEvent.setup();
+    const view = render(<Known hasEntries />);
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    screen.getByLabelText('Name').focus();
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    view.rerender(<Known hasEntries={false} />);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: ASK })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+    await user.keyboard('{Escape}');
+    expect(entryDialog()).toBeNull();
+  });
+
   it("hasEntries is the whole signal: with it false, typing alone does not make Escape ask", async () => {
     const user = userEvent.setup();
     render(<Known hasEntries={false} />);
