@@ -4,11 +4,11 @@ import {
   employmentDraftFromPerson, employmentPatchFromDraft, validateEmploymentDraft,
   type EmploymentDraft,
 } from '@/lib/employment-fields';
-import { percentToFraction } from '@/lib/percent-fields';
-import type { Role } from '@/lib/setup-progress';
+import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
+import type { BenefitsAnswer, Role } from '@/lib/setup-progress';
 import type { Person } from '@/types/schema';
 import { resolveBindings } from '../engine';
-import type { FlowCtx, StepSaveResult } from '../types';
+import type { FlowCtx, ProgressUpdate, StepSaveResult } from '../types';
 
 export function personForRole(ctx: FlowCtx, role: Role): Person | undefined {
   const { you, partner } = resolveBindings(ctx);
@@ -131,6 +131,32 @@ export interface BenefitsValues {
   premiumMonthly: number | null;
 }
 
+/** 2c's seed (CW-28). Review M5 (D-W4): a bound person's saved cells
+ *  prefill regardless of the asked flag — Settings → Revisit setup opens with
+ *  progress cleared. Review m4: the HSA yes/no seeds from the CONTRIBUTION —
+ *  after an explicit-No save wrote the honest zero, eligibility alone must not
+ *  flip the control back to Yes. v1.8.0 O3 (code review, CR-O-5): 2c's own
+ *  record adds what the row cannot say (an HSA "Yes" or "No" over a 0
+ *  contribution, a field typed as 0) while it is about this person and the
+ *  row still reads 0 there; a figure saved since wins. */
+export function prefillBenefits(ctx: FlowCtx, role: Role): BenefitsValues {
+  const bound = personForRole(ctx, role);
+  if (!bound) {
+    return { pct401k: null, hsaContributes: null, hsaEligible: false, hsaMonthly: null, premiumMonthly: null };
+  }
+  const recorded = ctx.progress.drafts.benefits?.[role];
+  const answer = recorded?.personId === bound.id ? recorded : undefined;
+  const zero = (field: BenefitsAnswer['zeros'][number]) => (answer?.zeros.includes(field) ? 0 : null);
+  return {
+    pct401k: bound.pretax401kPct > 0 ? fractionToPercent(bound.pretax401kPct) : zero('pct401k'),
+    hsaContributes:
+      bound.hsaMonthlyContribution > 0 ? true : answer?.hsa == null ? null : answer.hsa === 'yes',
+    hsaEligible: bound.hsaEligible,
+    hsaMonthly: bound.hsaMonthlyContribution || zero('hsaMonthly'),
+    premiumMonthly: bound.healthInsuranceMonthlyPremium || zero('premiumMonthly'),
+  };
+}
+
 export async function saveBenefits(
   role: Role, v: BenefitsValues, ctx: FlowCtx,
 ): Promise<StepSaveResult> {
@@ -148,7 +174,22 @@ export async function saveBenefits(
     patch.hsaMonthlyContribution = 0;
   }
   if (v.premiumMonthly != null) patch.healthInsuranceMonthlyPremium = v.premiumMonthly;
-  if (Object.keys(patch).length === 0) return { ok: true }; // nothing entered → nothing written
+  // v1.8.0 O3 (code review, CR-O-5): record what the row cannot say, so
+  // re-entry re-reads this answer as given (prefillBenefits). Progress only.
+  const contribution = patch.hsaMonthlyContribution ?? bound.hsaMonthlyContribution;
+  const zeros: BenefitsAnswer['zeros'] = [];
+  if (v.pct401k === 0) zeros.push('pct401k');
+  if (v.hsaContributes === true && v.hsaMonthly === 0) zeros.push('hsaMonthly');
+  if (v.premiumMonthly === 0) zeros.push('premiumMonthly');
+  const answer: BenefitsAnswer = {
+    personId: bound.id,
+    hsa: v.hsaContributes == null || contribution > 0 ? null : v.hsaContributes ? 'yes' : 'no',
+    zeros,
+  };
+  const progressUpdate: ProgressUpdate = (p) => ({
+    ...p, drafts: { ...p.drafts, benefits: { ...p.drafts.benefits, [role]: answer } },
+  });
+  if (Object.keys(patch).length === 0) return { ok: true, progressUpdate }; // nothing entered → nothing written
   await usePersonsStore.getState().update(bound.id, patch);
-  return { ok: true };
+  return { ok: true, progressUpdate };
 }

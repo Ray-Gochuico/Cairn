@@ -374,10 +374,16 @@ describe('worded flow round trip — Part 2 (v1.8.0 O3, CR-O-5)', () => {
       await user.click(screen.getByRole('radio', { name: 'No' }));
       await user.clear(screen.getByLabelText(/health insurance/));
       await user.type(screen.getByLabelText(/health insurance/), '0');
+    }, () => {
+      // The answer re-reads as given: a saved 0 alone reads as never answered.
+      expect(screen.getByLabelText(/401\(k\)/)).toHaveValue(0);
+      expect(screen.getByRole('radio', { name: 'No' })).toBeChecked();
+      expect(screen.getByLabelText(/health insurance/)).toHaveValue('0');
     });
     expect(saved.rows.persons[0]).toMatchObject({
       pretax_401k_pct: 0, hsa_eligible: 0, hsa_monthly_contribution: 0, health_insurance_monthly_premium: 0,
     });
+    expect(saved.progress.drafts.benefits).toEqual({ you: { personId: you, hsa: 'no', zeros: ['pct401k', 'premiumMonthly'] } });
   });
 
   it('2c benefits:you: HSA No over a saved contribution (the honest zero)', async () => {
@@ -386,6 +392,8 @@ describe('worded flow round trip — Part 2 (v1.8.0 O3, CR-O-5)', () => {
     startAt('benefits', { statuses: { ...PART1_DONE, 'pay:you': 'completed', 'retirement:you': 'completed' }, bindings: { you } }, 'you');
     const saved = await roundTrip(user, /^Work & pay — step 3 of/, /^What you own — step 1 of/, async () => {
       await user.click(screen.getByRole('radio', { name: 'No' }));
+    }, () => {
+      expect(screen.getByRole('radio', { name: 'No' })).toBeChecked();
     });
     expect(saved.rows.persons[0]).toMatchObject({ hsa_eligible: 1, hsa_monthly_contribution: 0 });
   });
@@ -397,6 +405,10 @@ describe('worded flow round trip — Part 2 (v1.8.0 O3, CR-O-5)', () => {
     const saved = await roundTrip(user, /^Work & pay — step 3 of/, /^What you own — step 1 of/, async () => {
       await user.click(screen.getByRole('radio', { name: 'Yes' }));
       await user.click(screen.getByRole('checkbox'));
+    }, () => {
+      expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+      expect(screen.getByRole('checkbox')).toBeChecked();
+      expect(screen.getByLabelText('HSA contribution / month')).toHaveValue('');
     });
     expect(saved.rows.persons[0]).toMatchObject({ hsa_eligible: 1, hsa_monthly_contribution: 0 });
   });
@@ -698,6 +710,26 @@ describe('worded flow round trip — the paths plan review added (v1.8.0 O3, CR-
       await user.type(screen.getByLabelText(/health insurance/), '180');
     });
     expect(saved.rows.persons[1]).toMatchObject({ name: JORDAN.name, pretax_401k_pct: 0.04, health_insurance_monthly_premium: 180 });
+  });
+
+  it('2c benefits:partner: HSA No and a $0 premium for a saved partner', async () => {
+    const user = userEvent.setup();
+    const you = await new PersonsRepo(db).create(withoutId(makePerson(YOU)));
+    const partner = await new PersonsRepo(db).create(withoutId(makePerson(JORDAN)));
+    await new HouseholdRepo(db).update({ filingStatus: 'MFJ' });
+    startAt('benefits', {
+      statuses: { ...PART2_DONE, 'pay:partner': 'completed', 'retirement:partner': 'completed' },
+      bindings: { you, partner },
+    }, 'partner');
+    const saved = await roundTrip(user, /^Work & pay — step 6 of/, /^What you own — step 1 of/, async () => {
+      await user.click(screen.getByRole('radio', { name: 'No' }));
+      await user.type(screen.getByLabelText(/health insurance/), '0');
+    }, () => {
+      expect(screen.getByRole('radio', { name: 'No' })).toBeChecked();
+      expect(screen.getByLabelText(/health insurance/)).toHaveValue('0');
+    });
+    expect(saved.rows.persons[1]).toMatchObject({ name: JORDAN.name, hsa_monthly_contribution: 0, health_insurance_monthly_premium: 0 });
+    expect(saved.progress.drafts.benefits).toEqual({ partner: { personId: partner, hsa: 'no', zeros: ['premiumMonthly'] } });
   });
 
   it('rent_gate, shown after a home "No": Yes, with no rows yet', async () => {

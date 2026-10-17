@@ -271,3 +271,18 @@ describe("setup-progress v2 — 1b's answer shape (v1.8.0 O3, CL-O3-1)", () => {
     }
   });
 });
+
+describe("setup-progress v2 — 2c's answer record (v1.8.0 O3 code review, CR-O-5)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("a stored 2c record survives a save and a load, for you and for the partner", () => {
+    const benefits = {
+      you: { personId: 1, hsa: 'no' as const, zeros: ['pct401k' as const, 'premiumMonthly' as const] },
+      partner: { personId: 2, hsa: 'yes' as const, zeros: ['hsaMonthly' as const] },
+    };
+    saveSetupProgress({ ...defaultProgressV2(), statuses: { about_you: 'completed' }, drafts: { benefits } });
+    const loaded = loadSetupProgress();
+    expect(loaded.statuses).toEqual({ about_you: 'completed' });
+    expect(loaded.drafts.benefits).toEqual(benefits);
+  });
+});
