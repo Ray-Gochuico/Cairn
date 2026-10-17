@@ -38,11 +38,15 @@ function FilingStatusSelect({
   value: FilingStatus | null;
   onChange: (v: FilingStatus) => void;
 }) {
+  // v1.8.0 O3: '' (no pick yet) keeps the Select controlled from its first
+  // render — `undefined` made Radix log a switch from uncontrolled to
+  // controlled on the first pick. '' is never a SelectItem value, so the echo
+  // guard below still drops every '' Radix sends back.
   return (
     <div>
       <Label htmlFor="flow-filing-status">Filing status</Label>
       <Select
-        value={value ?? undefined}
+        value={value ?? ''}
         onValueChange={(v) => {
           if (v === '') return; // Radix bubble-reset echo — never a user pick
           onChange(v as FilingStatus);

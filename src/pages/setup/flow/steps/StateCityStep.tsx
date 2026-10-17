@@ -64,8 +64,10 @@ export default function StateCityStep({ ctx, asked, onDirtyChange, submitRef }: 
           onChange={(e) => {
             const next = e.target.value.toUpperCase();
             setState(next === '' ? null : next);
-            // Mismatched city clears immediately (HouseholdForm parity).
-            if (city != null && !city.startsWith(`${next}_`)) setCity(null);
+            // A mismatched city clears once the state is a complete two-letter
+            // code (HouseholdForm parity, v1.8.0 O3): retyping one letter of
+            // the same state keeps the city.
+            if (city != null && next.length === 2 && !city.startsWith(`${next}_`)) setCity(null);
           }}
           aria-invalid={stateError ? true : undefined}
           aria-describedby={stateError ? 'flow-state-error' : undefined}
