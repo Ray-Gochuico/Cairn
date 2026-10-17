@@ -72,6 +72,22 @@ describe('StateCityStep (1c) — the city waits for a complete state (v1.8.0 O3)
     expect(householdUpdate).toHaveBeenCalledWith({ state: 'NY', city: 'NY_NYC' });
   });
 
+  it('clearing the whole state and retyping it keeps New York City and leaves the step clean', async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const submitRef = createRef<(() => Promise<StepSaveResult>) | null>() as
+      React.MutableRefObject<(() => Promise<StepSaveResult>) | null>;
+    render(<StateCityStep ctx={ctxWith()} asked onDirtyChange={onDirtyChange} submitRef={submitRef} />);
+    const stateInput = screen.getByLabelText('Which state do you live in?');
+    await user.clear(stateInput); // select all + delete: one input event with ''
+    expect(stateInput).toHaveValue('');
+    await user.type(stateInput, 'NY');
+    expect(cityValue()).toBe('NY_NYC');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(await submitRef.current!()).toEqual({ ok: true });
+    expect(householdUpdate).toHaveBeenCalledWith({ state: 'NY', city: 'NY_NYC' });
+  });
+
   it('a complete state the city does not match clears the city (designed)', async () => {
     const user = userEvent.setup();
     const { submitRef } = renderStep();

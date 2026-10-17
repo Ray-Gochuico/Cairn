@@ -296,6 +296,20 @@ describe('HouseholdForm — the city waits for a complete state (v1.8.0 O3, RC3,
     expect(citySelect().selectedOptions[0]?.textContent).toBe('NYC');
   });
 
+  it('clearing the whole state and retyping it keeps New York City, shown while the state is empty, and the form clean', async () => {
+    const user = userEvent.setup();
+    renderForm(SAVED_NY);
+    const stateInput = screen.getByLabelText('State');
+    await user.clear(stateInput); // select all + delete: one input event with ''
+    expect(stateInput).toHaveValue('');
+    expect(citySelect().value).toBe('NY_NYC');
+    expect(citySelect().selectedOptions[0]?.textContent).toBe('NYC');
+    await user.type(stateInput, 'NY');
+    expect(stateInput).toHaveValue('NY');
+    expect(citySelect().value).toBe('NY_NYC');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
   it('a picked complete state the city does not match clears it at once (designed)', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm(SAVED_NY);
