@@ -253,9 +253,21 @@ describe("setup-progress v2 — 1b's answer shape (v1.8.0 O3, CL-O3-1)", () => {
     expect(loaded.drafts).toEqual(older.drafts);
   });
 
-  it('a stored answer shape survives a save and a load', () => {
-    const marital = { married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: 'HOH' as const };
-    saveSetupProgress({ ...defaultProgressV2(), drafts: { marital } });
-    expect(loadSetupProgress().drafts.marital).toEqual(marital);
+  it('every answer shape 1b saves survives a save and a load — No, Jointly, Separately and a complicated pick', () => {
+    // A shape the schema rejected would fail the whole record's parse, and
+    // loadSetupProgress would then return a fresh default (statuses, drafts
+    // and bindings gone): the statuses check proves the record parsed.
+    const shapes = [
+      { married: 'no' as const, filing: null, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'jointly' as const, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'separately' as const, complicatedStatus: null },
+      { married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: 'HOH' as const },
+    ];
+    for (const marital of shapes) {
+      saveSetupProgress({ ...defaultProgressV2(), statuses: { about_you: 'completed' }, drafts: { marital } });
+      const loaded = loadSetupProgress();
+      expect(loaded.statuses).toEqual({ about_you: 'completed' });
+      expect(loaded.drafts.marital).toEqual(marital);
+    }
   });
 });

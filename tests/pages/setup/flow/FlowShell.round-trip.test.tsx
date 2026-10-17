@@ -22,6 +22,7 @@ import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import {
   defaultProgressV2, loadSetupProgress, saveSetupProgress,
+  SETUP_PROGRESS_V2_KEY, SetupProgressV2Schema,
   type SetupProgressV2, type StepId,
 } from '@/lib/setup-progress';
 import { HouseholdRepo } from '@/domain/household';
@@ -68,6 +69,10 @@ async function savedData() {
     const r = await db.select<Record<string, unknown>>(`SELECT * FROM ${t} ORDER BY id`);
     rows[t] = r.map(({ updated_at: _u, created_at: _c, ...rest }) => rest);
   }
+  // A stored record the schema rejects loads as a fresh default, so check it
+  // parses (else a rejected shape would compare two defaults).
+  const raw = localStorage.getItem(SETUP_PROGRESS_V2_KEY);
+  expect(raw != null && SetupProgressV2Schema.safeParse(JSON.parse(raw)).success, 'the stored progress record parses').toBe(true);
   const { cursor: _cursor, ...progress } = loadSetupProgress();
   return { rows, progress };
 }
@@ -245,6 +250,7 @@ describe('worded flow round trip — Part 1 (v1.8.0 O3, CR-O-5)', () => {
         await user.click(screen.getByRole('radio', { name: radio }));
       });
       expect(filingOf(saved)).toBe(fs);
+      expect(saved.progress.drafts.marital).toEqual({ married: 'no', filing: null, complicatedStatus: null });
     });
   }
 
