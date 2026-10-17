@@ -127,15 +127,20 @@ function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
  *   cells) carries `data-escape-cancels-edit`: Escape there cancels only
  *   that edit, and the dialog neither closes nor asks.
  *
- * "Entered" = an input event inside the dialog (typing, a native select, a
- * checkbox, a date field), or a change event once the user has pressed a key
- * or a pointer in it: a Radix Select pick reaches the dialog only as a change
- * event from its hidden select. A form resetting its own values fires no
- * input event, and the Radix Select hydration echo (the change its hidden
- * select fires when RHF's `values` land, house gotcha) comes before the user
- * has pressed anything, so neither marks a fresh dialog as entered. The marks
- * reset when a NEW content node mounts, i.e. on every open (Radix re-attaches
- * the same node's ref on each render, which must not reset them).
+ * "Entered" = an input event in one of the dialog's own fields (typing, a
+ * native select, a checkbox, a date field), or a change event there once the
+ * user has pressed a key or a pointer in it: a Radix Select pick reaches the
+ * dialog only as a change event from its hidden select, which sits inside
+ * the dialog. Not an entry: a file chosen in a file input (it starts an
+ * import, whose preview tracks its own rows), and an edit in a dialog opened
+ * from this one (its events reach this content through the React tree, but
+ * its fields are outside this dialog). A form resetting its own values
+ * fires no input event, and the Radix Select hydration echo (the change its
+ * hidden select fires when RHF's `values` land, house gotcha) comes before
+ * the user has pressed anything, so neither marks a fresh dialog as entered.
+ * The marks reset when a NEW content node mounts, i.e. on every open (Radix
+ * re-attaches the same node's ref on each render, which must not reset
+ * them).
  *
  * A caller that tracks its own entries (the import preview's row edits, the
  * PDF review's) passes `hasEntries`, which is then the whole signal: an
@@ -173,6 +178,12 @@ const EntryDialogContent = React.forwardRef<
     },
     [ref]
   )
+  // An event from one of this dialog's own fields: inside its box, and not a
+  // file input (choosing a CSV to import enters nothing here).
+  const isOwnField = (target: EventTarget) =>
+    target instanceof Node &&
+    nodeRef.current?.contains(target) === true &&
+    !(target instanceof HTMLInputElement && target.type === "file")
   // The user's answer. Both run once the question has closed, so it no
   // longer traps focus: Stay puts focus back where it was, Discard entries
   // closes the dialog through its X.
@@ -214,10 +225,12 @@ const EntryDialogContent = React.forwardRef<
       },
       onInputCapture: (event) => {
         onInputCapture?.(event)
+        if (!isOwnField(event.target)) return
         enteredRef.current = true
       },
       onChangeCapture: (event) => {
         onChangeCapture?.(event)
+        if (!isOwnField(event.target)) return
         if (pressedRef.current) enteredRef.current = true
       },
       onEscapeKeyDown: (event) => {

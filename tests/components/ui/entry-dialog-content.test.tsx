@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { StrictMode, useEffect, useState } from 'react';
 import {
   Dialog,
+  DialogContent,
   DialogDescription,
   DialogTitle,
   EntryDialogContent,
@@ -433,5 +434,78 @@ describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
     await user.keyboard('{Escape}');
     expect(entryDialog()).toBeNull();
     expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+  });
+});
+
+/** An entry dialog that starts an import (ValueHistorySection's Import CSV
+ *  inside the asset-values dialog): a file input, and a dialog it opens. */
+function NestedHarness() {
+  const [open, setOpen] = useState(false);
+  const [inner, setInner] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        Add manually
+      </button>
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <EntryDialogContent>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <input aria-label="Name" />
+          <input type="file" aria-label="CSV file" />
+          <button type="button" onClick={() => setInner(true)}>
+            Open the preview
+          </button>
+          <Dialog open={inner} onOpenChange={(o) => !o && setInner(false)}>
+            <DialogContent>
+              <DialogTitle>Preview</DialogTitle>
+              <DialogDescription>Nested harness.</DialogDescription>
+              <input aria-label="Row value" />
+            </DialogContent>
+          </Dialog>
+        </EntryDialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+describe("EntryDialogContent — only an entry in its own fields counts (CR-O-3)", () => {
+  async function openNested() {
+    const user = userEvent.setup();
+    render(<NestedHarness />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    return user;
+  }
+
+  it('choosing a file to import is not an entry here: Escape still closes at once', async () => {
+    const user = await openNested();
+    await user.upload(screen.getByLabelText('CSV file'), new File(['a,b'], 'values.csv', { type: 'text/csv' }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(entryDialog()).toBeNull();
+  });
+
+  it('typing in a dialog opened from this one is not an entry here: once it closes, Escape closes this one at once', async () => {
+    const user = await openNested();
+    await user.click(screen.getByRole('button', { name: 'Open the preview' }));
+    await screen.findByRole('dialog', { name: 'Preview' });
+    await user.type(screen.getByLabelText('Row value'), '61000');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Preview' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(entryDialog()).toBeNull();
+  });
+
+  it('its own field still counts after a nested dialog has come and gone', async () => {
+    const user = await openNested();
+    await user.click(screen.getByRole('button', { name: 'Open the preview' }));
+    await screen.findByRole('dialog', { name: 'Preview' });
+    await user.keyboard('{Escape}');
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
   });
 });

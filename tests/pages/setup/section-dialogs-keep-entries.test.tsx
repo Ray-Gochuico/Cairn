@@ -204,3 +204,27 @@ describe('form-view dialogs — pristine Escape and the Radix Select', () => {
     expect(writeSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('form-view dialogs — an import started inside one', () => {
+  it('Property / vehicle values: importing a CSV from inside the dialog, then skipping it, leaves the dialog untouched, so Escape closes it at once', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Section4_History hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    await user.click(within(screen.getByTestId('entity-card-property-vehicle-values')).getByRole('button', { name: 'Add manually' }));
+    const outer = await screen.findByRole('dialog', { name: 'Add property / vehicle value snapshot' });
+    await user.click(within(outer).getByRole('button', { name: 'Import CSV' }));
+    const csv = new File(['owner_type,owner_name,snapshot_date,value\nPROPERTY,Home,2024-01-31,500000\n'], 'values.csv', { type: 'text/csv' });
+    await user.upload(within(outer).getAllByTestId('import-csv-file-input')[0] as HTMLInputElement, csv);
+    await screen.findByRole('dialog', { name: /Import asset value snapshots/ });
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Import asset value snapshots/ })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Add property / vehicle value snapshot' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Add property / vehicle value snapshot' })).toBeNull();
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+});
