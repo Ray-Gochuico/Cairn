@@ -179,6 +179,9 @@ describe('HouseholdForm — a saved city holds at open (v1.8.0 O3, RC3)', () => 
     const { onSubmit } = renderForm({ ...SAVED_NY, state: 'NJ' });
     expect(screen.getByLabelText('State')).toHaveValue('NJ');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // A complete state never lists the held city: no option matches NJ (CX-O3-1).
+    expect(citySelect().value).toBe('');
+    expect(citySelect().selectedOptions[0]?.textContent).toBe('(No local tax)');
     // Only the user's own state edit clears a city; a Filing status pick keeps the stored one.
     await user.click(screen.getByRole('combobox', { name: 'Filing status' }));
     await user.click(await screen.findByRole('option', { name: 'Married Filing Jointly' }));
