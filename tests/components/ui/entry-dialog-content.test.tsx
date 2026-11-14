@@ -384,6 +384,146 @@ describe('EntryDialogContent — a question never outlives what it asked about (
     await user.keyboard('{Escape}');
     expect(entryDialog()).toBeNull();
   });
+
+  it('after the caller closed it under its question, the next open that is typed into still asks on Escape', async () => {
+    const user = userEvent.setup();
+    const caller = { close: () => {} };
+    render(<CallerClosesHarness caller={caller} />);
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await act(async () => {
+      caller.close();
+    });
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await user.type(screen.getByLabelText('Name'), 'Sam Lee');
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Sam Lee');
+  });
+});
+
+/** WKWebView's exit animation, for the question only. Radix Presence keeps a
+ *  closing dialog mounted, and its buttons clickable, until its animationend
+ *  (the app's `animate-out`, about 200 ms). jsdom runs no animations, so the
+ *  question's computed animationName is stubbed (and CSS.escape, which
+ *  Presence calls), and `end()` dispatches the animationend by hand. */
+function animateQuestionExit() {
+  const g = globalThis as { CSS?: { escape?: (s: string) => string } };
+  const savedCss = g.CSS;
+  const savedEscape = savedCss?.escape;
+  if (!g.CSS) g.CSS = {};
+  if (!g.CSS.escape) g.CSS.escape = (s) => s;
+  const real = window.getComputedStyle.bind(window);
+  const spy = vi
+    .spyOn(window, 'getComputedStyle')
+    .mockImplementation((el: Element, pseudo?: string | null) => {
+      const style = real(el, pseudo);
+      return new Proxy(style, {
+        get(target, key) {
+          if (key === 'animationName' && el.getAttribute('role') === 'dialog' && (el.textContent ?? '').includes(ASK)) {
+            return el.getAttribute('data-state') === 'closed' ? 'exit' : 'enter';
+          }
+          const value = Reflect.get(target, key);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    });
+  return {
+    end() {
+      const question = screen.getByText(ASK).closest('[role="dialog"]');
+      if (!question) throw new Error('no question to end');
+      const event = new Event('animationend', { bubbles: true });
+      Object.defineProperty(event, 'animationName', { value: 'exit' });
+      act(() => {
+        question.dispatchEvent(event);
+      });
+    },
+    restore() {
+      spy.mockRestore();
+      if (!savedCss) delete g.CSS;
+      else if (!savedEscape) delete savedCss.escape;
+    },
+  };
+}
+
+function Tracked({ hasEntries, onOpenChange }: { hasEntries?: boolean; onOpenChange: (open: boolean) => void }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) setOpen(false);
+      }}
+    >
+      <EntryDialogContent hasEntries={hasEntries}>
+        <DialogTitle>Add a thing</DialogTitle>
+        <DialogDescription>Entry harness.</DialogDescription>
+        <input aria-label="Name" />
+      </EntryDialogContent>
+    </Dialog>
+  );
+}
+
+describe('EntryDialogContent — an answered question stays answered while it closes (CR-O-3)', () => {
+  it("the caller's signal answering it as Stay: a Discard entries click while it is still closing discards nothing", async () => {
+    const anim = animateQuestionExit();
+    try {
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      const view = render(<Tracked hasEntries onOpenChange={onOpenChange} />);
+      await screen.findByRole('dialog', { name: 'Add a thing' });
+      screen.getByLabelText('Name').focus();
+      await user.keyboard('{Escape}');
+      await screen.findByRole('dialog', { name: ASK });
+      const discard = screen.getByRole('button', { name: 'Discard entries' });
+      view.rerender(<Tracked hasEntries={false} onOpenChange={onOpenChange} />);
+      await settleRadixListeners();
+      // Answered, but still mounted while it animates out.
+      expect(discard).toBeInTheDocument();
+      expect(screen.getByText(ASK).closest('[role="dialog"]')).toHaveAttribute('data-state', 'closed');
+      fireEvent.click(discard);
+      await settleRadixListeners();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      anim.end();
+      expect(screen.queryByText(ASK)).toBeNull();
+      expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    } finally {
+      anim.restore();
+    }
+  });
+
+  it('after Stay, a Discard entries click while the question is still closing discards nothing, and the next Escape asks again', async () => {
+    const anim = animateQuestionExit();
+    try {
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      render(<Tracked onOpenChange={onOpenChange} />);
+      await screen.findByRole('dialog', { name: 'Add a thing' });
+      await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+      await user.keyboard('{Escape}');
+      await screen.findByRole('dialog', { name: ASK });
+      const discard = screen.getByRole('button', { name: 'Discard entries' });
+      await user.click(screen.getByRole('button', { name: 'Stay' }));
+      await settleRadixListeners();
+      expect(discard).toBeInTheDocument();
+      fireEvent.click(discard);
+      await settleRadixListeners();
+      expect(onOpenChange).not.toHaveBeenCalled();
+      anim.end();
+      expect(screen.queryByText(ASK)).toBeNull();
+      expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
+      await user.keyboard('{Escape}');
+      expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    } finally {
+      anim.restore();
+    }
+  });
 });
 
 describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
@@ -424,6 +564,13 @@ describe('EntryDialogContent — hasEntries (CR-O-3)', () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
     await user.keyboard('{Escape}');
     expect(entryDialog()).toBeNull();
+  });
+
+  it('nothing entered at open: no question is answered, so focus stays on the first field, where the dialog put it', async () => {
+    render(<Known hasEntries={false} />);
+    await screen.findByRole('dialog', { name: 'Add a thing' });
+    await settleRadixListeners();
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
   });
 
   it("hasEntries is the whole signal: with it false, typing alone does not make Escape ask", async () => {
