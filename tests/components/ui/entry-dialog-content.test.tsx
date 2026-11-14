@@ -37,6 +37,18 @@ function overlay(): Element {
   return el;
 }
 
+/** One mouse press on a non-focusable element, in a browser's order:
+ *  pointerdown (where Radix dismisses a dialog), a microtask checkpoint,
+ *  then mousedown, whose default action moves focus off to the body.
+ *  user-event runs a press in one go, with no checkpoint in between. */
+async function pressLikeABrowser(el: Element) {
+  fireEvent.pointerDown(el);
+  await Promise.resolve();
+  await Promise.resolve();
+  fireEvent.mouseDown(el);
+  (document.activeElement as HTMLElement | null)?.blur();
+}
+
 function Harness({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -168,6 +180,37 @@ describe('EntryDialogContent — Escape asks once something is entered (CR-O-3)'
     fireEvent.pointerDown(overlays[1]);
     expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Add a thing' })).toBeInTheDocument();
+    expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("a press on the question's overlay puts focus back on the field, after the press's own focus change too", async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await settleRadixListeners();
+    const overlays = document.querySelectorAll('[data-state="open"].fixed.inset-0');
+    expect(overlays).toHaveLength(2);
+    await pressLikeABrowser(overlays[1]);
+    await settleRadixListeners();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('after a press on the dimmed page behind it, Stay puts focus inside the dialog, never on the page behind', async () => {
+    const { user, onOpenChange } = await openHarness();
+    await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+    await user.pointer({ keys: '[MouseLeft]', target: overlay() });
+    expect(document.activeElement).toBe(document.body);
+    await user.keyboard('{Escape}');
+    await screen.findByRole('dialog', { name: ASK });
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
+    await settleRadixListeners();
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(entryDialog()).toContainElement(document.activeElement as HTMLElement);
     expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Pat Rivera');
     expect(onOpenChange).not.toHaveBeenCalled();
   });

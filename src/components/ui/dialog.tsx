@@ -116,8 +116,10 @@ function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
  *   eat the user's typing.
  * - Escape closes it at once while nothing has been entered. Once something
  *   has, Escape asks first (the house ConfirmDialog, the one useConfirm
- *   renders). "Stay" (or Escape on the question) keeps every value and puts
- *   focus back where it was; "Discard entries" closes the dialog through its
+ *   renders). "Stay" (or Escape on the question, or a press on its
+ *   overlay) keeps every value and puts focus back where it was in the
+ *   dialog, or on the dialog itself if focus had left it (a press on the
+ *   dimmed page does that); "Discard entries" closes the dialog through its
  *   X. The question goes with what it asked about: if the dialog closes
  *   some other way while it is up (a Save that was in flight closing it),
  *   the question is dropped, and the next open starts without it; if the
@@ -185,17 +187,26 @@ const EntryDialogContent = React.forwardRef<
     nodeRef.current?.contains(target) === true &&
     !(target instanceof HTMLInputElement && target.type === "file")
   // The user's answer. Both run once the question has closed, so it no
-  // longer traps focus: Stay puts focus back where it was, Discard entries
-  // closes the dialog through its X.
+  // longer traps focus. Discard entries closes the dialog through its X.
+  // Stay puts focus back where it was in this dialog, or on the dialog
+  // itself when it was outside (the body, after a press on the dimmed
+  // page). Stay waits for the end of the current input task: when a press
+  // on the question's overlay answered it, that press's own focus change
+  // (its mousedown) comes after the pointerdown and must not undo this.
   const answer = React.useCallback((discard: boolean) => {
     if (!askingRef.current) return
     askingRef.current = false
     setAsking(false)
+    if (discard) {
+      void Promise.resolve().then(() => closeRef.current?.click())
+      return
+    }
     const returnTo = returnToRef.current
-    void Promise.resolve().then(() => {
-      if (discard) closeRef.current?.click()
-      else (returnTo?.isConnected ? returnTo : nodeRef.current)?.focus()
-    })
+    setTimeout(() => {
+      const box = nodeRef.current
+      const target = returnTo && box?.contains(returnTo) ? returnTo : box
+      target?.focus()
+    }, 0)
   }, [])
   // The content the question was asked in has unmounted: drop it unanswered.
   const drop = React.useCallback(() => {
