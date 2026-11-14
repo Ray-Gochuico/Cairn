@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -162,7 +162,7 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
         open={dialog === 'household'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Household</DialogTitle>
             <DialogDescription className="sr-only">
@@ -170,13 +170,13 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             </DialogDescription>
           </DialogHeader>
           <HouseholdForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'persons'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a person</DialogTitle>
             <DialogDescription className="sr-only">
@@ -184,13 +184,13 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             </DialogDescription>
           </DialogHeader>
           <PersonForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={editingPerson !== null}
         onOpenChange={(o) => !o && setEditingPerson(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit person</DialogTitle>
             <DialogDescription className="sr-only">
@@ -208,13 +208,13 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
               onCancel={() => setEditingPerson(null)}
             />
           )}
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'employment'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Employment</DialogTitle>
             <DialogDescription className="sr-only">
@@ -222,13 +222,13 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             </DialogDescription>
           </DialogHeader>
           <EmploymentSection onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       <Dialog
         open={dialog === 'dependents'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a dependent</DialogTitle>
             <DialogDescription className="sr-only">
@@ -236,7 +236,7 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             </DialogDescription>
           </DialogHeader>
           <DependentForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
       {confirmDialog}
     </div>

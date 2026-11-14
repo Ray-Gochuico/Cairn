@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { EmploymentType } from '@/types/schema';
 import {
@@ -6,6 +6,7 @@ import {
   employmentPatchFromDraft,
   validateEmploymentDraft,
   type EmploymentDraft,
+  type EmploymentPersonFields,
 } from '@/lib/employment-fields';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface Props {
-  /** Fires after each successful per-person save. */
+  /** Fires after a successful per-person save that leaves no OTHER person
+   *  here with unsaved entries (v1.8.0 O2): the Employment dialog closes on
+   *  it, so one person's Save never discards another person's entries. */
   onSaved?: () => void;
 }
 
@@ -21,6 +24,24 @@ interface Props {
 // module now (worded-onboarding wave) — one save contract for PersonForm,
 // this section, and the flow.
 type PersonDraft = EmploymentDraft;
+
+/** v1.8.0 O2: saving this draft would write what saving that person's
+ *  stored row untouched would write, so nothing in it is unsaved. Both sides
+ *  go through the save's own normalising (an HOURLY save stores salary 0,
+ *  blank hours keep the stored value, numbers parse), so neither a saved
+ *  person nor an untouched one counts as unsaved, including a row stored
+ *  before that contract (an Hourly person who kept a hidden salary). */
+function draftIsSaved(d: PersonDraft, p: EmploymentPersonFields): boolean {
+  const w = employmentPatchFromDraft(d, p.regularHoursPerWeek);
+  const s = employmentPatchFromDraft(employmentDraftFromPerson(p), p.regularHoursPerWeek);
+  return (
+    w.employmentType === s.employmentType &&
+    w.annualSalaryPretax === s.annualSalaryPretax &&
+    w.hourlyRate === s.hourlyRate &&
+    w.regularHoursPerWeek === s.regularHoursPerWeek &&
+    w.otThresholdHoursPerWeek === s.otThresholdHoursPerWeek
+  );
+}
 
 function emptyToNullNumber(v: string): number | null {
   if (v === '') return null;
@@ -36,12 +57,19 @@ function emptyToNullNumber(v: string): number | null {
  *   - SALARY_NO_OT: annual salary only
  *   - SALARY_WITH_OT: both annual salary AND hourly fields
  *
- * Save is per-row and fires onSaved after each successful update so the
- * card count refreshes.
+ * Save is per-row. onSaved fires after a successful save only while no
+ * other person here has unsaved entries (v1.8.0 O2, RC2 variant), so the
+ * dialog stays open on another person's typing.
  */
 export default function EmploymentSection({ onSaved }: Props) {
   const { persons, load, update } = usePersonsStore();
   const [drafts, setDrafts] = useState<Record<number, PersonDraft>>({});
+  // v1.8.0 O2: the latest drafts, read after a save's await (typing into
+  // another person while the save is in flight must count).
+  const draftsRef = useRef(drafts);
+  useEffect(() => {
+    draftsRef.current = drafts;
+  }, [drafts]);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [errorById, setErrorById] = useState<Record<number, string | null>>(
     {},
@@ -91,7 +119,13 @@ export default function EmploymentSection({ onSaved }: Props) {
     setErrorById((prev) => ({ ...prev, [id]: null }));
     try {
       await update(id, employmentPatchFromDraft(draft, storedHours ?? null));
-      onSaved?.();
+      const latest = draftsRef.current;
+      const othersSaved = usePersonsStore.getState().persons.every((p) => {
+        if (p.id == null || p.id === id) return true;
+        const other = latest[p.id];
+        return other === undefined || draftIsSaved(other, p);
+      });
+      if (othersSaved) onSaved?.();
     } catch {
       setErrorById((prev) => ({
         ...prev,

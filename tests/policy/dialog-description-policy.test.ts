@@ -8,11 +8,13 @@ import { collectSourceFiles } from './source-walker';
 // SheetDescription child, or an explicit aria-describedby). Radix dev-warns
 // on each offender; screen-reader users get a nameless modal. Escape hatch:
 // `// dialog-description-policy: allow — <reason>` in the first 5 lines.
+// v1.8.0 O2: EntryDialogContent (the entry-dialog content) is policed too, so
+// a file that moves to it never drops out of this ratchet.
 
 const SRC = path.resolve(__dirname, '..', '..', 'src');
 const ALLOW = '// dialog-description-policy: allow';
 // Concatenated so this file never matches its own patterns.
-const CONTENT_TOKENS = ['<Dialog' + 'Content', '<Sheet' + 'Content'];
+const CONTENT_TOKENS = ['<Dialog' + 'Content', '<Sheet' + 'Content', '<EntryDialog' + 'Content'];
 const DESC_TOKENS = ['Dialog' + 'Description', 'Sheet' + 'Description', 'aria-describedby'];
 
 function violates(source: string): boolean {
@@ -39,6 +41,7 @@ describe('dialog-description policy (round-3 chip D — 10th ratchet)', () => {
     it('flags a content with no description', () => {
       expect(violates(`<${'Dialog'}Content>x</div>`)).toBe(true);
       expect(violates(`<${'Sheet'}Content>x</div>`)).toBe(true);
+      expect(violates(`<${'EntryDialog'}Content>x</div>`)).toBe(true);
     });
     it('accepts a description child or explicit aria-describedby', () => {
       expect(violates(`<${'Dialog'}Content><${'Dialog'}Description>d</div>`)).toBe(false);

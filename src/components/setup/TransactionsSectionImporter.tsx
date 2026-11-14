@@ -21,6 +21,9 @@ import type { ParseResult as PdfParseResult } from '@/pdf/parse-statement';
 type PendingImport =
   | {
       kind: 'pdf';
+      /** v1.8.0 O2 (CL-O2-3): a per-file id, assigned once when the file is
+       *  queued. It keys the PDF review, so each queued PDF mounts its own. */
+      id: number;
       filename: string;
       result: PdfParseResult;
       fileBytes: Uint8Array;
@@ -68,6 +71,10 @@ export default function TransactionsSectionImporter({
   // because position is derived from `queue.length` which already triggers
   // re-renders.
   const totalRef = useRef<number>(0);
+  // v1.8.0 O2 (CL-O2-3): the last id given to a queued PDF. Bumped in
+  // processFiles, never inside a setQueue updater (StrictMode runs those
+  // twice), so a PDF's id never changes while its review is open.
+  const nextPdfIdRef = useRef<number>(0);
   const [dragOver, setDragOver] = useState(false);
 
   const accounts = useAccountsStore((s) => s.accounts);
@@ -127,6 +134,7 @@ export default function TransactionsSectionImporter({
           const result = parseStatement(items);
           next.push({
             kind: 'pdf',
+            id: ++nextPdfIdRef.current,
             filename: file.name,
             result,
             fileBytes: bytes,
@@ -295,7 +303,11 @@ export default function TransactionsSectionImporter({
       )}
 
       {current?.kind === 'pdf' && (
+        // v1.8.0 O2 (CL-O2-3): one review per queued PDF. The review builds
+        // its rows once on mount, so with no per-file key the second PDF
+        // showed the first PDF's rows, and its Save wrote them again.
         <PdfReviewModal
+          key={current.id}
           result={current.result}
           filename={current.filename}
           fileBytes={current.fileBytes}

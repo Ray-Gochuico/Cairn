@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -312,6 +312,11 @@ export function ImportPreviewModal({
   };
 
   const title = ENTITY_TITLES[entity] ?? 'Import from CSV';
+  // v1.8.0 O2 (CR-O-3): a dismissal here skips the file (ImportCsvButton,
+  // TransactionsSectionImporter), so once a row is edited, removed or given
+  // a conflict choice, Escape asks first. Removals and the bulk buttons fire
+  // no input event, so the dialog is told.
+  const rowsEdited = state.edits.size > 0 || state.deletions.size > 0 || state.conflictMode.size > 0;
   const committableCount = state.committableRows().length;
 
   const previewTable = (() => {
@@ -341,7 +346,7 @@ export function ImportPreviewModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <EntryDialogContent className="max-w-4xl" hasEntries={rowsEdited}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -435,7 +440,7 @@ export function ImportPreviewModal({
             {committing ? 'Committing…' : `Commit (${committableCount} rows)`}
           </Button>
         </DialogFooter>
-      </DialogContent>
+      </EntryDialogContent>
     </Dialog>
   );
 }

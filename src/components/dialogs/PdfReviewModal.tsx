@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -56,8 +56,10 @@ interface EditableRow {
  * opts in (we opt in here — the issuer/filename line is a meaningful
  * description for screen readers).
  *
- * The dialog opens once on mount and closes only via Cancel / Save —
- * the parent unmounts on close.
+ * The dialog opens once on mount; the parent unmounts it on close. Cancel
+ * and the X close it at once, and so does Escape until a row is edited;
+ * after that Escape asks first (v1.8.0 O2, CR-O-3), because a close here
+ * skips the PDF (TransactionsSectionImporter's advance).
  */
 export function PdfReviewModal({
   result,
@@ -77,6 +79,9 @@ export function PdfReviewModal({
   const persons = usePersonsStore((s) => s.persons);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
+  // v1.8.0 O2: any row edit, including the "Exclude (transfer)" button, which
+  // fires no input event, so the dialog is told.
+  const [rowsEdited, setRowsEdited] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -186,6 +191,7 @@ export function PdfReviewModal({
 
   function updateRow(index: number, patch: Partial<EditableRow>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+    setRowsEdited(true);
   }
 
   const handleSave = async () => {
@@ -240,17 +246,15 @@ export function PdfReviewModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent
+      <EntryDialogContent
         // Wider than the default max-w-lg to fit the review table. Replace the
         // shadcn default vertical-center grid with a flex column so the body
         // can scroll while the header/footer stay pinned (mirrors the original
         // hand-rolled layout).
         className="max-w-5xl w-[calc(100vw-2rem)] max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
-        // Suppress backdrop-click close: in-flight edits are stored only in
-        // local state, so a stray click would silently throw work away. The
-        // explicit Cancel button is the only outside-of-Save exit.
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
+        // In-flight edits live only in local state: a backdrop click never
+        // closes it (EntryDialogContent), and Escape asks once a row is edited.
+        hasEntries={rowsEdited}
       >
         <DialogHeader className="px-6 py-4 border-b text-left">
           <DialogTitle>Review transactions</DialogTitle>
@@ -345,8 +349,19 @@ export function PdfReviewModal({
                             className="border rounded px-1 py-0.5 text-xs"
                             onChange={(e) => {
                               const val = e.target.value === '' ? null : Number(e.target.value);
-                              const { propertyId, vehicleId } = defaultPropertyVehicle(val);
-                              updateRow(i, { categoryId: val, propertyId, vehicleId });
+                              // v1.8.0 O2 (O1 chip (d), CR-O-2): a property or vehicle
+                              // already picked is kept while the new category is still
+                              // in its family (Home, Vehicles); only a change of family
+                              // re-defaults it.
+                              const next = defaultPropertyVehicle(val);
+                              const cat = categories.find((c) => c.id === val);
+                              const stillHome = homeParent != null && cat?.parentCategoryId === homeParent.id;
+                              const stillVehicle = vehicleParent != null && cat?.parentCategoryId === vehicleParent.id;
+                              updateRow(i, {
+                                categoryId: val,
+                                propertyId: stillHome && row.propertyId != null ? row.propertyId : next.propertyId,
+                                vehicleId: stillVehicle && row.vehicleId != null ? row.vehicleId : next.vehicleId,
+                              });
                             }}
                           >
                             <option value="">— uncategorized —</option>
@@ -483,7 +498,7 @@ export function PdfReviewModal({
             </Button>
           </div>
         </DialogFooter>
-      </DialogContent>
+      </EntryDialogContent>
     </Dialog>
   );
 }

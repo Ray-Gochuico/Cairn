@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
+  EntryDialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -79,7 +79,7 @@ export default function Section3_WhatYouOwe({ status, onSetStatus, hasData, sett
         open={dialog === 'loans'}
         onOpenChange={(o) => !o && setDialog(null)}
       >
-        <DialogContent className="max-w-2xl">
+        <EntryDialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a loan</DialogTitle>
             <DialogDescription className="sr-only">
@@ -87,7 +87,7 @@ export default function Section3_WhatYouOwe({ status, onSetStatus, hasData, sett
             </DialogDescription>
           </DialogHeader>
           <LoanForm onSaved={() => setDialog(null)} />
-        </DialogContent>
+        </EntryDialogContent>
       </Dialog>
     </div>
   );

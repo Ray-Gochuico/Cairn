@@ -31,6 +31,7 @@ export function ValueCell({ value, error, onChange }: Props) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
+          data-escape-cancels-edit={draft !== value ? '' : undefined}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') { setDraft(value); setEditing(!!error); }
