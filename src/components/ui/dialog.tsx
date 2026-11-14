@@ -135,7 +135,11 @@ function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
  * native select, a checkbox, a date field), or a change event there once the
  * user has pressed a key or a pointer in it: a Radix Select pick reaches the
  * dialog only as a change event from its hidden select, which sits inside
- * the dialog. Not an entry: a file chosen in a file input (it starts an
+ * the dialog. Radix renders that hidden select only for a Select inside a
+ * <form> (or given `form`); a Select outside one fires no event here, so a
+ * pick made with it alone does not count (HouseholdForm's Filing status,
+ * the one Radix Select in an entry dialog today, is inside its <form>).
+ * Not an entry: a file chosen in a file input (it starts an
  * import, whose preview tracks its own rows), and an edit in a dialog opened
  * from this one (its events reach this content through the React tree, but
  * its fields are outside this dialog). A form resetting its own values
