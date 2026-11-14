@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -449,12 +449,14 @@ describe('EntryDialogContent — a question never outlives what it asked about (
   });
 });
 
-/** WKWebView's exit animation, for the question only. Radix Presence keeps a
- *  closing dialog mounted, and its buttons clickable, until its animationend
- *  (the app's `animate-out`, about 200 ms). jsdom runs no animations, so the
- *  question's computed animationName is stubbed (and CSS.escape, which
- *  Presence calls), and `end()` dispatches the animationend by hand. */
-function animateQuestionExit() {
+/** WKWebView's exit animation, for the dialogs whose text includes one of
+ *  `names` (the question by default). Radix Presence keeps a closing dialog
+ *  mounted, and its buttons clickable, until its animationend (the app's
+ *  `animate-out`, about 200 ms). jsdom runs no animations, so the dialog's
+ *  computed animationName is stubbed (and CSS.escape, which Presence calls),
+ *  and `end(name)` dispatches the animationend by hand. */
+function animateExit(...names: string[]) {
+  const animated = names.length > 0 ? names : [ASK];
   const g = globalThis as { CSS?: { escape?: (s: string) => string } };
   const savedCss = g.CSS;
   const savedEscape = savedCss?.escape;
@@ -467,7 +469,7 @@ function animateQuestionExit() {
       const style = real(el, pseudo);
       return new Proxy(style, {
         get(target, key) {
-          if (key === 'animationName' && el.getAttribute('role') === 'dialog' && (el.textContent ?? '').includes(ASK)) {
+          if (key === 'animationName' && el.getAttribute('role') === 'dialog' && animated.some((n) => (el.textContent ?? '').includes(n))) {
             return el.getAttribute('data-state') === 'closed' ? 'exit' : 'enter';
           }
           const value = Reflect.get(target, key);
@@ -476,13 +478,13 @@ function animateQuestionExit() {
       });
     });
   return {
-    end() {
-      const question = screen.getByText(ASK).closest('[role="dialog"]');
-      if (!question) throw new Error('no question to end');
+    end(name: string = ASK) {
+      const dialog = screen.getByText(name).closest('[role="dialog"]');
+      if (!dialog) throw new Error(`no dialog to end: ${name}`);
       const event = new Event('animationend', { bubbles: true });
       Object.defineProperty(event, 'animationName', { value: 'exit' });
       act(() => {
-        question.dispatchEvent(event);
+        dialog.dispatchEvent(event);
       });
     },
     restore() {
@@ -514,7 +516,7 @@ function Tracked({ hasEntries, onOpenChange }: { hasEntries?: boolean; onOpenCha
 
 describe('EntryDialogContent — an answered question stays answered while it closes (CR-O-3)', () => {
   it("the caller's signal answering it as Stay: a Discard entries click while it is still closing discards nothing", async () => {
-    const anim = animateQuestionExit();
+    const anim = animateExit();
     try {
       const onOpenChange = vi.fn();
       const user = userEvent.setup();
@@ -541,7 +543,7 @@ describe('EntryDialogContent — an answered question stays answered while it cl
   });
 
   it('after Stay, a Discard entries click while the question is still closing discards nothing, and the next Escape asks again', async () => {
-    const anim = animateQuestionExit();
+    const anim = animateExit();
     try {
       const onOpenChange = vi.fn();
       const user = userEvent.setup();
@@ -563,6 +565,116 @@ describe('EntryDialogContent — an answered question stays answered while it cl
       await user.keyboard('{Escape}');
       expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
       expect(onOpenChange).not.toHaveBeenCalled();
+    } finally {
+      anim.restore();
+    }
+  });
+
+  /** An import batch: a dismissal moves on to the next file, shown in the
+   *  same open dialog (ImportCsvButton, TransactionsSectionImporter). */
+  /** An import preview cell focuses itself from an effect when it opens for
+   *  editing, as an error cell does on a new file (ValueCell.tsx:17). */
+  function NextFileRow({ focused }: { focused: boolean }) {
+    const ref = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+      if (focused) ref.current?.focus();
+    }, [focused]);
+    return <input ref={ref} aria-label="Row in file 2" />;
+  }
+
+  function Batch({ skipped, focusNext = false }: { skipped: number[]; focusNext?: boolean }) {
+    const [file, setFile] = useState(1);
+    const [edited, setEdited] = useState(false);
+    return (
+      <Dialog
+        open
+        onOpenChange={(o) => {
+          if (o) return;
+          skipped.push(file);
+          setFile((f) => f + 1);
+          setEdited(false);
+        }}
+      >
+        <EntryDialogContent hasEntries={edited}>
+          <DialogTitle>Add a thing</DialogTitle>
+          <DialogDescription>Entry harness.</DialogDescription>
+          <p>File {file}</p>
+          {file === 1 ? (
+            <input key="file-1" aria-label="Row in file 1" onInput={() => setEdited(true)} />
+          ) : (
+            <NextFileRow key="file-2" focused={focusNext} />
+          )}
+        </EntryDialogContent>
+      </Dialog>
+    );
+  }
+
+  it('Discard entries in a batch: once the question has closed over the next file, focus is in the dialog, not on the page behind', async () => {
+    const anim = animateExit();
+    try {
+      const skipped: number[] = [];
+      const user = userEvent.setup();
+      render(<Batch skipped={skipped} />);
+      await screen.findByText('File 1');
+      await user.type(screen.getByLabelText('Row in file 1'), '61000');
+      await user.keyboard('{Escape}');
+      await screen.findByRole('dialog', { name: ASK });
+      await user.click(screen.getByRole('button', { name: 'Discard entries' }));
+      await settleRadixListeners();
+      expect(skipped).toEqual([1]);
+      expect(screen.getByText('File 2')).toBeInTheDocument();
+      anim.end();
+      await settleRadixListeners();
+      expect(screen.queryByText(ASK)).toBeNull();
+      expect(document.activeElement).not.toBe(document.body);
+      expect(screen.getByRole('dialog', { name: 'Add a thing' })).toContainElement(document.activeElement as HTMLElement);
+      expect(skipped).toEqual([1]);
+    } finally {
+      anim.restore();
+    }
+  });
+
+  it("Discard entries in a batch whose next file opens focused on a field (an import cell to fix) leaves focus on that field", async () => {
+    const anim = animateExit();
+    try {
+      const skipped: number[] = [];
+      const user = userEvent.setup();
+      render(<Batch skipped={skipped} focusNext />);
+      await screen.findByText('File 1');
+      await user.type(screen.getByLabelText('Row in file 1'), '61000');
+      await user.keyboard('{Escape}');
+      await screen.findByRole('dialog', { name: ASK });
+      await user.click(screen.getByRole('button', { name: 'Discard entries' }));
+      await settleRadixListeners();
+      anim.end();
+      await settleRadixListeners();
+      expect(skipped).toEqual([1]);
+      expect(document.activeElement).toBe(screen.getByLabelText('Row in file 2'));
+    } finally {
+      anim.restore();
+    }
+  });
+
+  it('Discard entries that closes the dialog moves no focus into it while it animates out', async () => {
+    const anim = animateExit(ASK, 'Add a thing');
+    try {
+      const onOpenChange = vi.fn();
+      const user = userEvent.setup();
+      render(<Tracked onOpenChange={onOpenChange} />);
+      await screen.findByRole('dialog', { name: 'Add a thing' });
+      await user.type(screen.getByLabelText('Name'), 'Pat Rivera');
+      await user.keyboard('{Escape}');
+      await screen.findByRole('dialog', { name: ASK });
+      await user.click(screen.getByRole('button', { name: 'Discard entries' }));
+      await settleRadixListeners();
+      expect(onOpenChange).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      const closing = entryDialog();
+      expect(closing).toHaveAttribute('data-state', 'closed');
+      expect(closing).not.toContainElement(document.activeElement as HTMLElement);
+      anim.end(ASK);
+      anim.end('Add a thing');
+      expect(entryDialog()).toBeNull();
     } finally {
       anim.restore();
     }

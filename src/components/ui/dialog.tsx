@@ -120,10 +120,12 @@ function OnContentUnmount({ onUnmount }: { onUnmount: () => void }) {
  *   overlay) keeps every value and puts focus back where it was in the
  *   dialog, or on the dialog itself if focus had left it (a press on the
  *   dimmed page does that); "Discard entries" closes the dialog through its
- *   X. The question goes with what it asked about: if the dialog closes
- *   some other way while it is up (a Save that was in flight closing it),
- *   the question is dropped, and the next open starts without it; if the
- *   caller's `hasEntries` turns false while it is up, it is answered as Stay.
+ *   X (if the caller keeps it open with something new in it, as an import
+ *   batch does with its next file, focus goes into it). The question goes
+ *   with what it asked about: if the dialog closes some other way while it
+ *   is up (a Save that was in flight closing it), the question is dropped,
+ *   and the next open starts without it; if the caller's `hasEntries` turns
+ *   false while it is up, it is answered as Stay.
  * - The X and the form's own Cancel stay immediate.
  * - A field that uses Escape to cancel its own edit (the import preview's
  *   cells) carries `data-escape-cancels-edit`: Escape there cancels only
@@ -198,7 +200,17 @@ const EntryDialogContent = React.forwardRef<
     askingRef.current = false
     setAsking(false)
     if (discard) {
-      void Promise.resolve().then(() => closeRef.current?.click())
+      void Promise.resolve().then(() => {
+        closeRef.current?.click()
+        // A caller may move on instead of closing (an import batch shows
+        // its next file in the same open dialog). Then focus goes into the
+        // dialog, not to the page behind, unless the new content already
+        // took it (a cell that opens focused for a fix).
+        setTimeout(() => {
+          const box = nodeRef.current
+          if (box?.dataset.state === "open" && !box.contains(document.activeElement)) box.focus()
+        }, 0)
+      })
       return
     }
     const returnTo = returnToRef.current
