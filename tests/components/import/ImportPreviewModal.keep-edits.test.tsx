@@ -385,4 +385,29 @@ describe('ImportPreviewModal — row edits survive Flip signs (STOP-B, CR-O-2 ×
     await user.click(screen.getByRole('button', { name: 'Stay' }));
     expect(screen.getByText('STARBUCKSX')).toBeInTheDocument();
   });
+
+  it('Flip signs alone is not a row edit (D-O2-8): Escape on an otherwise untouched file skips it at once, with no question', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImportPreviewModal
+        entity="transaction"
+        parsed={{
+          headers: ['date', 'account', 'amount', 'merchant', 'category', 'reimbursable'],
+          rows: [{ date: '2024-03-15', account: 'Checking', amount: '-12.00', merchant: 'STARBUCKS', category: 'Groceries', reimbursable: 'no' }],
+          errors: [],
+        }}
+        ctx={{ accounts: [{ id: 1, name: 'Checking' }], categories: [{ id: 1, name: 'Groceries' }] } as never}
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    await user.click(screen.getByRole('checkbox', { name: /Flip signs/ }));
+    expect(screen.getByRole('checkbox', { name: /Flip signs/ })).toBeChecked();
+    expect(await screen.findByText('→ 12.00')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
