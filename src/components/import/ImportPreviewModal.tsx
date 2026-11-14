@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import {
   Dialog,
@@ -126,10 +126,19 @@ export function ImportPreviewModal({
         : ctx,
     [entity, ctx, flipSigns],
   );
+  // One preview store per file (v1.8.0 O1, CR-O-2). Every row edit, deletion
+  // and conflict choice lives in it, so a new context never rebuilds it: Flip
+  // signs, or a reload of a store the parent's ctx is built from, is pushed
+  // in and re-checks the rows, keeping the user's work. A layout effect, so
+  // no frame is painted from the old context.
   const storeRef = useMemo(
     () => createImportPreviewStore(entity, parsed, effectiveCtx),
-    [entity, parsed, effectiveCtx],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entity, parsed],
   );
+  useLayoutEffect(() => {
+    storeRef.getState().setCtx(effectiveCtx);
+  }, [storeRef, effectiveCtx]);
   const state = useStore(storeRef);
 
   // Share of non-error transaction rows whose resolved amount is negative.
@@ -148,7 +157,13 @@ export function ImportPreviewModal({
     }
     return total === 0 ? 0 : negative / total;
   }, [entity, state.derivedRows]);
-  const showFlipPrompt = entity === 'transaction' && (negativeShare >= 0.5 || flipSigns);
+  // The store's own sign counts too: in the one render between a Flip signs
+  // change and the layout effect that pushes it, the rows are still derived
+  // under the old sign, and the prompt (with its focused checkbox) must not
+  // unmount there (v1.8.0 O1).
+  const showFlipPrompt =
+    entity === 'transaction'
+    && (negativeShare >= 0.5 || flipSigns || state.ctx.transactionAmountSign === 'FLIP');
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
