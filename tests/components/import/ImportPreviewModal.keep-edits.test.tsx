@@ -352,3 +352,37 @@ describe("ImportPreviewModal — a cell's own Escape (CR-O-3)", () => {
     expect(screen.getByText('STARBUCKS')).toBeInTheDocument();
   });
 });
+
+describe('ImportPreviewModal — row edits survive Flip signs (STOP-B, CR-O-2 × CR-O-3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('a committed merchant edit, then Flip signs: Escape still asks, and Stay keeps the edit', async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ImportPreviewModal
+        entity="transaction"
+        parsed={{
+          headers: ['date', 'account', 'amount', 'merchant', 'category', 'reimbursable'],
+          rows: [{ date: '2024-03-15', account: 'Checking', amount: '-20.00', merchant: 'STARBUCKS', category: 'Groceries', reimbursable: 'no' }],
+          errors: [],
+        }}
+        ctx={{ accounts: [{ id: 1, name: 'Checking' }], categories: [{ id: 1, name: 'Groceries' }] } as never}
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    await user.click(screen.getByText('STARBUCKS'));
+    await user.type(screen.getByDisplayValue('STARBUCKS'), 'X{Enter}');
+    expect(screen.getByText('STARBUCKSX')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /Flip signs/ }));
+    expect(screen.getByRole('checkbox', { name: /Flip signs/ })).toBeChecked();
+    await user.keyboard('{Escape}');
+    expect(await screen.findByRole('dialog', { name: ASK })).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Stay' }));
+    expect(screen.getByText('STARBUCKSX')).toBeInTheDocument();
+  });
+});
