@@ -26,6 +26,11 @@ export default function HoldingsPanel() {
   const { holdings, load: loadHoldings, create, update, remove, isLoading: holdingsLoading, error: holdingsError } = useHoldingsStore();
   const { confirm, dialog } = useConfirm();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  // The new-holding row's key. It moves only after that row's own successful
+  // add, so the row starts empty again then and at no other time: an account
+  // pick, a delete or a store reload keeps what the user typed (v1.8.0 O1,
+  // D-O1-1).
+  const [newRowKey, setNewRowKey] = useState(0);
 
   const reload = useCallback(() => {
     loadAccounts();
@@ -197,11 +202,11 @@ export default function HoldingsPanel() {
               <div className="pt-2">
                 <div className="text-xs text-muted-foreground mb-1">Add holding</div>
                 <HoldingForm
-                  // The key resets the form when accounts change so the new-row inputs clear.
-                  key={`new-${selectedAccountId}-${accountHoldings.length}`}
+                  key={`new-${newRowKey}`}
                   initial={newRowInitial}
                   onSave={async (next) => {
                     await create({ ...next, accountId: selectedAccountId ?? accounts[0].id! });
+                    setNewRowKey((k) => k + 1);
                     // W19 fetch-on-add: the full refresh supersets the old
                     // bespoke enrich IIFE — it enriches the new ticker AND
                     // prices it AND re-derives the account snapshot, then

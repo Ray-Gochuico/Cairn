@@ -60,6 +60,13 @@ export interface ImportPreviewState<E extends ImportEntity> {
   bulkSetConflict(mode: 'update' | 'skip'): void;
   setConflictMode(rowId: RowId, mode: 'update' | 'skip'): void;
   deleteAllErrors(): void;
+  /**
+   * v1.8.0 O1 (CR-O-2): take a new validation context (Flip signs, or the
+   * stores behind it reloaded) without starting the preview over. Every edit,
+   * deletion and conflict choice is kept; every row is checked again against
+   * the new context. The same context object again is a no-op.
+   */
+  setCtx(ctx: ValidationContext): void;
   committableRows(): PreviewRow<ResolvedFor<E>>[];
 }
 
@@ -96,13 +103,13 @@ function deriveRows<E extends ImportEntity>(
   deletions: Set<RowId>,
   ctx: ValidationContext,
   // Identity cache from the previous derive. Validators are pure functions of
-  // (merged, rowId, ctx) and ctx is fixed for the session, so a row whose
-  // merged input signature is unchanged yields a byte-identical PreviewRow —
-  // we reuse the prior object so its reference is stable. Without this, every
-  // edit re-derives ALL rows into fresh objects and the per-row React.memo in
-  // the preview tables can never skip an unrelated row (a 10k-row import would
-  // re-render all 10k rows on each keystroke). `prevCache` is read and the
-  // fresh cache is written in place.
+  // (merged, rowId, ctx) and ctx changes only through setCtx, which drops the
+  // cache, so a row whose merged input signature is unchanged yields a
+  // byte-identical PreviewRow — we reuse the prior object so its reference is
+  // stable. Without this, every edit re-derives ALL rows into fresh objects
+  // and the per-row React.memo in the preview tables can never skip an
+  // unrelated row (a 10k-row import would re-render all 10k rows on each
+  // keystroke). `prevCache` is read and the fresh cache is written in place.
   prevCache?: Map<RowId, RowCacheEntry>,
   nextCache?: Map<RowId, RowCacheEntry>,
 ): { derivedRows: PreviewRow<ResolvedFor<E>>[]; summary: ImportSummary } {
@@ -144,8 +151,9 @@ export function createImportPreviewStore<E extends ImportEntity>(
     const initialEdits = new Map<RowId, RawRow>();
     const initialDeletions = new Set<RowId>();
     // Persistent per-row identity cache (see deriveRows). Lives for the whole
-    // import session so unchanged rows keep a stable PreviewRow reference
-    // across every edit, letting the per-row React.memo skip them.
+    // import session (setCtx starts it over) so unchanged rows keep a stable
+    // PreviewRow reference across every edit, letting the per-row React.memo
+    // skip them.
     let rowCache = new Map<RowId, RowCacheEntry>();
     const { derivedRows, summary } = deriveRows(
       entity, parsed.rows, initialEdits, initialDeletions, ctx, undefined, rowCache,
@@ -205,6 +213,15 @@ export function createImportPreviewStore<E extends ImportEntity>(
           if (r.status === 'error') deletions.add(r.rowId);
         }
         return recompute({ ...s, deletions });
+      }),
+
+      setCtx: (nextCtx) => set((s) => {
+        if (s.ctx === nextCtx) return s;
+        // A new context can change any row's verdict (account names, the
+        // rows that already exist, the amount sign), so nothing checked under
+        // the old one is reused. edits, deletions and conflictMode carry over.
+        rowCache = new Map();
+        return recompute({ ...s, ctx: nextCtx });
       }),
 
       committableRows: () => {

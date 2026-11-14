@@ -155,20 +155,31 @@ export default function HouseholdForm({
   const taxRulesItems = useTaxRulesStore((s) => s.items);
   const state = form.watch('state');
 
-  // When state changes, clear city if its prefix no longer matches.
-  useEffect(() => {
-    const currentCity = form.watch('city');
-    if (currentCity && !currentCity.startsWith(`${state}_`)) {
+  // v1.8.0 O3 (RC3, CR-O-4): a city the state no longer matches is cleared in
+  // the state field's own change path (its register onChange below), never in
+  // an effect. The effect that used to do it ran at mount with the first
+  // render's 'CA' default (RHF seeds the form from defaultValues before the
+  // `values` reset), cleared every saved non-CA city and dirtied the untouched
+  // form, so the next Save of anything wrote city = null. It waits for a
+  // complete two-letter state, so retyping one letter keeps the city.
+  const clearMismatchedCity = () => {
+    const next = form.getValues('state');
+    const currentCity = form.getValues('city');
+    if (currentCity && next.length === 2 && !currentCity.startsWith(`${next}_`)) {
       form.setValue('city', null, { shouldDirty: true });
     }
-  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
 
   // Filter to CITY rules scoped to the current state (SINGLE only to avoid duplicates).
+  // While the state is partial (mid-edit) the held city keeps its option, so
+  // the select shows the city the form still holds (v1.8.0 O3, D-O3-4).
+  const heldCity = form.watch('city');
   const cityRules = taxRulesItems.filter(
     (r) =>
       r.jurisdictionType === 'CITY' &&
       r.filingStatus === 'SINGLE' &&
-      r.jurisdictionCode.startsWith(`${state}_`),
+      (r.jurisdictionCode.startsWith(`${state}_`) ||
+        (state.length < 2 && r.jurisdictionCode === heldCity)),
   );
 
   const [justSaved, setJustSaved] = useState(false);
@@ -257,6 +268,7 @@ export default function HouseholdForm({
                 list="us-states"
                 {...form.register('state', {
                   setValueAs: (v) => (typeof v === 'string' ? v.toUpperCase() : v),
+                  onChange: clearMismatchedCity,
                 })}
                 placeholder="CA"
                 aria-invalid={form.formState.errors.state ? true : undefined}

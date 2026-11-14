@@ -566,8 +566,11 @@ function AssetSnapshotsInlineForm({
         </select>
       </div>
 
+      {/* No key (v1.8.0 O1, CR-O-2): another pick keeps the same section, so
+          the typed date and value, the open Value history and an edit in
+          progress all hold. The section reads its owner from these props,
+          so Add entry saves to the asset the picker shows. */}
       <ValueHistorySection
-        key={selected.key}
         ownerType={selected.ownerType}
         ownerId={selected.id}
         fallbackValue={selected.fallbackValue}

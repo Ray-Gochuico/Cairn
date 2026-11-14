@@ -3,10 +3,12 @@ import {
   prefillAboutYou, saveAboutYou, maritalConflict, filingStatusFromValues,
   prefillMaritalFiling, saveMaritalFiling, saveStateCity, saveExpenses,
   EMPTY_MARITAL_VALUES,
+  prefillExpenses,
 } from '@/domain/setup-flow/steps/part1';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { defaultProgressV2 } from '@/lib/setup-progress';
+import { visibleInstances } from '@/domain/setup-flow/engine';
 import { makeHousehold, makePerson } from '../../factories';
 import type { FlowCtx } from '@/domain/setup-flow/types';
 
@@ -172,5 +174,150 @@ describe('part1 save mappers', () => {
     const r = await saveExpenses({ monthly: null }, ctxWith());
     expect(r.ok).toBe(true);
     expect(householdUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('1b prefill round trip — a complicated Single / Head of Household answer (v1.8.0 O3, RC4)', () => {
+  // Yes → "It's more complicated" → Single or Head of Household with a partner
+  // drafted used to re-read as "No", and an untouched Next deleted the draft.
+  const JORDAN = { name: 'Jordan Lee', dateOfBirth: '1991-08-21' };
+  const withDraft = (filingStatus: 'HOH' | 'SINGLE') =>
+    ctxWith({
+      household: makeHousehold({ filingStatus }),
+      progress: { ...defaultProgressV2(), drafts: { partner: { ...JORDAN } } },
+    });
+
+  for (const fs of ['HOH', 'SINGLE'] as const) {
+    it(`re-reads Yes → "It's more complicated" → ${fs} with the pending partner draft`, () => {
+      expect(prefillMaritalFiling(withDraft(fs))).toEqual({
+        ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'complicated', complicatedStatus: fs,
+        partnerName: 'Jordan Lee', partnerDob: '1991-08-21',
+      });
+    });
+
+    it(`an untouched re-save of the ${fs} prefill keeps the status, the partner draft and the partner's Part 2 steps`, async () => {
+      const ctx = withDraft(fs);
+      const r = await saveMaritalFiling(prefillMaritalFiling(ctx), ctx);
+      expect(householdUpdate).toHaveBeenCalledWith({ filingStatus: fs });
+      const after = r.ok && r.progressUpdate ? r.progressUpdate(ctx.progress) : ctx.progress;
+      expect(after.drafts.partner).toEqual(JORDAN);
+      expect(
+        visibleInstances({ ...ctx, progress: after }).filter((i) => i.role === 'partner').map((i) => i.key),
+      ).toEqual(['pay:partner', 'retirement:partner', 'benefits:partner']);
+    });
+  }
+
+  it('without a partner draft a Single or Head of Household status still re-reads as No (control)', () => {
+    expect(prefillMaritalFiling(ctxWith({ household: makeHousehold({ filingStatus: 'HOH' }) })))
+      .toEqual({ ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'hoh' });
+    expect(prefillMaritalFiling(ctxWith({ household: makeHousehold({ filingStatus: 'SINGLE' }) })))
+      .toEqual({ ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single' });
+  });
+});
+
+describe("1b answer shape — a complicated answer re-reads verbatim (v1.8.0 O3, CL-O3-1)", () => {
+  // 1b records its own answer shape in progress.drafts at every save, so a
+  // complicated answer re-reads as picked even with no partner entered (the
+  // inference above has no trace of "married" then). The shape is used only
+  // while the saved status still matches it.
+  const JORDAN = { name: 'Jordan Lee', dateOfBirth: '1991-08-21' };
+  const afterSave = async (values: typeof EMPTY_MARITAL_VALUES, ctx: FlowCtx) => {
+    const r = await saveMaritalFiling(values, ctx);
+    return r.ok && r.progressUpdate ? r.progressUpdate(ctx.progress) : ctx.progress;
+  };
+
+  it("saveMaritalFiling records 1b's answer shape on every save", async () => {
+    const complicated = await afterSave(
+      { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'complicated', complicatedStatus: 'HOH' }, ctxWith(),
+    );
+    expect(complicated.drafts.marital).toEqual({ married: 'yes', filing: 'complicated', complicatedStatus: 'HOH' });
+    const jointly = await afterSave(
+      { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly', partnerName: JORDAN.name, partnerDob: JORDAN.dateOfBirth },
+      ctxWith(),
+    );
+    expect(jointly.drafts).toMatchObject({
+      marital: { married: 'yes', filing: 'jointly', complicatedStatus: null }, partner: JORDAN,
+    });
+    const bound = await afterSave(
+      { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'separately' },
+      ctxWith({ household: makeHousehold({ filingStatus: 'MFS' }), persons: [makePerson({ id: 1 }), makePerson({ id: 2 })] }),
+    );
+    expect(bound.drafts.marital).toEqual({ married: 'yes', filing: 'separately', complicatedStatus: null });
+    expect(bound.bindings.partner).toBe(2);
+    // A "No" after a complicated pick keeps no leftover filing answer.
+    const no = await afterSave(
+      { ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single', filing: 'complicated', complicatedStatus: 'HOH' },
+      ctxWith(),
+    );
+    expect(no.drafts.marital).toEqual({ married: 'no', filing: null, complicatedStatus: null });
+  });
+
+  for (const fs of ['HOH', 'SINGLE'] as const) {
+    it(`a partner-less Yes → "It's more complicated" → ${fs} re-reads verbatim, and its untouched re-save keeps it`, async () => {
+      const picked = { ...EMPTY_MARITAL_VALUES, married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: fs };
+      const progress = await afterSave(picked, ctxWith());
+      const reentry = ctxWith({ household: makeHousehold({ filingStatus: fs }), progress });
+      expect(prefillMaritalFiling(reentry)).toEqual(picked);
+      householdUpdate.mockClear();
+      expect(await afterSave(prefillMaritalFiling(reentry), reentry)).toEqual(progress);
+      expect(householdUpdate).toHaveBeenCalledWith({ filingStatus: fs });
+    });
+  }
+
+  it('a stored complicated Married Filing Jointly answer re-reads verbatim with its partner draft', () => {
+    expect(prefillMaritalFiling(ctxWith({
+      household: makeHousehold({ filingStatus: 'MFJ' }),
+      progress: {
+        ...defaultProgressV2(),
+        drafts: { partner: JORDAN, marital: { married: 'yes', filing: 'complicated', complicatedStatus: 'MFJ' } },
+      },
+    }))).toEqual({
+      ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'complicated', complicatedStatus: 'MFJ',
+      partnerName: JORDAN.name, partnerDob: JORDAN.dateOfBirth,
+    });
+  });
+
+  it('a stored answer the saved status no longer matches is ignored — an edit made elsewhere wins (control)', () => {
+    const stored = { married: 'yes' as const, filing: 'complicated' as const, complicatedStatus: 'HOH' as const };
+    const withStatus = (filingStatus: 'MFJ' | 'SINGLE') => ctxWith({
+      household: makeHousehold({ filingStatus }),
+      progress: { ...defaultProgressV2(), drafts: { marital: stored } },
+    });
+    expect(prefillMaritalFiling(withStatus('MFJ'))).toEqual({ ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly' });
+    expect(prefillMaritalFiling(withStatus('SINGLE'))).toEqual({ ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single' });
+  });
+});
+
+describe('1e answer record — a typed $0 re-reads as given (v1.8.0 O3 code review, CR-O-5)', () => {
+  // A saved 0 reads the same as a household that never answered 1e, so 1e
+  // records a typed 0 in the progress record (never a figure) and re-reads
+  // it while the saved figure is still 0.
+  const recorded = { ...defaultProgressV2(), drafts: { expenses: { zero: true as const } } };
+  const after = async (monthly: number | null, ctx: FlowCtx) => {
+    const r = await saveExpenses({ monthly }, ctx);
+    return r.ok && r.progressUpdate ? r.progressUpdate(ctx.progress).drafts.expenses : 'no update';
+  };
+
+  it('saveExpenses records a typed 0, and a later figure or a cleared field drops the record', async () => {
+    expect(await after(0, ctxWith())).toEqual({ zero: true });
+    expect(householdUpdate).toHaveBeenCalledWith({ monthlyExpenseBaseline: 0 });
+    expect(await after(4000, ctxWith({ progress: recorded }))).toBeUndefined();
+    householdUpdate.mockClear();
+    expect(await after(null, ctxWith({ progress: recorded }))).toBeUndefined();
+    expect(householdUpdate).not.toHaveBeenCalled(); // nothing entered still writes nothing (D-WF18)
+  });
+
+  it('prefillExpenses re-reads a recorded 0 while the saved figure is still 0, and its untouched re-save keeps both', async () => {
+    const reentry = ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 0 }), progress: recorded });
+    expect(prefillExpenses(reentry)).toBe(0);
+    expect(await after(prefillExpenses(reentry), reentry)).toEqual({ zero: true });
+    expect(householdUpdate).toHaveBeenCalledWith({ monthlyExpenseBaseline: 0 });
+    // No record: a saved 0 reads as never answered, as before.
+    expect(prefillExpenses(ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 0 }) }))).toBeNull();
+  });
+
+  it('a figure saved since wins over a recorded 0 (control)', () => {
+    expect(prefillExpenses(ctxWith({ household: makeHousehold({ monthlyExpenseBaseline: 2500 }), progress: recorded })))
+      .toBe(2500);
   });
 });
