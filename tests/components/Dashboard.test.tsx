@@ -32,6 +32,12 @@ import {
 } from '@/types/enums';
 import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
+import { SqliteAdapter } from '@/db/sqlite-adapter';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
+import { setDatabase } from '@/db/db';
+import { LoansRepo } from '@/domain/loans';
+import { LoanPaymentsRepo } from '@/domain/loan-payments';
+import { makeLoan } from '../factories';
 import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 import { localTodayISO } from '@/lib/dates';
 
@@ -1209,5 +1215,51 @@ describe('C034: the close row counts only accounts the closed month tracked', ()
     });
     render(<MemoryRouter><Dashboard /></MemoryRouter>);
     expect(within(screen.getByTestId('briefing-card')).getByText('Close October — confirm 2 balances.')).toBeInTheDocument();
+  });
+});
+
+// G4-09 (v1.8.0 W4): the close row's loan clause counts the payments /monthly
+// still lists as unrecorded (its next-scheduled-payment rule), read from the
+// real repos. Until those reads resolve the row carries no loan count. Fake
+// Date only, at a literal local day (the October close).
+describe('G4-09: the close row counts only the loan payments /monthly still lists', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-15T12:00:00'));
+    resetStores();
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+  });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await db.close();
+  });
+
+  it('3 active loans, 2 recorded, 1 balance unconfirmed: "Close October — confirm 1 balance, record 1 loan payment."', async () => {
+    const repo = new LoansRepo(db);
+    const payments = new LoanPaymentsRepo(db);
+    const ids: number[] = [];
+    for (const [name, bal, first] of [
+      ['Mortgage', 250_000, '2020-01-01'],
+      ['Car loan', 12_000, '2024-03-20'],
+      ['Student loan', 18_000, '2019-09-05'],
+    ] as const) {
+      ids.push(await repo.create(makeLoan({ name, currentBalance: bal, firstPaymentDate: first })));
+    }
+    for (const id of ids.slice(0, 2)) {
+      const loan = (await repo.findById(id))!;
+      const e = (await repo.projectedSchedule(id, '2026-11-15'))[0];
+      await payments.create({ loanId: id, paymentDate: e.paymentDate, principal: e.principal, interest: e.interest, extra: e.extra, source: 'AMORTIZATION' });
+      await repo.update(id, { currentBalance: Math.max(0, loan.currentBalance - (e.principal + e.extra)) });
+    }
+    primeStores({ accounts: [{ id: 1 }], snapshotValues: [{ accountId: 1, snapshotDate: '2026-09-30', totalValue: 1_000 }] });
+    useLoansStore.setState({ loans: await repo.list(), isLoading: false, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const briefing = screen.getByTestId('briefing-card');
+    // While the per-loan reads are pending, no loan count shows.
+    expect(within(briefing).getByText('Close October — confirm 1 balance.')).toBeInTheDocument();
+    expect(await within(briefing).findByText('Close October — confirm 1 balance, record 1 loan payment.')).toBeInTheDocument();
   });
 });

@@ -41,6 +41,10 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { lastMonthYyyymm, monthlyInputPendingFor, pendingCloseAccountIds } from '@/lib/input-pending';
+import { countOutstandingLoanPayments, nextLoanPaymentStatuses } from '@/lib/monthly-loan-status';
+import { getDatabase } from '@/db/db';
+import { LoansRepo } from '@/domain/loans';
+import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
 import {
   filterByForPersonId,
@@ -775,18 +779,35 @@ export default function Dashboard() {
   const topExposure = topEffectiveExposures(concentrationReport.perTicker, 1)[0] ?? null;
 
   // Cadence-row counts. N is the close selector's account count (C034: the
-  // same accounts /monthly gives a card each); M counts active loans —
-  // candidates, reconciled precisely on /monthly.
+  // same accounts /monthly gives a card each).
   const balancesToConfirm = useMemo(
     () => pendingCloseAccountIds(today, accounts, snapshots).length,
     [today, accounts, snapshots],
   );
-  const loanPaymentsToRecord = useMemo(
-    // Wave A: household count (the /monthly ritual reconciles the whole
-    // household — see the pendingAccountIds comment above).
-    () => loans.filter((l) => l.currentBalance > 0).length,
-    [loans],
-  );
+  // M (G4-09, v1.8.0 W4): the loan payments /monthly still lists as
+  // unrecorded, by its own next-scheduled-payment rule (two reads per loan).
+  // Household, like N. Until the reads for THESE loans on THIS day resolve,
+  // M is 0, so the row never shows an unreconciled count.
+  const [loanCount, setLoanCount] = useState<{ loans: typeof loans; todayISO: string; count: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const outstanding = async (): Promise<number> => {
+      if (loans.length === 0) return 0;
+      const db = getDatabase();
+      return countOutstandingLoanPayments(
+        await nextLoanPaymentStatuses(loans, new LoansRepo(db), new LoanPaymentsRepo(db), todayISO),
+      );
+    };
+    outstanding().then(
+      (count) => { if (!cancelled) setLoanCount({ loans, todayISO, count }); },
+      () => { if (!cancelled) setLoanCount({ loans, todayISO, count: 0 }); },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [loans, todayISO]);
+  const loanPaymentsToRecord =
+    loanCount !== null && loanCount.loans === loans && loanCount.todayISO === todayISO ? loanCount.count : 0;
 
   // Next move (the demoted NextMoveCard states — same pipeline, same order).
   const roadmapCtx = useRoadmap();
