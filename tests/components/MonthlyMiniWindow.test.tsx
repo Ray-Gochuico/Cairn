@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -18,7 +18,8 @@ import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { AccountType, LoanType, SnapshotSource } from '@/types/enums';
 import MonthlyMiniWindow from '@/pages/MonthlyMiniWindow';
 import { formatDate } from '@/lib/format';
-import { makePerson } from '../factories';
+import { monthlyInputUnconfirmedFor } from '@/lib/input-pending';
+import { makeAccount, makePerson } from '../factories';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -908,5 +909,161 @@ describe('MonthlyMiniWindow', () => {
       expect(screen.getByText('Joint Cash')).toBeInTheDocument();
       expect(screen.queryByText(/hidden by this view/)).not.toBeInTheDocument();
     });
+  });
+});
+
+// C006 (v1.8.0 W4): Save on the derived card's override refuses an emptied
+// field instead of confirming a $0 close. Real stores over an all-migrations
+// in-memory DB; only Date is faked, to a literal local day, so last month's
+// close is lastBusinessDayOfMonth('2026-10') = 2026-10-30 (Oct 31 2026 is a
+// Saturday). A number input hands React '' for an emptied field, for
+// whitespace and for an out-of-range figure such as 1e999 (jsdom and WebKit
+// both sanitize), so each of those reaches Save as ''.
+describe('C006: the derived override refuses an emptied field', () => {
+  const OCT_CLOSE = '2026-10-30';
+  const NAME = 'Taxable Brokerage';
+  const DERIVED = 61842.17;
+  const realUpsert = useSnapshotsStore.getState().upsert;
+  let db2: SqliteAdapter;
+
+  type Row = { snapshot_date: string; total_value: number; source: string };
+  const octRow = async (accountId: number): Promise<Row | undefined> =>
+    (await db2.select<Row>(
+      'SELECT snapshot_date, total_value, source FROM account_snapshots WHERE account_id = ? AND snapshot_date = ?',
+      [accountId, OCT_CLOSE],
+    ))[0];
+
+  async function seedBrokerage(name = NAME, derived = DERIVED): Promise<number> {
+    const id = await new AccountsRepo(db2).create(makeAccount({ name, type: AccountType.ACCOUNT_BROKERAGE }));
+    const repo = new AccountSnapshotsRepo(db2);
+    await repo.upsert({ accountId: id, snapshotDate: '2026-09-30', totalValue: 60110.4, source: SnapshotSource.USER_CONFIRMED });
+    await repo.upsert({ accountId: id, snapshotDate: OCT_CLOSE, totalValue: derived, source: SnapshotSource.AUTO_DERIVED });
+    return id;
+  }
+
+  async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: `Edit ${NAME}` }));
+    return screen.getByLabelText(`override value for ${NAME}`);
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
+    db2 = new SqliteAdapter(':memory:');
+    await runMigrations(db2, await loadAllMigrations());
+    setDatabase(db2);
+    resetStores();
+    useSnapshotsStore.setState({ upsert: realUpsert } as never);
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    await db2.close();
+  });
+
+  it('Edit → clear → Save writes nothing, shows "Enter a number" and keeps the editor open', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    expect(await octRow(id)).toEqual({ snapshot_date: OCT_CLOSE, total_value: DERIVED, source: 'AUTO_DERIVED' });
+    expect(screen.getByLabelText(`override value for ${NAME}`)).toBeInTheDocument();
+    expect(screen.queryByText(/✓ Confirmed/)).not.toBeInTheDocument();
+  });
+
+  it('whitespace typed into the cleared field is refused the same way', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.type(input, '   ');
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    expect((await octRow(id))?.source).toBe('AUTO_DERIVED');
+  });
+
+  it('1e999 (out of range) is refused the same way', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.type(input, '1e999');
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    expect((await octRow(id))?.source).toBe('AUTO_DERIVED');
+  });
+
+  it('keyboard only: Backspace the field empty, Tab to Save, Enter writes nothing', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = (await openEditor(user)) as HTMLInputElement;
+    await user.click(input);
+    await user.keyboard('{Backspace}'.repeat(Math.max(input.value.length, 1)));
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: `Save ${NAME}` }));
+    await user.keyboard('{Enter}');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    expect((await octRow(id))?.total_value).toBe(DERIVED);
+  });
+
+  it('after a refused empty Save, October still counts as unconfirmed', async () => {
+    await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    await screen.findByRole('alert');
+    const today = new Date('2026-11-14T12:00:00');
+    expect(monthlyInputUnconfirmedFor(today, useAccountsStore.getState().accounts, useSnapshotsStore.getState().snapshots)).toBe(true);
+  });
+
+  it('a typed 0 is a real $0 and is confirmed', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.type(input, '0');
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByText(/✓ Confirmed/)).toBeInTheDocument();
+    expect(await octRow(id)).toEqual({ snapshot_date: OCT_CLOSE, total_value: 0, source: 'USER_CONFIRMED' });
+  });
+
+  it('a typed 48500 is confirmed as typed', async () => {
+    const id = await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.type(input, '48500');
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByText(/✓ Confirmed/)).toBeInTheDocument();
+    expect(await octRow(id)).toEqual({ snapshot_date: OCT_CLOSE, total_value: 48500, source: 'USER_CONFIRMED' });
+  });
+
+  it('Confirm and Confirm all are unchanged: each ratifies the derived figure as shown', async () => {
+    const a = await seedBrokerage();
+    const b = await seedBrokerage('Partner Brokerage', 20500.5);
+    const user = userEvent.setup();
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: `Confirm ${NAME}` }));
+    await waitFor(async () => expect((await octRow(a))?.source).toBe('USER_CONFIRMED'));
+    expect((await octRow(a))?.total_value).toBe(DERIVED);
+    await user.click(screen.getByRole('button', { name: 'Confirm all (1)' }));
+    expect(await screen.findByText('Confirmed 1 account value.')).toBeInTheDocument();
+    expect(await octRow(b)).toEqual({ snapshot_date: OCT_CLOSE, total_value: 20500.5, source: 'USER_CONFIRMED' });
+  });
+
+  it('the cash card on the same page still refuses an emptied field (sibling rule, unchanged)', async () => {
+    const id = await new AccountsRepo(db2).create(makeAccount({ name: 'Joint Checking', type: AccountType.ACCOUNT_CASH }));
+    await new AccountSnapshotsRepo(db2).upsert({ accountId: id, snapshotDate: '2026-10-31', totalValue: 7350, source: SnapshotSource.MANUAL });
+    const user = userEvent.setup();
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    await user.clear(await screen.findByLabelText('balance for Joint Checking'));
+    await user.click(screen.getByRole('button', { name: 'Save Joint Checking balance' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    expect(await db2.select('SELECT snapshot_date, total_value, source FROM account_snapshots WHERE account_id = ?', [id]))
+      .toEqual([{ snapshot_date: '2026-10-31', total_value: 7350, source: 'MANUAL' }]);
   });
 });

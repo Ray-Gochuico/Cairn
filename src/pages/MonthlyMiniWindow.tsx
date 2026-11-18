@@ -211,8 +211,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               disabled={busy}
               aria-label={`Save ${account.name}`}
               onClick={() => {
-                const n = Number(editValue);
-                if (Number.isNaN(n)) {
+                // C006 (v1.8.0 W4): the sibling cards' rule. Number('') is 0, so
+                // a NaN-only check confirmed an emptied field as a $0 close; a
+                // typed 0 is still a real $0.
+                const raw = editValue.trim();
+                const n = Number(raw);
+                if (raw === '' || !Number.isFinite(n)) {
                   setError('Enter a number');
                   return;
                 }
