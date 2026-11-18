@@ -345,8 +345,23 @@ export function ImportPreviewModal({
   })();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <EntryDialogContent className="max-w-4xl" hasEntries={rowsEdited}>
+    // v1.8.0 W4 (PG-4, C041): while a commit is in flight nothing dismisses
+    // the preview. A dismissal skips the file, but the commit already sent
+    // still lands, and the caller would then move its queue on twice.
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && committing) return;
+        onOpenChange(o);
+      }}
+    >
+      <EntryDialogContent
+        className="max-w-4xl"
+        hasEntries={rowsEdited}
+        onEscapeKeyDown={(e) => {
+          if (committing) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -420,19 +435,20 @@ export function ImportPreviewModal({
           )}
           {queueLength && queueLength > 1 ? (
             <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" disabled={committing} onClick={() => onOpenChange(false)}>
                 Skip this file
               </Button>
               <Button
                 variant="ghost"
                 className="text-destructive-soft-foreground"
+                disabled={committing}
                 onClick={() => onCancelAll?.()}
               >
                 Cancel all {queueLength} files
               </Button>
             </>
           ) : (
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" disabled={committing} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
           )}

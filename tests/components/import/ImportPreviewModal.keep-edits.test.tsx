@@ -193,7 +193,7 @@ describe('ImportPreviewModal — keeps row edits (CR-O-3)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('Escape while file 1 is still committing: the commit moving the batch on to file 2 closes the question, and file 2 is not skipped', async () => {
+  it('Escape while file 1 is still committing asks nothing (v1.8.0 W4, PG-4), and the commit moving the batch on to file 2 does not skip it', async () => {
     let release: () => void = () => {};
     vi.mocked(commitSnapshotImport).mockImplementationOnce(
       () => new Promise((r) => { release = () => r({ inserted: 1, updated: 0, skipped: 0 } as never); }) as never,
@@ -231,7 +231,7 @@ describe('ImportPreviewModal — keeps row edits (CR-O-3)', () => {
     await user.click(screen.getByRole('button', { name: 'Commit (1 rows)' }));
     await waitFor(() => expect(commitSnapshotImport).toHaveBeenCalledTimes(1));
     await user.keyboard('{Escape}');
-    await screen.findByRole('dialog', { name: ASK });
+    expect(screen.queryByRole('dialog', { name: ASK })).toBeNull();
     await act(async () => {
       release();
     });
