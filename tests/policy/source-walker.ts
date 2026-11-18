@@ -296,3 +296,29 @@ export function uncoveredClockReads(source: string, fileName: string): ClockRead
   ts.forEachChild(sf, (child) => walk(child, moduleHooked || moduleDirect, moduleDirect, true));
   return out;
 }
+
+/**
+ * C174 (c): every no-argument `new Date()` / `Date.now()` in a SOURCE file
+ * that runs when the module loads: outside every function, method and
+ * instance initializer (a static class field still counts). A read at module
+ * scope is fixed for the life of the page, so it goes stale across midnight
+ * and no test that renders the module can move it.
+ */
+export function moduleScopeClockReads(source: string, fileName: string): ClockRead[] {
+  const sf = parseSource(source, fileName);
+  const out: ClockRead[] = [];
+  const walk = (node: ts.Node): void => {
+    if (isClockRead(node)) out.push(readAt(sf, node));
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isPropertyDeclaration(node) && !(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Static)) return;
+    if (ts.isCallExpression(node) && isFnNode(unwrapParens(node.expression))) {
+      // An immediately invoked function runs at load: walk into it.
+      node.arguments.forEach(walk);
+      walk((unwrapParens(node.expression) as FnNode).body);
+      return;
+    }
+    ts.forEachChild(node, walk);
+  };
+  ts.forEachChild(sf, walk);
+  return out;
+}
