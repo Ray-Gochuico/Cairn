@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
@@ -327,6 +327,33 @@ describe("C034: the Monthly check-in lists every account the close counts", () =
     renderMonthly('/monthly?view=joint');
     expect(await screen.findByText('Nothing to check in this view.')).toBeInTheDocument();
     expect(screen.getByText('2 household items still awaiting review in other views.')).toBeInTheDocument();
+  });
+
+  it('person view after a household save: a saved month-end card is not counted as hidden and unconfirmed', async () => {
+    await db.execute(
+      `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+       VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+    );
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Alice 401(k)', type: AccountType.ACCOUNT_401K, ownerPersonId: 1 }, 10_000, '2026-09-10');
+    await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Bob 401(k)', type: AccountType.ACCOUNT_401K, ownerPersonId: 2 }, 20_000, '2026-09-10');
+    let go: (to: string) => void = () => {};
+    function ViewSwitch() {
+      go = useNavigate();
+      return null;
+    }
+    const user = userEvent.setup();
+    render(<MemoryRouter initialEntries={['/monthly']}><ViewSwitch /><MonthlyMiniWindow /></MemoryRouter>);
+    await waitFor(() => monthEndSection());
+    await saveMonthEnd(user, [['Bob 401(k)', '20500']]);
+    // The same mounted page moves to Alice's view: Bob's saved card is hidden, and nothing of his waits.
+    act(() => go('/monthly?view=p1'));
+    expect(await screen.findByLabelText('balance for Alice 401(k)')).toBeInTheDocument();
+    expect(screen.queryByText('Bob 401(k)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/hidden by this view/)).not.toBeInTheDocument();
   });
 
   it('parity: every account the Dashboard row counts has exactly one card on the Monthly check-in', async () => {
