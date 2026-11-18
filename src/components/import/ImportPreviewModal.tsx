@@ -118,7 +118,22 @@ export function ImportPreviewModal({
   // NEGATIVE amounts, which isRealSpending (positive = spending) ignores — a
   // whole file can land as $0 Money out. When the user opts in, we thread a
   // 'FLIP' sign into the ctx so every parsed amount negates.
-  const [flipSigns, setFlipSigns] = useState(false);
+  const [flipSignsTicked, setFlipSigns] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+  // v1.8.0 W4 (PG-3, O1 chip (g) ⚑): a batch shows each file in this one open
+  // preview, so a new file starts with its own Flip signs (unticked) and no
+  // failed-commit line; the rows' store is per file already (below). The
+  // reset happens while rendering, and this render already reads the new
+  // file unflipped, so its store is made under the right sign.
+  const [shownParsed, setShownParsed] = useState(parsed);
+  const newFile = shownParsed !== parsed;
+  if (newFile) {
+    setShownParsed(parsed);
+    setFlipSigns(false);
+    setCommitError(null);
+  }
+  const flipSigns = newFile ? false : flipSignsTicked;
   const effectiveCtx = useMemo(
     () =>
       entity === 'transaction' && flipSigns
@@ -164,8 +179,6 @@ export function ImportPreviewModal({
   const showFlipPrompt =
     entity === 'transaction'
     && (negativeShare >= 0.5 || flipSigns || state.ctx.transactionAmountSign === 'FLIP');
-  const [committing, setCommitting] = useState(false);
-  const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const loadAccounts = useAccountsStore((s) => s.load);
