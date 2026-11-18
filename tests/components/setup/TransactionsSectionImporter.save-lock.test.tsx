@@ -183,4 +183,23 @@ describe('PDF review: locked from Save until the importer is done with the PDF (
     expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
     expect(await stored()).toEqual(['ALPHA MARKET']);
   });
+
+  // Fix round: the lock's exit on a failed write. Since Save also shuts the
+  // X and Escape, a review left on "Saving…" after an error would trap the
+  // user and the rest of the queue.
+  it('a failed write shows its error and lets go: Save and Cancel come back, and the X moves on to b.pdf', async () => {
+    const { user } = await queueTwoPdfs();
+    useTransactionsStore.setState({
+      createMany: async () => { throw new Error('database is locked'); },
+    });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('database is locked')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('ALPHA MART')).toBeNull();
+    expect(h.archives).toHaveLength(0);
+    expect(await stored()).toEqual([]);
+  });
 });
