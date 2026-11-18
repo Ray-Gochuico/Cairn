@@ -123,15 +123,20 @@ function parseSource(source: string, fileName: string): TS.SourceFile {
   );
 }
 
-/** A no-argument `new Date()` (or `new Date`) or a no-argument `Date.now()`. */
+/** `Date` itself, or `Date` read off an object: `globalThis.Date`, `window.Date`, `self.Date`. */
+function isDateRef(e: TS.Expression): boolean {
+  return (ts.isIdentifier(e) && e.text === 'Date')
+    || (ts.isPropertyAccessExpression(e) && e.name.text === 'Date');
+}
+
+/** A no-argument `new Date()` (or `new Date`) or a no-argument `Date.now()`, plain or qualified (`globalThis.Date.now()`). */
 function isClockRead(node: TS.Node): boolean {
   if (ts.isNewExpression(node)) {
-    return ts.isIdentifier(node.expression) && node.expression.text === 'Date'
+    return isDateRef(node.expression)
       && (node.arguments === undefined || node.arguments.length === 0);
   }
   if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-    const target = node.expression.expression;
-    return ts.isIdentifier(target) && target.text === 'Date'
+    return isDateRef(node.expression.expression)
       && node.expression.name.text === 'now' && node.arguments.length === 0;
   }
   return false;

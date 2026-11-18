@@ -81,6 +81,17 @@ describe('src module-scope clock policy', () => {
       expect(lines(src)).toEqual([1, 2, 3, 4]);
     });
 
+    it('flags a qualified read at load (globalThis.Date, window.Date) like a plain one', () => {
+      const src = [
+        'export const STAMP = globalThis.Date.now();',
+        'const Y = new window.Date().getFullYear();',
+        'const later = () => self.Date.now();',
+        "const FIXED = new globalThis.Date('2026-01-01T00:00:00');",
+        'const T0 = globalThis.performance.now();',
+      ].join('\n');
+      expect(lines(src)).toEqual([1, 2]);
+    });
+
     it('a read inside a function, an arrow, a method, a component or an instance field is not module scope', () => {
       const src = [
         'function thisYear() { return new Date().getFullYear(); }',

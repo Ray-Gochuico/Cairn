@@ -197,6 +197,23 @@ describe('the per-block real-clock detector (self-tests)', () => {
     expect(lines(src)).toEqual([]);
   });
 
+  it('judges a qualified read (globalThis.Date, window.Date) like a plain one', () => {
+    const src = [
+      "describe('Q', () => {",
+      "  it('q', () => { const t = globalThis.Date.now(); });",
+      "  it('r', () => { const w = window.Date.now(); });",
+      "  it('s', () => { const d = new globalThis.Date(); });",
+      "  it('dated', () => { const f = new window.Date('2026-11-14T12:00:00'); });",
+      "  it('other', () => { const m = new globalThis.Map(); const p = globalThis.performance.now(); });",
+      '});',
+      "describe('faked', () => {",
+      '  beforeEach(() => { vi.useFakeTimers(); });',
+      "  it('f', () => { const t = globalThis.Date.now(); });",
+      '});',
+    ].join('\n');
+    expect(lines(src)).toEqual([2, 3, 4]);
+  });
+
   it('flags Date.now() in a shared helper file, and the scan covers tests/helpers and other support files', async () => {
     const helperSrc = 'export function nowIso(): string { return new Date(Date.now()).toISOString(); }';
     expect(uncoveredClockReads(helperSrc, 'tests/helpers/clock.ts')).toEqual([{ line: 1, text: 'Date.now()' }]);
