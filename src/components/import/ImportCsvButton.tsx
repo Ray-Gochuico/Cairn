@@ -35,6 +35,7 @@ import { vehicleTemplateCsv } from '@/lib/import/validators/vehicle';
 import { equityGrantTemplateCsv } from '@/lib/import/validators/equity-grant';
 import { contributionTemplateCsv } from '@/lib/import/validators/contribution';
 import { assetValueSnapshotTemplateCsv } from '@/lib/import/validators/asset-value-snapshot';
+import { CTX_SOURCES, type CtxSource } from '@/lib/import/ctx-sources';
 import type { ImportEntity, ValidationContext } from '@/lib/import/types';
 
 const ENTITY_LABEL: Record<ImportEntity, string> = {
@@ -110,6 +111,10 @@ export function ImportCsvButton({ entity }: Props) {
   const contributions = useContributionsStore((s) => s.contributions);
   const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
 
+  // v1.8.0 W4 (O1 chip (e)): a store the entity does not read stands in as
+  // null, so its reloads never change the memo's inputs (CTX_SOURCES).
+  const reads = CTX_SOURCES[entity];
+  const dep = <T,>(source: CtxSource, list: T): T | null => (reads.includes(source) ? list : null);
   const ctx: ValidationContext = useMemo(() => ({
     accounts: accounts.map((a) => ({ id: a.id!, name: a.name })),
     persons: persons.map((p) => ({ id: p.id!, name: p.name })),
@@ -157,19 +162,20 @@ export function ImportCsvButton({ entity }: Props) {
       entity === 'asset_value_snapshot'
         ? buildAssetValueSnapshotConflictMap(assetValueSnapshots)
         : undefined,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
-    accounts,
-    persons,
-    categories,
-    snapshots,
-    transactions,
-    holdings,
-    loans,
-    properties,
-    vehicles,
-    equityGrants,
-    contributions,
-    assetValueSnapshots,
+    dep('accounts', accounts),
+    dep('persons', persons),
+    dep('categories', categories),
+    dep('snapshots', snapshots),
+    dep('transactions', transactions),
+    dep('holdings', holdings),
+    dep('loans', loans),
+    dep('properties', properties),
+    dep('vehicles', vehicles),
+    dep('equityGrants', equityGrants),
+    dep('contributions', contributions),
+    dep('assetValueSnapshots', assetValueSnapshots),
     entity,
   ]);
 
