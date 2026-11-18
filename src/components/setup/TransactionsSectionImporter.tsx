@@ -314,8 +314,14 @@ export default function TransactionsSectionImporter({
           existing={transactions}
           onClose={advance}
           onSaved={async (_insertedCount, fileBytes) => {
-            await archivePdfAfterSave(current.filename, fileBytes);
-            advance();
+            // The review stays locked until this settles (PG-4). The rows
+            // are saved; the archive reports its own failures as a warning,
+            // and the queue moves on whatever happens there.
+            try {
+              await archivePdfAfterSave(current.filename, fileBytes);
+            } finally {
+              advance();
+            }
           }}
         />
       )}

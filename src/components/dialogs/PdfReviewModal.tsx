@@ -27,7 +27,10 @@ interface PdfReviewModalProps {
   fileBytes: Uint8Array;
   existing: Transaction[];
   onClose: () => void;
-  onSaved: (insertedCount: number, fileBytes: Uint8Array) => void;
+  /** Called once the rows are written. The review stays locked (Save, Cancel,
+   *  the X and Escape) until the promise it returns settles: the importer
+   *  archives the PDF and moves its queue on there (v1.8.0 W4, PG-4). */
+  onSaved: (insertedCount: number, fileBytes: Uint8Array) => void | Promise<void>;
 }
 
 interface EditableRow {
@@ -59,7 +62,10 @@ interface EditableRow {
  * The dialog opens once on mount; the parent unmounts it on close. Cancel
  * and the X close it at once, and so does Escape until a row is edited;
  * after that Escape asks first (v1.8.0 O2, CR-O-3), because a close here
- * skips the PDF (TransactionsSectionImporter's advance).
+ * skips the PDF (TransactionsSectionImporter's advance). From Save until the
+ * caller's onSaved has settled, nothing closes it and Save stays off
+ * (v1.8.0 W4, PG-4): the rows are already written, so a second Save would
+ * write them twice, and a close would skip the next queued PDF.
  */
 export function PdfReviewModal({
   result,
@@ -197,6 +203,7 @@ export function PdfReviewModal({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    let savedCount: number;
     try {
       const included = rows.filter((r) => r.included);
       const toInsert = included.map(
@@ -229,9 +236,17 @@ export function PdfReviewModal({
       }
 
       await syncRecurring(useCategoriesStore.getState().categories);
-      onSaved(included.length, fileBytes);
+      savedCount = included.length;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setSaving(false);
+      return;
+    }
+    // The rows are written. Stay locked until the caller is done with them
+    // (the importer archives the PDF, then moves its queue on), so Save,
+    // Cancel, the X and Escape cannot come back in between (PG-4).
+    try {
+      await onSaved(savedCount, fileBytes);
     } finally {
       setSaving(false);
     }
@@ -243,7 +258,8 @@ export function PdfReviewModal({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        // While a save is in flight the X (and Escape) close nothing (PG-4).
+        if (!open && !saving) onClose();
       }}
     >
       <EntryDialogContent
@@ -255,6 +271,10 @@ export function PdfReviewModal({
         // In-flight edits live only in local state: a backdrop click never
         // closes it (EntryDialogContent), and Escape asks once a row is edited.
         hasEntries={rowsEdited}
+        // Mid-save, Escape neither closes the review nor asks (PG-4).
+        onEscapeKeyDown={(e) => {
+          if (saving) e.preventDefault();
+        }}
       >
         <DialogHeader className="px-6 py-4 border-b text-left">
           <DialogTitle>Review transactions</DialogTitle>
