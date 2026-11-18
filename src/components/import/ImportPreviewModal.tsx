@@ -118,7 +118,22 @@ export function ImportPreviewModal({
   // NEGATIVE amounts, which isRealSpending (positive = spending) ignores — a
   // whole file can land as $0 Money out. When the user opts in, we thread a
   // 'FLIP' sign into the ctx so every parsed amount negates.
-  const [flipSigns, setFlipSigns] = useState(false);
+  const [flipSignsTicked, setFlipSigns] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+  // v1.8.0 W4 (PG-3, O1 chip (g) ⚑): a batch shows each file in this one open
+  // preview, so a new file starts with its own Flip signs (unticked) and no
+  // failed-commit line; the rows' store is per file already (below). The
+  // reset happens while rendering, and this render already reads the new
+  // file unflipped, so its store is made under the right sign.
+  const [shownParsed, setShownParsed] = useState(parsed);
+  const newFile = shownParsed !== parsed;
+  if (newFile) {
+    setShownParsed(parsed);
+    setFlipSigns(false);
+    setCommitError(null);
+  }
+  const flipSigns = newFile ? false : flipSignsTicked;
   const effectiveCtx = useMemo(
     () =>
       entity === 'transaction' && flipSigns
@@ -164,8 +179,6 @@ export function ImportPreviewModal({
   const showFlipPrompt =
     entity === 'transaction'
     && (negativeShare >= 0.5 || flipSigns || state.ctx.transactionAmountSign === 'FLIP');
-  const [committing, setCommitting] = useState(false);
-  const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -345,8 +358,23 @@ export function ImportPreviewModal({
   })();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <EntryDialogContent className="max-w-4xl" hasEntries={rowsEdited}>
+    // v1.8.0 W4 (PG-4, C041): while a commit is in flight nothing dismisses
+    // the preview. A dismissal skips the file, but the commit already sent
+    // still lands, and the caller would then move its queue on twice.
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && committing) return;
+        onOpenChange(o);
+      }}
+    >
+      <EntryDialogContent
+        className="max-w-4xl"
+        hasEntries={rowsEdited}
+        onEscapeKeyDown={(e) => {
+          if (committing) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -382,6 +410,7 @@ export function ImportPreviewModal({
         <SummaryBar
           state={state as unknown as ImportPreviewState<ImportEntity>}
           entity={entity}
+          locked={committing}
         />
 
         {showFlipPrompt && (
@@ -392,6 +421,7 @@ export function ImportPreviewModal({
               <input
                 type="checkbox"
                 checked={flipSigns}
+                disabled={committing}
                 onChange={(e) => setFlipSigns(e.target.checked)}
               />
               Flip signs (treat negatives as spending)
@@ -402,8 +432,12 @@ export function ImportPreviewModal({
             (max-h-[55vh] overflow-auto) so the virtualizer can measure a finite
             viewport; an outer scroll wrapper here would nest two scrollers and
             defeat the windowing. The empty-state path has no scroll and renders
-            fine inside this plain container. */}
-        <div>{previewTable}</div>
+            fine inside this plain container. While a commit is in flight the
+            fieldset disables every control in the rows, a cell's edit field
+            included: the commit has taken the rows, so an edit made then would
+            not be committed (v1.8.0 W4 fix round). The bulk choices and Flip
+            signs above are disabled with them. */}
+        <fieldset disabled={committing}>{previewTable}</fieldset>
 
         {commitError && (
           <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
@@ -420,19 +454,20 @@ export function ImportPreviewModal({
           )}
           {queueLength && queueLength > 1 ? (
             <>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" disabled={committing} onClick={() => onOpenChange(false)}>
                 Skip this file
               </Button>
               <Button
                 variant="ghost"
                 className="text-destructive-soft-foreground"
+                disabled={committing}
                 onClick={() => onCancelAll?.()}
               >
                 Cancel all {queueLength} files
               </Button>
             </>
           ) : (
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" disabled={committing} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
           )}
@@ -448,9 +483,12 @@ export function ImportPreviewModal({
 function SummaryBar({
   state,
   entity,
+  locked,
 }: {
   state: ImportPreviewState<ImportEntity>;
   entity: ImportEntity;
+  /** A commit is in flight: the bulk choices change nothing it writes. */
+  locked: boolean;
 }) {
   return (
     <div className="flex gap-2 items-center text-xs flex-wrap">
@@ -473,20 +511,20 @@ function SummaryBar({
       <div className="ml-auto flex gap-2">
         {entity === 'snapshot' && (
           <>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('update')}>
               Update all
             </Button>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('skip')}>
               Skip all
             </Button>
           </>
         )}
         {(entity === 'transaction' || entity === 'contribution') && state.summary.duplicate > 0 && (
           <>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('update')}>
               Insert all duplicates
             </Button>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('skip')}>
               Skip all duplicates
             </Button>
           </>
@@ -496,6 +534,7 @@ function SummaryBar({
             size="sm"
             variant="outline"
             className="text-destructive-soft-foreground"
+            disabled={locked}
             onClick={() => state.deleteAllErrors()}
           >
             Delete errors

@@ -18,7 +18,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
  * (detection, parsers) is pure over `PdfTextItem[]` and fully testable.
  */
 export async function extractTextItems(bytes: Uint8Array): Promise<PdfTextItem[]> {
-  const doc = await pdfjsLib.getDocument({ data: bytes }).promise;
+  // pdf.js transfers the array it is given to its worker ([data.buffer] in the
+  // postMessage transfer list), which empties the caller's copy. Hand it its
+  // own copy, so the caller keeps the PDF (the statements archive writes it).
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
   const out: PdfTextItem[] = [];
   try {
     for (let p = 1; p <= doc.numPages; p++) {

@@ -1,4 +1,5 @@
 // src/lib/import/conflict-detector.ts
+import { ContributionSource } from '@/types/enums';
 import type {
   Account,
   Holding,
@@ -125,14 +126,30 @@ export function buildEquityGrantConflictMap(
 }
 
 /**
+ * The duplicate key of one contribution: `${accountId}::${date}::${amount}`
+ * (mirrors transactions), with `::match` added for an EMPLOYER_MATCH. v1.8.0
+ * W4 (C040 ⚑): a match equal to that day's paycheck deferral is never read
+ * as a copy of it, while every other source keeps the plain key, so a row
+ * entered by hand and re-imported as PAYCHECK is still caught. The person is
+ * not part of the key. The saved side (below) and the imported side (the
+ * contribution validator) both use this, so the two cannot drift.
+ */
+export function contributionDupKey(
+  c: Pick<Contribution, 'accountId' | 'date' | 'amount' | 'source'>,
+): string {
+  const key = `${c.accountId}::${c.date}::${c.amount}`;
+  return c.source === ContributionSource.EMPLOYER_MATCH ? `${key}::match` : key;
+}
+
+/**
  * Build a lookup set for contribution dedupe heuristic during import.
- * Key format: `${accountId}::${date}::${amount}` (mirrors transactions).
+ * Key format: contributionDupKey.
  */
 export function buildContributionDuplicateKeys(
   contribs: ReadonlyArray<Contribution>,
 ): Set<string> {
   const s = new Set<string>();
-  for (const c of contribs) s.add(`${c.accountId}::${c.date}::${c.amount}`);
+  for (const c of contribs) s.add(contributionDupKey(c));
   return s;
 }
 

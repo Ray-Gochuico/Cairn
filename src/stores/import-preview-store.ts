@@ -158,6 +158,28 @@ export function createImportPreviewStore<E extends ImportEntity>(
     const { derivedRows, summary } = deriveRows(
       entity, parsed.rows, initialEdits, initialDeletions, ctx, undefined, rowCache,
     );
+    // v1.8.0 W4 (O1 chip (j) ⚑): Skip all (and Skip all duplicates) also
+    // covers a row that turns into a conflict after it was pressed (an edit,
+    // or a reload pushed in through setCtx), unless the row has a choice of
+    // its own. Only a skip carries forward: Update all and Insert all
+    // duplicates act on the rows shown at the click, so a duplicate that
+    // appears later is never written without a choice of its own, and either
+    // of them ends an earlier Skip all's carry.
+    let bulkConflict: 'skip' | null = null;
+    const withBulkConflict = (
+      conflictMode: Map<RowId, 'update' | 'skip'>,
+      rows: ReadonlyArray<PreviewRow<unknown>>,
+    ): Map<RowId, 'update' | 'skip'> => {
+      if (bulkConflict === null) return conflictMode;
+      let out = conflictMode;
+      for (const r of rows) {
+        if ((r.status === 'update' || r.status === 'duplicate') && !out.has(r.rowId)) {
+          if (out === conflictMode) out = new Map(conflictMode);
+          out.set(r.rowId, bulkConflict);
+        }
+      }
+      return out;
+    };
 
     const recompute = (s: ImportPreviewState<E>): ImportPreviewState<E> => {
       const nextCache = new Map<RowId, RowCacheEntry>();
@@ -165,7 +187,12 @@ export function createImportPreviewStore<E extends ImportEntity>(
         entity, s.rawRows, s.edits, s.deletions, s.ctx, rowCache, nextCache,
       );
       rowCache = nextCache;
-      return { ...s, derivedRows: next.derivedRows, summary: next.summary };
+      return {
+        ...s,
+        derivedRows: next.derivedRows,
+        summary: next.summary,
+        conflictMode: withBulkConflict(s.conflictMode, next.derivedRows),
+      };
     };
 
     return {
@@ -192,6 +219,7 @@ export function createImportPreviewStore<E extends ImportEntity>(
       }),
 
       bulkSetConflict: (mode) => set((s) => {
+        bulkConflict = mode === 'skip' ? 'skip' : null;
         const conflictMode = new Map(s.conflictMode);
         for (const r of s.derivedRows) {
           if (r.status === 'update' || r.status === 'duplicate') {

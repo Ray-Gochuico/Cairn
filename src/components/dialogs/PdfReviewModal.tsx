@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { categorize } from '@/lib/categorize';
-import { transactionDedupKey, filterDuplicates } from '@/lib/dedup';
+import { formatCurrencyCents } from '@/lib/format';
+import { filterDuplicates } from '@/lib/dedup';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -18,6 +19,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { MerchantSeedRepo } from '@/domain/merchant-seed';
 import { getDatabase } from '@/db/db';
+import { issuerLabel } from '@/pdf/issuer-label';
 import type { ParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
@@ -27,7 +29,10 @@ interface PdfReviewModalProps {
   fileBytes: Uint8Array;
   existing: Transaction[];
   onClose: () => void;
-  onSaved: (insertedCount: number, fileBytes: Uint8Array) => void;
+  /** Called once the rows are written. The review stays locked (Save, Cancel,
+   *  the X and Escape) until the promise it returns settles: the importer
+   *  archives the PDF and moves its queue on there (v1.8.0 W4, PG-4). */
+  onSaved: (insertedCount: number, fileBytes: Uint8Array) => void | Promise<void>;
 }
 
 interface EditableRow {
@@ -59,7 +64,12 @@ interface EditableRow {
  * The dialog opens once on mount; the parent unmounts it on close. Cancel
  * and the X close it at once, and so does Escape until a row is edited;
  * after that Escape asks first (v1.8.0 O2, CR-O-3), because a close here
- * skips the PDF (TransactionsSectionImporter's advance).
+ * skips the PDF (TransactionsSectionImporter's advance). From Save until the
+ * caller's onSaved has settled, nothing closes it and Save stays off
+ * (v1.8.0 W4, PG-4): the rows are already written, so a second Save would
+ * write them twice, and a close would skip the next queued PDF. Every row
+ * control is disabled then too: Save has taken the rows, so a later edit
+ * would not be saved while the footer counted it as "will be saved".
  */
 export function PdfReviewModal({
   result,
@@ -136,11 +146,14 @@ export function PdfReviewModal({
         result.transactions,
         existing,
       );
-      const dupKeys = new Set(dupTransactions.map(transactionDedupKey));
+      // v1.8.0 W4 (C040): flag exactly the rows filterDuplicates called copies,
+      // by identity (the parser emits one object per row). By key, every copy
+      // of a charge listed twice was flagged, the one it kept as fresh too.
+      const dupRows = new Set(dupTransactions);
 
       const built: EditableRow[] = result.transactions.map((t) => {
         const predictedCategoryId = categorize(t.merchant, freshOverrides, seeds);
-        const isDuplicate = dupKeys.has(transactionDedupKey(t));
+        const isDuplicate = dupRows.has(t);
         const { propertyId, vehicleId } = defaultPropertyVehicleFromFresh(predictedCategoryId);
         return {
           date: t.date,
@@ -197,6 +210,7 @@ export function PdfReviewModal({
   const handleSave = async () => {
     setSaving(true);
     setError(null);
+    let savedCount: number;
     try {
       const included = rows.filter((r) => r.included);
       const toInsert = included.map(
@@ -229,21 +243,42 @@ export function PdfReviewModal({
       }
 
       await syncRecurring(useCategoriesStore.getState().categories);
-      onSaved(included.length, fileBytes);
+      savedCount = included.length;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setSaving(false);
+      return;
+    }
+    // The rows are written. Stay locked until the caller is done with them
+    // (the importer archives the PDF, then moves its queue on), so Save,
+    // Cancel, the X and Escape cannot come back in between (PG-4).
+    try {
+      await onSaved(savedCount, fileBytes);
     } finally {
       setSaving(false);
     }
   };
 
   const includedCount = rows.filter((r) => r.included).length;
+  // v1.8.0 W4 (G2-10 ⚑): the totals of the rows to be saved, to check against
+  // the statement's own. Charges are the positive amounts (money spent, the
+  // sign convention of src/pdf/types.ts), credits the negative ones, shown as
+  // amounts. Summed in whole cents.
+  let chargesCents = 0;
+  let creditsCents = 0;
+  for (const r of rows) {
+    if (!r.included) continue;
+    const cents = Math.round(r.amount * 100);
+    if (cents > 0) chargesCents += cents;
+    else creditsCents -= cents;
+  }
 
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) onClose();
+        // While a save is in flight the X (and Escape) close nothing (PG-4).
+        if (!open && !saving) onClose();
       }}
     >
       <EntryDialogContent
@@ -255,11 +290,15 @@ export function PdfReviewModal({
         // In-flight edits live only in local state: a backdrop click never
         // closes it (EntryDialogContent), and Escape asks once a row is edited.
         hasEntries={rowsEdited}
+        // Mid-save, Escape neither closes the review nor asks (PG-4).
+        onEscapeKeyDown={(e) => {
+          if (saving) e.preventDefault();
+        }}
       >
         <DialogHeader className="px-6 py-4 border-b text-left">
           <DialogTitle>Review transactions</DialogTitle>
           <DialogDescription>
-            {result.issuer} · {filename}
+            {issuerLabel(result.issuer)} · {filename}
           </DialogDescription>
         </DialogHeader>
 
@@ -303,6 +342,7 @@ export function PdfReviewModal({
                           type="checkbox"
                           aria-label={`Include ${row.merchant}`}
                           checked={row.included}
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { included: e.target.checked })}
                         />
                       </td>
@@ -312,6 +352,7 @@ export function PdfReviewModal({
                           value={row.date}
                           aria-label={`Date for ${row.merchant}`}
                           className="border rounded px-1 py-0.5 text-xs w-32"
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { date: e.target.value })}
                         />
                       </td>
@@ -322,6 +363,7 @@ export function PdfReviewModal({
                             value={row.merchant}
                             aria-label={`Merchant name for row ${i + 1}`}
                             className="border rounded px-1 py-0.5 text-xs w-36"
+                            disabled={saving}
                             onChange={(e) => updateRow(i, { merchant: e.target.value })}
                           />
                           {row.isDuplicate && (
@@ -338,6 +380,7 @@ export function PdfReviewModal({
                           value={row.amount}
                           aria-label={`Amount for ${row.merchant}`}
                           className="border rounded px-1 py-0.5 text-xs w-24"
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { amount: Number(e.target.value) })}
                         />
                       </td>
@@ -347,6 +390,7 @@ export function PdfReviewModal({
                             value={row.categoryId ?? ''}
                             aria-label={`Category for ${row.merchant}`}
                             className="border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) => {
                               const val = e.target.value === '' ? null : Number(e.target.value);
                               // v1.8.0 O2 (O1 chip (d), CR-O-2): a property or vehicle
@@ -377,6 +421,7 @@ export function PdfReviewModal({
                             title="Exclude (transfer)"
                             className="text-xs text-muted-foreground hover:text-foreground"
                             aria-label={`Exclude transfer for ${row.merchant}`}
+                            disabled={saving}
                             onClick={() => {
                               // Transfer is seeded as id=41; it is not a Home/Vehicles
                               // category so property/vehicle links must be cleared.
@@ -400,6 +445,7 @@ export function PdfReviewModal({
                             value={row.propertyId ?? ''}
                             aria-label={`Property for ${row.merchant}`}
                             className="mt-1 border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { propertyId: e.target.value === '' ? null : Number(e.target.value) })
                             }
@@ -418,6 +464,7 @@ export function PdfReviewModal({
                             value={row.vehicleId ?? ''}
                             aria-label={`Vehicle for ${row.merchant}`}
                             className="mt-1 border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { vehicleId: e.target.value === '' ? null : Number(e.target.value) })
                             }
@@ -436,6 +483,7 @@ export function PdfReviewModal({
                           type="checkbox"
                           aria-label={`Reimbursable for ${row.merchant}`}
                           checked={row.reimbursable}
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { reimbursable: e.target.checked })}
                         />
                       </td>
@@ -445,6 +493,7 @@ export function PdfReviewModal({
                             value={row.personId ?? ''}
                             aria-label={`Person for ${row.merchant}`}
                             className="border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { personId: e.target.value === '' ? null : Number(e.target.value) })
                             }
@@ -468,7 +517,15 @@ export function PdfReviewModal({
 
         <DialogFooter className="px-6 py-4 border-t flex items-center justify-between sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            {includedCount} of {rows.length} rows will be saved
+            {rows.length > 0 && (
+              <span>
+                Charges {formatCurrencyCents(chargesCents / 100)} · Credits{' '}
+                {formatCurrencyCents(creditsCents / 100)} ·{' '}
+              </span>
+            )}
+            <span>
+              {includedCount} of {rows.length} rows will be saved
+            </span>
           </div>
           <div className="flex items-center gap-3">
             {/* Wave-4 a11y: live region mounts EMPTY so SRs announce the
