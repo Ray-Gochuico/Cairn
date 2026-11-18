@@ -179,23 +179,31 @@ function primeStores(opts: PrimeOpts = {}) {
   });
 }
 
-/** Build $amount contributions, one per month, for the last `months` months. */
+// C174 (v1.8.0 W4, A2 chip (b)): the tests that build monthly contributions
+// run on one literal local day, and the helper counts back from that day, so
+// the page's 6-month window and the fixture agree on every calendar date.
+const GOALS_TODAY_ISO = '2026-11-14';
+function pinGoalsToday() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(`${GOALS_TODAY_ISO}T12:00:00`));
+}
+
+/** Build $amount contributions, one per month, for the `months` months ending on GOALS_TODAY_ISO. */
 function monthlyContribs(accountId: number, monthlyAmount: number, months = 6): Partial<Contribution>[] {
-  const today = new Date();
-  return Array.from({ length: months }, (_, i) => {
-    const d = new Date(today);
-    d.setMonth(d.getMonth() - i);
-    return {
-      accountId,
-      date: d.toISOString().slice(0, 10),
-      amount: monthlyAmount,
-    };
-  });
+  const [y, m, d] = GOALS_TODAY_ISO.split('-').map(Number);
+  return Array.from({ length: months }, (_, i) => ({
+    accountId,
+    date: new Date(Date.UTC(y, m - 1 - i, d)).toISOString().slice(0, 10),
+    amount: monthlyAmount,
+  }));
 }
 
 describe('Goals page', () => {
   beforeEach(() => {
     resetStores();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('empty state offers an in-place "Add your first goal" that opens the drawer (W14)', async () => {
@@ -243,6 +251,7 @@ describe('Goals page', () => {
   });
 
   it('shows a capped "Funded ✓" terminal state for an over-funded goal (Wave 11 T24)', () => {
+    pinGoalsToday();
     // currentSaved (12k) exceeds target (10k) → funded terminal state.
     primeStores({
       goals: [
@@ -276,6 +285,7 @@ describe('Goals page', () => {
   });
 
   it('shows off-track badge for a goal that cannot meet the target', () => {
+    pinGoalsToday();
     // Tiny saved + tiny contributions, big target, near deadline → off-track
     primeStores({
       goals: [
@@ -483,6 +493,7 @@ describe('Goals page', () => {
   });
 
   it('uses the 6-month average contribution to drive the projection (off- vs on-track flips with contributions)', () => {
+    pinGoalsToday();
     // Same goal, two store states. Without contributions → off-track. With
     // contributions → on-track. Confirms the page is averaging recent flow.
     const baseGoal = {

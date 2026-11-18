@@ -22,13 +22,14 @@ const TESTS_DIR = path.join(ROOT, 'tests');
 // comment in the PR explaining why a real clock is genuinely required.
 // ---------------------------------------------------------------------------
 const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
-  'tests/components/Budget.test.tsx',
+  // Budget.test.tsx pruned 2026-11 (v1.8.0 W4, C174 (d)): its fixture months are
+  // one literal month and the page runs on a literal local day.
   // Dashboard.test.tsx was pruned from this allowlist 2026-07-09 (W13): its
   // briefing tests pin the clock via vi.useFakeTimers({ toFake: ['Date'] }),
   // which the detector counts as fake-timer usage.
   // Goals.test.tsx pruned 2026-09 (v1.8.0 A-2′): its local-day describe pins the
   // clock via vi.useFakeTimers({ toFake: ['Date'] }). Its monthlyContribs helper
-  // still reads the real clock (the Dashboard W13 precedent; chip).
+  // counts back from a literal day since 2026-11 (v1.8.0 W4, C174 (d)).
   'tests/components/Investments.test.tsx',
   'tests/components/MonthlyMiniWindow.test.tsx',
   'tests/components/Spending.test.tsx',
@@ -44,10 +45,11 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   // fake-timer usage.
   'tests/domain/fund-holdings.test.ts',
   // loan-history.test.ts pruned 2026-09 (v1.8.0 A-2′): its default-anchor describe
-  // uses fake timers; five legacy tests still read the real clock (plus the pin-4
-  // test via localTodayISO()) (chip).
+  // uses fake timers; its five legacy tests and the pin-4 test run on a literal
+  // local day since 2026-11 (v1.8.0 W4, C174 (d)).
   // price-cache.test.ts pruned 2026-09 (v1.8.0 A-2′): its local-key describe uses
-  // fake timers; its TTL tests still use the real clock with SQLite's own 'now'.
+  // fake timers; its TTL tests key on a literal local day since 2026-11 (v1.8.0
+  // W4, C174 (d)), with SQLite's own 'now' on both sides of the 6-hour check.
   'tests/pdf/layout.test.ts',
   'tests/stores/properties-store.test.ts',
   'tests/stores/vehicles-store.test.ts',

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -20,6 +20,12 @@ const mig = (file: string) => ({
   sql: readFileSync(resolve(__dirname, `../../src/db/migrations/${file}.sql`), 'utf-8'),
 });
 
+// C174 (v1.8.0 W4, A2 chip (i)): Budget.tsx reads the LOCAL month, so every
+// fixture month here is one literal month and the page runs on a literal local
+// day inside it (a UTC-month fixture was next month on a month-end evening).
+const BUDGET_MONTH = '2026-11';
+const BUDGET_NOW = new Date('2026-11-14T12:00:00');
+
 // The W10 loading-gate test overrides categories.load with a no-op; capture +
 // restore the real loads each beforeEach so later DB-backed tests hydrate.
 const realCategoriesLoad = useCategoriesStore.getState().load;
@@ -29,6 +35,8 @@ describe('Budget page', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(BUDGET_NOW);
     localStorage.clear();
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
@@ -43,7 +51,10 @@ describe('Budget page', () => {
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: realTransactionsLoad });
   });
 
-  afterEach(async () => { await db.close(); });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await db.close();
+  });
 
   it('lists budgetable categories and renders the empty-state when no budgets are set', async () => {
     render(<MemoryRouter><Budget /></MemoryRouter>);
@@ -81,7 +92,7 @@ describe('Budget page', () => {
     // Pre-set a budget on Groceries (id 33) and add an actual transaction
     const repo = new CategoriesRepo(db);
     await repo.update(33, { monthlyBudget: 600 });
-    const month = new Date().toISOString().slice(0, 7);
+    const month = BUDGET_MONTH;
     const txn: Omit<Transaction, 'id'> = {
       householdId: 1, date: `${month}-05`, merchant: 'TJ', merchantRaw: 'TJ',
       amount: 120, categoryId: 33, sourceAccountId: null, propertyId: null,
@@ -122,7 +133,7 @@ describe('Budget page', () => {
   });
 
   describe('Wave A: person view (D2)', () => {
-    const month = new Date().toISOString().slice(0, 7);
+    const month = BUDGET_MONTH;
     const personTxn = (personId: number | null, amount: number): Omit<Transaction, 'id'> => ({
       householdId: 1, date: `${month}-05`, merchant: 'M', merchantRaw: 'M',
       amount, categoryId: 33, sourceAccountId: null, propertyId: null,
@@ -174,7 +185,7 @@ describe('Budget page', () => {
   });
 
   describe('tracked categories + Misc catch-all', () => {
-    const month = new Date().toISOString().slice(0, 7);
+    const month = BUDGET_MONTH;
     const seedTxn = (categoryId: number, amount: number, day = '05'): Omit<Transaction, 'id'> => ({
       householdId: 1, date: `${month}-${day}`, merchant: 'M', merchantRaw: 'M',
       amount, categoryId, sourceAccountId: null, propertyId: null,
