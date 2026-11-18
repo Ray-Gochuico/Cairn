@@ -18,6 +18,13 @@ const confirmedSnapshot: AccountSnapshot = {
   id: 1, accountId: 3, snapshotDate: '2026-07-31', totalValue: 50_000,
   source: SnapshotSource.USER_CONFIRMED,
 };
+// C034 (v1.8.0 W4): G3 counts only an account the closed month tracked. A
+// 529 entered in June is tracked by the July close and sits outside the FI
+// portfolio, so G2 and G3 still render together (as in tests/lib/model-gaps).
+const college529 = makeAccount({ id: 9, type: AccountType.ACCOUNT_529, name: 'College 529' });
+const college529June: AccountSnapshot = {
+  id: 9, accountId: 9, snapshotDate: '2026-06-30', totalValue: 5_000, source: SnapshotSource.MANUAL,
+};
 const recentContribution: Contribution = {
   id: 1, accountId: 3, personId: null, date: '2026-06-15', amount: 500,
   source: ContributionSource.MANUAL,
@@ -60,7 +67,10 @@ describe('ModelGapsCard', () => {
   });
 
   it('several rows render in the model order, each with its own home link', () => {
-    const { container } = renderCard({ snapshots: [], contributions: [] });
+    const { container } = renderCard({
+      accounts: [makeAccount({ id: 3, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' }), college529],
+      snapshots: [college529June], contributions: [],
+    });
     const items = Array.from(container.querySelectorAll('li'));
     expect(items.map((li) => li.querySelector('span')?.textContent)).toEqual([
       'No account snapshots yet — the portfolio starts at $0 in these projections.',

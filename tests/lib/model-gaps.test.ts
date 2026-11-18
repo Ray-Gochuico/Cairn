@@ -33,6 +33,16 @@ const recentContribution: Contribution = {
 };
 const SETTLED_SETTINGS = { defaultDrawdownTaxRate: 0.15 } as AppSettings;
 
+// C034 (v1.8.0 W4): G3 reads the one close selector, which counts only an
+// account the closed month tracked (a snapshot dated in or before last month).
+// A 529 entered in June is tracked by the July close and sits outside the FI
+// portfolio, so the all-rows fixtures below keep G2 (no FI-eligible snapshots)
+// and G3 firing together.
+const college529 = makeAccount({ id: 9, type: AccountType.ACCOUNT_529, name: 'College 529' });
+const college529June: AccountSnapshot = {
+  id: 9, accountId: 9, snapshotDate: '2026-06-30', totalValue: 5_000, source: SnapshotSource.MANUAL,
+};
+
 /** A household with every projection input present → ZERO rows (D-W3-13). */
 export const settledInput = (over: Partial<ModelGapsInput> = {}): ModelGapsInput => ({
   household: fullHousehold,
@@ -78,14 +88,20 @@ describe('buildModelGaps — absence is the calm outcome', () => {
     expect(rows.find((r) => r.id === 'G1')).toBeUndefined();
   });
 
-  it('G2 + G3 co-fire with no snapshots: portfolio $0 AND last month unconfirmed', () => {
-    const rows = buildModelGaps(settledInput({ snapshots: [] })).rows;
+  it('G2 + G3 co-fire with no FI-eligible snapshots: portfolio $0 AND last month unconfirmed', () => {
+    const rows = buildModelGaps(settledInput({ accounts: [brokerage, college529], snapshots: [college529June] })).rows;
     expect(rows.find((r) => r.id === 'G2')?.text)
       .toBe('No account snapshots yet — the portfolio starts at $0 in these projections.');
     expect(rows.find((r) => r.id === 'G2')?.cta).toEqual({ label: 'Open Accounts →', to: '/investments?manage=accounts' });
     expect(rows.find((r) => r.id === 'G3')?.text)
       .toBe("Last month's balances aren't confirmed — lines start from the latest figures you've confirmed.");
     expect(rows.find((r) => r.id === 'G3')?.cta).toEqual({ label: 'Open monthly check-in →', to: '/monthly' });
+  });
+
+  it('C034: with no snapshot at all there is nothing to close — G2 fires and G3 stays silent', () => {
+    const rows = buildModelGaps(settledInput({ snapshots: [] })).rows;
+    expect(rows.find((r) => r.id === 'G2')).toBeDefined();
+    expect(rows.find((r) => r.id === 'G3')).toBeUndefined();
   });
 
   it('G3 alone: a snapshot exists but last month was never confirmed', () => {
@@ -143,7 +159,7 @@ describe('buildModelGaps — absence is the calm outcome', () => {
   // (snapshot-only), but the CONSEQUENCE claims the engine seed. Holdings
   // without snapshots (and 529-only snapshots) seed a non-zero month 0.
   it('G2 is silent when the engine seed is NOT zero (holdings without snapshots)', () => {
-    const rows = buildModelGaps(settledInput({ snapshots: [], engineStartsAtZero: false })).rows;
+    const rows = buildModelGaps(settledInput({ accounts: [brokerage, college529], snapshots: [college529June], engineStartsAtZero: false })).rows;
     expect(rows.find((r) => r.id === 'G2')).toBeUndefined();
     expect(rows.find((r) => r.id === 'G3')).toBeDefined();  // the sibling row is unaffected
   });
@@ -408,14 +424,14 @@ describe('buildModelGaps — absence is the calm outcome', () => {
   });
 
   it('G11 sits directly after G1\'s slot — before G2 (contract order)', () => {
-    const rows = buildModelGaps(settledInput({ scenarioSpending: [AT_ZERO], snapshots: [], contributions: [] })).rows;
+    const rows = buildModelGaps(settledInput({ scenarioSpending: [AT_ZERO], accounts: [brokerage, college529], snapshots: [college529June], contributions: [] })).rows;
     expect(rows.map((r) => r.id)).toEqual(['G11:1', 'G2', 'G3', 'G4']);
   });
 
   it('row order is the contract order (G1 → G10)', () => {
     const rows = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
-      snapshots: [], contributions: [], roadmapHasUnanswered: true, settings: null,
+      accounts: [brokerage, college529], snapshots: [college529June], contributions: [], roadmapHasUnanswered: true, settings: null,
       sides: [{ name: 'Baseline', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }, { name: 'B2', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }],
     })).rows;
     expect(rows.map((r) => r.id)).toEqual(['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G9', 'G10']);
@@ -476,7 +492,7 @@ describe('buildModelGaps — absence is the calm outcome', () => {
   it('golden byte pins (D-W3-P14): the all-rows fixture and the empty fixture', () => {
     const all = buildModelGaps(settledInput({
       household: makeHousehold({ ...fullHousehold, monthlyExpenseBaseline: 0, growthScenarios: [], withdrawalRate: 0 }),
-      snapshots: [], contributions: [], roadmapHasUnanswered: true, settings: null,
+      accounts: [brokerage, college529], snapshots: [college529June], contributions: [], roadmapHasUnanswered: true, settings: null,
       persons: [makePerson({ id: 1, name: 'Alex', annualSalaryPretax: 0 })],
       sides: [{ name: 'Baseline', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }, { name: 'B2', payload: { ...P(), withdrawalStrategy: 'sequential' as const } }],
     }));

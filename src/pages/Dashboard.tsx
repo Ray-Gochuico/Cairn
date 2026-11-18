@@ -32,7 +32,7 @@ import { useLoadGate } from '@/lib/use-load-gate';
 import { useLocalToday } from '@/lib/use-local-today';
 import { dateFromLocalISO, utcNoonOf } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
-import { AccountType, GoalType, SnapshotSource } from '@/types/enums';
+import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
 import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
@@ -40,7 +40,7 @@ import { monthlyContributionAvg, pickModerateRate } from '@/lib/growth-scenario'
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
-import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
+import { lastMonthYyyymm, monthlyInputPendingFor, pendingCloseAccountIds } from '@/lib/input-pending';
 import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
 import {
   filterByForPersonId,
@@ -118,18 +118,6 @@ const LIQUID_INVESTMENT_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_CASH,
   AccountType.ACCOUNT_SAVINGS,
   AccountType.ACCOUNT_HSA,
-]);
-
-/**
- * Account types whose values are entered manually as of "today", not
- * auto-derived from ticker prices. Matches `SKIPPED_ACCOUNT_TYPES` in
- * `daily-snapshot.ts` so the pending-input nudge stays consistent with
- * what today's snapshot derivation actually produces.
- */
-const MANUAL_BALANCE_TYPES = new Set<AccountType>([
-  AccountType.ACCOUNT_CASH,
-  AccountType.ACCOUNT_SAVINGS,
-  AccountType.ACCOUNT_CRYPTO,
 ]);
 
 /**
@@ -696,45 +684,17 @@ export default function Dashboard() {
     });
   }, [visibleGoals, snapshots, contributions, todayUtcNoon, annualGrowthRate]);
 
-  /**
-   * Pending-input detection lives in `src/lib/input-pending.ts` as a pure
-   * helper. Dashboard's job is to compose the inputs:
-   *   - `accountIds`: every non-excluded account whose value is auto-derived
-   *     (the manual-balance set is skipped — those get a "what's today's
-   *     balance?" card in the mini-window instead of a last-month check).
-   *   - `snapshotsLastMonth`: filtered to last month's snapshots.
-   */
-  // Wave A: pending detection + the briefing close-row counts are HOUSEHOLD
-  // (unfiltered) — the row links to /monthly, a household ritual, so its
-  // counts must match what /monthly's household view will ask; the sidebar
-  // pending dot (use-monthly-input-pending) is household for the same reason.
-  const pendingAccountIds = useMemo(
-    () =>
-      accounts
-        .filter(
-          (a) =>
-            a.id !== undefined &&
-            !a.excludedFromNetWorth &&
-            !MANUAL_BALANCE_TYPES.has(a.type),
-        )
-        .map((a) => a.id as number),
-    [accounts],
-  );
-
+  // Pending-input detection lives in `src/lib/input-pending.ts`. Wave A: the
+  // pending flag and the briefing close-row counts are HOUSEHOLD (unfiltered):
+  // the row links to /monthly, a household ritual, so its counts must match
+  // what /monthly's household view will ask; the sidebar pending dot
+  // (use-monthly-input-pending) is household for the same reason. C034 (v1.8.0
+  // W4): all three read the one close selector, pendingCloseAccountIds.
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
 
-  const snapshotsLastMonth = useMemo(
-    () => snapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
-    [snapshots, lastMonth],
-  );
-
   const isInputPending = useMemo(
-    () =>
-      isMonthlyInputPending(today, {
-        accountIds: pendingAccountIds,
-        snapshotsLastMonth,
-      }),
-    [today, pendingAccountIds, snapshotsLastMonth],
+    () => monthlyInputPendingFor(today, accounts, snapshots),
+    [today, accounts, snapshots],
   );
 
   // W10 F8: transactions were the ONE entity the header comment's "everything
@@ -814,20 +774,12 @@ export default function Dashboard() {
   const concentrationReport = useConcentration();
   const topExposure = topEffectiveExposures(concentrationReport.perTicker, 1)[0] ?? null;
 
-  // Cadence-row counts. N mirrors isMonthlyInputPending's per-account rule
-  // exactly (an account clears on a USER_CONFIRMED or MANUAL row); M counts
-  // active loans — candidates, reconciled precisely on /monthly.
+  // Cadence-row counts. N is the close selector's account count (C034: the
+  // same accounts /monthly gives a card each); M counts active loans —
+  // candidates, reconciled precisely on /monthly.
   const balancesToConfirm = useMemo(
-    () =>
-      pendingAccountIds.filter(
-        (id) =>
-          !snapshotsLastMonth.some(
-            (s) =>
-              s.accountId === id &&
-              (s.source === SnapshotSource.USER_CONFIRMED || s.source === SnapshotSource.MANUAL),
-          ),
-      ).length,
-    [pendingAccountIds, snapshotsLastMonth],
+    () => pendingCloseAccountIds(today, accounts, snapshots).length,
+    [today, accounts, snapshots],
   );
   const loanPaymentsToRecord = useMemo(
     // Wave A: household count (the /monthly ritual reconciles the whole

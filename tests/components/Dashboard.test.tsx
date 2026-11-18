@@ -849,9 +849,10 @@ describe('W13 briefing hero', () => {
   });
 
   it('the amber "Monthly input pending" banner is retired — the cadence ROW carries the ritual', () => {
-    // Day 9 (past grace), one non-manual account with NO June snapshot →
-    // pending, 1 balance to confirm.
-    primeStores({ accounts: [{ id: 1 }] });
+    // Day 9 (past grace), one non-manual account tracked since May with NO
+    // June confirmation → pending, 1 balance to confirm. (C034, v1.8.0 W4: an
+    // account with no snapshot at all has nothing to close, so it needs one.)
+    primeStores({ accounts: [{ id: 1 }], snapshotValues: [{ accountId: 1, snapshotDate: '2026-05-29', totalValue: 1_000 }] });
     renderDashboard();
     expect(screen.queryByText('Monthly input pending')).toBeNull();
     const briefing = screen.getByTestId('briefing-card');
@@ -1162,5 +1163,51 @@ describe('v1.8.0 A-2′ (CR-A2-2): UTC-accessor helpers get the local day at UTC
     expect(within(briefing).getByTestId('briefing-row-net-worth').textContent).toContain(
       'Net worth is up +$10,000 (+10.0%).',
     );
+  });
+});
+
+// C034 (v1.8.0 W4): the Dashboard's "Close {Month}" count and the sidebar dot
+// read ONE selector (pendingCloseAccountIds). An account first entered after
+// the month closed has nothing to close. Fake Date only, at a literal local day.
+describe('C034: the close row counts only accounts the closed month tracked', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
+    resetStores();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a fresh setup on Nov 14 (balances dated that day) shows no October close row', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Ray 401(k)', type: AccountType.ACCOUNT_401K },
+        { id: 2, name: 'Family HSA', type: AccountType.ACCOUNT_HSA },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-11-14', totalValue: 120_000 },
+        { accountId: 2, snapshotDate: '2026-11-14', totalValue: 8_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(within(screen.getByTestId('briefing-card')).queryByText(/^Close October/)).toBeNull();
+  });
+
+  it('accounts entered in September and not confirmed in October are counted', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Ray 401(k)', type: AccountType.ACCOUNT_401K },
+        { id: 2, name: 'Family HSA', type: AccountType.ACCOUNT_HSA },
+        { id: 3, name: 'New IRA', type: AccountType.ACCOUNT_ROTH_IRA },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-09-10', totalValue: 120_000 },
+        { accountId: 2, snapshotDate: '2026-09-10', totalValue: 8_000 },
+        { accountId: 3, snapshotDate: '2026-11-02', totalValue: 30_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(within(screen.getByTestId('briefing-card')).getByText('Close October — confirm 2 balances.')).toBeInTheDocument();
   });
 });

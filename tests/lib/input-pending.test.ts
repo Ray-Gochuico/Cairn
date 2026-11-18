@@ -5,6 +5,8 @@ import {
   currentMonthYyyymm,
   shouldShowMonthlyPrompt,
   monthlyInputPendingFor,
+  monthlyInputUnconfirmedFor,
+  pendingCloseAccountIds,
   MONTHLY_INPUT_GRACE_DAY,
 } from '@/lib/input-pending';
 import { AccountType, SnapshotSource } from '@/types/enums';
@@ -273,5 +275,62 @@ describe('monthlyInputPendingFor (whole-store composition)', () => {
         wsnap(1, '2026-04-30', SnapshotSource.USER_CONFIRMED),
       ]),
     ).toBe(true);
+  });
+});
+
+// C034 (v1.8.0 W4): ONE definition of "balances to confirm" for last month's
+// close. An account first entered after last month ended has nothing to close;
+// it joins once it has a snapshot dated in or before last month. Literal days.
+describe('pendingCloseAccountIds (C034: the one close selector)', () => {
+  const nov14 = new Date(2026, 10, 14); // the October close
+  const acct = (id: number, type: AccountType, excluded = false) =>
+    ({ id, type, excludedFromNetWorth: excluded }) as never;
+  const row = (accountId: number, date: string, source: SnapshotSource) =>
+    ({ id: accountId * 100 + Number(date.slice(8)), accountId, snapshotDate: date, totalValue: 1, source }) as never;
+
+  it('a fresh setup on Nov 14 (rows dated that day) has nothing to close for October', () => {
+    const accounts = [acct(1, AccountType.ACCOUNT_401K), acct(2, AccountType.ACCOUNT_ROTH_IRA), acct(3, AccountType.ACCOUNT_CASH)];
+    const snaps = [row(1, '2026-11-14', SnapshotSource.MANUAL), row(2, '2026-11-14', SnapshotSource.MANUAL), row(3, '2026-11-14', SnapshotSource.MANUAL)];
+    expect(monthlyInputPendingFor(nov14, accounts, snaps)).toBe(false);
+    expect(monthlyInputUnconfirmedFor(nov14, accounts, snaps)).toBe(false);
+    expect(pendingCloseAccountIds(nov14, accounts, snaps)).toEqual([]);
+  });
+
+  it('an account with no snapshot at all is not counted', () => {
+    expect(monthlyInputUnconfirmedFor(nov14, [acct(1, AccountType.ACCOUNT_BROKERAGE)], [])).toBe(false);
+    expect(pendingCloseAccountIds(nov14, [acct(1, AccountType.ACCOUNT_BROKERAGE)], [])).toEqual([]);
+  });
+
+  it('entered in September and never confirmed in October: counted', () => {
+    const accounts = [acct(1, AccountType.ACCOUNT_401K), acct(2, AccountType.ACCOUNT_HSA)];
+    const snaps = [row(1, '2026-09-10', SnapshotSource.MANUAL), row(2, '2026-09-10', SnapshotSource.MANUAL), row(2, '2026-11-02', SnapshotSource.MANUAL)];
+    expect(pendingCloseAccountIds(nov14, accounts, snaps)).toEqual([1, 2]);
+    expect(monthlyInputUnconfirmedFor(nov14, accounts, snaps)).toBe(true);
+  });
+
+  it('an AUTO_DERIVED row in October counts the account; a MANUAL or USER_CONFIRMED row in October clears it', () => {
+    const accounts = [acct(1, AccountType.ACCOUNT_BROKERAGE), acct(2, AccountType.ACCOUNT_BROKERAGE), acct(3, AccountType.ACCOUNT_BROKERAGE)];
+    const snaps = [
+      row(1, '2026-10-29', SnapshotSource.AUTO_DERIVED),
+      row(2, '2026-10-29', SnapshotSource.AUTO_DERIVED), row(2, '2026-10-29', SnapshotSource.USER_CONFIRMED),
+      row(3, '2026-10-15', SnapshotSource.MANUAL),
+    ];
+    expect(pendingCloseAccountIds(nov14, accounts, snaps)).toEqual([1]);
+  });
+
+  it('cash, savings, crypto and excluded accounts never count', () => {
+    const accounts = [
+      acct(1, AccountType.ACCOUNT_CASH), acct(2, AccountType.ACCOUNT_SAVINGS),
+      acct(3, AccountType.ACCOUNT_CRYPTO), acct(4, AccountType.ACCOUNT_BROKERAGE, true),
+    ];
+    const snaps = [1, 2, 3, 4].map((id) => row(id, '2026-09-10', SnapshotSource.MANUAL));
+    expect(pendingCloseAccountIds(nov14, accounts, snaps)).toEqual([]);
+  });
+
+  it('the January close of a November setup counts it (the year boundary)', () => {
+    const jan12 = new Date(2027, 0, 12); // the December close
+    const snaps = [row(1, '2026-11-14', SnapshotSource.MANUAL)];
+    expect(monthlyInputPendingFor(jan12, [acct(1, AccountType.ACCOUNT_401K)], snaps)).toBe(true);
+    expect(pendingCloseAccountIds(jan12, [acct(1, AccountType.ACCOUNT_401K)], snaps)).toEqual([1]);
   });
 });
