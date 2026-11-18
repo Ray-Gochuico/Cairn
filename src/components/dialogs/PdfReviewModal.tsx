@@ -18,6 +18,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { MerchantSeedRepo } from '@/domain/merchant-seed';
 import { getDatabase } from '@/db/db';
+import { issuerLabel } from '@/pdf/issuer-label';
 import type { ParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
@@ -282,7 +283,7 @@ export function PdfReviewModal({
         <DialogHeader className="px-6 py-4 border-b text-left">
           <DialogTitle>Review transactions</DialogTitle>
           <DialogDescription>
-            {result.issuer} · {filename}
+            {issuerLabel(result.issuer)} · {filename}
           </DialogDescription>
         </DialogHeader>
 
