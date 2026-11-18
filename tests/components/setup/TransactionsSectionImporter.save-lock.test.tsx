@@ -111,6 +111,14 @@ function holdCreateMany(): { release: () => void; started: () => boolean } {
   return { release: () => release!(), started: () => release !== null };
 }
 
+/** Every form control the review's table shows (a row's tick, date, name,
+ *  amount, category, Exclude and Reimbursable for the one row here). */
+function rowControls(): Element[] {
+  const controls = [...screen.getByRole('table').querySelectorAll('input, select, button')];
+  expect(controls).toHaveLength(7);
+  return controls;
+}
+
 async function stored(): Promise<string[]> {
   await useTransactionsStore.getState().load();
   return useTransactionsStore.getState().transactions.map((t) => t.merchant).sort();
@@ -196,10 +204,35 @@ describe('PDF review: locked from Save until the importer is done with the PDF (
     expect(await screen.findByText('database is locked')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    rowControls().forEach((control) => expect(control).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
     expect(screen.queryByDisplayValue('ALPHA MART')).toBeNull();
     expect(h.archives).toHaveLength(0);
     expect(await stored()).toEqual([]);
+  });
+
+  // Fix round: Save has taken the rows, so they are read-only until the
+  // review lets go. An edit then would not be saved, and the totals line
+  // would count rows that are not the ones being written.
+  it('while saving, every row control is disabled: an untick or a new amount is refused, and the footer keeps what is being saved', async () => {
+    const { user } = await queueTwoPdfs();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(h.archives).toHaveLength(1));
+    // a.pdf's rows are written and its archive is still running.
+    rowControls().forEach((control) => expect(control).toBeDisabled());
+    const include = screen.getByRole('checkbox', { name: 'Include ALPHA MART' });
+    const amount = screen.getByRole('spinbutton', { name: 'Amount for ALPHA MART' });
+    await user.click(include);
+    await user.type(amount, '9');
+    expect(include).toBeChecked();
+    expect(amount).toHaveValue(12.5);
+    expect(screen.getByText('1 of 1 rows will be saved').parentElement!.textContent).toBe(
+      'Charges $12.50 · Credits $0.00 · 1 of 1 rows will be saved',
+    );
+    await act(async () => { h.archives[0](); });
+    expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
+    rowControls().forEach((control) => expect(control).toBeEnabled());
+    expect(await stored()).toEqual(['ALPHA MART']);
   });
 });

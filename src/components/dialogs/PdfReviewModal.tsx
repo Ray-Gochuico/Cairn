@@ -67,7 +67,9 @@ interface EditableRow {
  * skips the PDF (TransactionsSectionImporter's advance). From Save until the
  * caller's onSaved has settled, nothing closes it and Save stays off
  * (v1.8.0 W4, PG-4): the rows are already written, so a second Save would
- * write them twice, and a close would skip the next queued PDF.
+ * write them twice, and a close would skip the next queued PDF. Every row
+ * control is disabled then too: Save has taken the rows, so a later edit
+ * would not be saved while the footer counted it as "will be saved".
  */
 export function PdfReviewModal({
   result,
@@ -340,6 +342,7 @@ export function PdfReviewModal({
                           type="checkbox"
                           aria-label={`Include ${row.merchant}`}
                           checked={row.included}
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { included: e.target.checked })}
                         />
                       </td>
@@ -349,6 +352,7 @@ export function PdfReviewModal({
                           value={row.date}
                           aria-label={`Date for ${row.merchant}`}
                           className="border rounded px-1 py-0.5 text-xs w-32"
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { date: e.target.value })}
                         />
                       </td>
@@ -359,6 +363,7 @@ export function PdfReviewModal({
                             value={row.merchant}
                             aria-label={`Merchant name for row ${i + 1}`}
                             className="border rounded px-1 py-0.5 text-xs w-36"
+                            disabled={saving}
                             onChange={(e) => updateRow(i, { merchant: e.target.value })}
                           />
                           {row.isDuplicate && (
@@ -375,6 +380,7 @@ export function PdfReviewModal({
                           value={row.amount}
                           aria-label={`Amount for ${row.merchant}`}
                           className="border rounded px-1 py-0.5 text-xs w-24"
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { amount: Number(e.target.value) })}
                         />
                       </td>
@@ -384,6 +390,7 @@ export function PdfReviewModal({
                             value={row.categoryId ?? ''}
                             aria-label={`Category for ${row.merchant}`}
                             className="border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) => {
                               const val = e.target.value === '' ? null : Number(e.target.value);
                               // v1.8.0 O2 (O1 chip (d), CR-O-2): a property or vehicle
@@ -414,6 +421,7 @@ export function PdfReviewModal({
                             title="Exclude (transfer)"
                             className="text-xs text-muted-foreground hover:text-foreground"
                             aria-label={`Exclude transfer for ${row.merchant}`}
+                            disabled={saving}
                             onClick={() => {
                               // Transfer is seeded as id=41; it is not a Home/Vehicles
                               // category so property/vehicle links must be cleared.
@@ -437,6 +445,7 @@ export function PdfReviewModal({
                             value={row.propertyId ?? ''}
                             aria-label={`Property for ${row.merchant}`}
                             className="mt-1 border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { propertyId: e.target.value === '' ? null : Number(e.target.value) })
                             }
@@ -455,6 +464,7 @@ export function PdfReviewModal({
                             value={row.vehicleId ?? ''}
                             aria-label={`Vehicle for ${row.merchant}`}
                             className="mt-1 border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { vehicleId: e.target.value === '' ? null : Number(e.target.value) })
                             }
@@ -473,6 +483,7 @@ export function PdfReviewModal({
                           type="checkbox"
                           aria-label={`Reimbursable for ${row.merchant}`}
                           checked={row.reimbursable}
+                          disabled={saving}
                           onChange={(e) => updateRow(i, { reimbursable: e.target.checked })}
                         />
                       </td>
@@ -482,6 +493,7 @@ export function PdfReviewModal({
                             value={row.personId ?? ''}
                             aria-label={`Person for ${row.merchant}`}
                             className="border rounded px-1 py-0.5 text-xs"
+                            disabled={saving}
                             onChange={(e) =>
                               updateRow(i, { personId: e.target.value === '' ? null : Number(e.target.value) })
                             }
