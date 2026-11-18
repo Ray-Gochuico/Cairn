@@ -7,8 +7,9 @@
  * import from it.
  */
 import { readdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import ts from 'typescript';
+import type * as TS from 'typescript';
 
 export async function collectSourceFiles(
   dir: string,
@@ -84,7 +85,15 @@ export function stripComments(source: string): string {
 // read inside a string, a template's text or a comment is never seen, and a
 // read is judged by the block it sits in rather than by the whole file.
 // `typescript` is already a devDependency (no new package).
+//
+// Cost (v1.8.0 W4 review): the compiler loads on the first parse, not when
+// this file is imported, because most policy tests import it only to walk a
+// directory and each test file would pay the load again. A source with no
+// `Date` in its text holds no clock read, so it is never parsed, and no parse
+// keeps parent links (nothing here reads `.parent`).
 // ---------------------------------------------------------------------------
+
+let ts: typeof TS;
 
 /** One flagged clock read: 1-based line and the read's own source text. */
 export interface ClockRead {
@@ -98,18 +107,24 @@ const HOOK_CALLS: ReadonlySet<string> = new Set(['beforeEach', 'beforeAll', 'aft
 const SETUP_HOOKS: ReadonlySet<string> = new Set(['beforeEach', 'beforeAll']);
 const FAKE_CLOCK_METHODS: ReadonlySet<string> = new Set(['useFakeTimers', 'setSystemTime']);
 
-function parseSource(source: string, fileName: string): ts.SourceFile {
+/** Every clock read names `Date`, so a source without it has none to find. */
+function mayReadClock(source: string): boolean {
+  return source.includes('Date');
+}
+
+function parseSource(source: string, fileName: string): TS.SourceFile {
+  ts ??= createRequire(import.meta.url)('typescript') as typeof TS;
   return ts.createSourceFile(
     fileName,
     source,
     ts.ScriptTarget.Latest,
-    true,
+    false,
     fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 }
 
 /** A no-argument `new Date()` (or `new Date`) or a no-argument `Date.now()`. */
-function isClockRead(node: ts.Node): boolean {
+function isClockRead(node: TS.Node): boolean {
   if (ts.isNewExpression(node)) {
     return ts.isIdentifier(node.expression) && node.expression.text === 'Date'
       && (node.arguments === undefined || node.arguments.length === 0);
@@ -122,24 +137,24 @@ function isClockRead(node: ts.Node): boolean {
   return false;
 }
 
-function readAt(sf: ts.SourceFile, node: ts.Node): ClockRead {
+function readAt(sf: TS.SourceFile, node: TS.Node): ClockRead {
   return { line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1, text: node.getText(sf) };
 }
 
 /** The root name of a call's callee: `describe(…)`, `it.each(rows)(…)` and `describe.skip(…)` → the first identifier. */
-function calleeRoot(call: ts.CallExpression): string | null {
-  let e: ts.Expression = call.expression;
+function calleeRoot(call: TS.CallExpression): string | null {
+  let e: TS.Expression = call.expression;
   while (ts.isPropertyAccessExpression(e) || ts.isCallExpression(e)) e = e.expression;
   return ts.isIdentifier(e) ? e.text : null;
 }
 
-type FnNode = ts.ArrowFunction | ts.FunctionExpression;
+type FnNode = TS.ArrowFunction | TS.FunctionExpression;
 
-function isFnNode(node: ts.Node | undefined): node is FnNode {
+function isFnNode(node: TS.Node | undefined): node is FnNode {
   return node !== undefined && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
 }
 
-function unwrapParens(e: ts.Expression): ts.Expression {
+function unwrapParens(e: TS.Expression): TS.Expression {
   while (ts.isParenthesizedExpression(e)) e = e.expression;
   return e;
 }
@@ -150,9 +165,9 @@ function unwrapParens(e: ts.Expression): ts.Expression {
  * hook or test that calls one, or passes one as its callback, counts as
  * setting the clock.
  */
-function fakeClockHelpers(sf: ts.SourceFile): ReadonlySet<string> {
+function fakeClockHelpers(sf: TS.SourceFile): ReadonlySet<string> {
   const names = new Set<string>();
-  const visit = (node: ts.Node): void => {
+  const visit = (node: TS.Node): void => {
     if (ts.isFunctionDeclaration(node) && node.name && node.body && hasDirectFakeCall(node.body)) {
       names.add(node.name.text);
     }
@@ -166,14 +181,14 @@ function fakeClockHelpers(sf: ts.SourceFile): ReadonlySet<string> {
   return names;
 }
 
-function isFakeClockCall(node: ts.Node): boolean {
+function isFakeClockCall(node: TS.Node): boolean {
   return ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
     && FAKE_CLOCK_METHODS.has(node.expression.name.text);
 }
 
-function hasDirectFakeCall(node: ts.Node): boolean {
+function hasDirectFakeCall(node: TS.Node): boolean {
   let found = false;
-  const visit = (n: ts.Node): void => {
+  const visit = (n: TS.Node): void => {
     if (found) return;
     if (isFakeClockCall(n)) {
       found = true;
@@ -186,9 +201,9 @@ function hasDirectFakeCall(node: ts.Node): boolean {
 }
 
 /** Does this node install the fake clock: a `vi.useFakeTimers()` / `vi.setSystemTime()` call, or a call to (or pass of) a same-file helper that does? */
-function installsFakeClock(node: ts.Node, helpers: ReadonlySet<string>): boolean {
+function installsFakeClock(node: TS.Node, helpers: ReadonlySet<string>): boolean {
   let found = false;
-  const visit = (n: ts.Node): void => {
+  const visit = (n: TS.Node): void => {
     if (found) return;
     if (isFakeClockCall(n)) {
       found = true;
@@ -210,19 +225,19 @@ function installsFakeClock(node: ts.Node, helpers: ReadonlySet<string>): boolean
   return found;
 }
 
-function statementsOf(fn: FnNode): readonly ts.Statement[] {
+function statementsOf(fn: FnNode): readonly TS.Statement[] {
   return ts.isBlock(fn.body) ? fn.body.statements : [];
 }
 
 /** A `beforeEach`/`beforeAll` statement whose hook installs the fake clock. */
-function isFakeSetupHook(stmt: ts.Statement, helpers: ReadonlySet<string>): boolean {
+function isFakeSetupHook(stmt: TS.Statement, helpers: ReadonlySet<string>): boolean {
   if (!ts.isExpressionStatement(stmt) || !ts.isCallExpression(stmt.expression)) return false;
   const root = calleeRoot(stmt.expression);
   return root !== null && SETUP_HOOKS.has(root) && installsFakeClock(stmt.expression, helpers);
 }
 
 /** A statement that installs the fake clock as it runs (not inside a hook, test or suite). */
-function isDirectFakeStatement(stmt: ts.Statement, helpers: ReadonlySet<string>): boolean {
+function isDirectFakeStatement(stmt: TS.Statement, helpers: ReadonlySet<string>): boolean {
   if (!ts.isExpressionStatement(stmt)) return false;
   const e = stmt.expression;
   if (ts.isCallExpression(e)) {
@@ -248,11 +263,12 @@ function isDirectFakeStatement(stmt: ts.Statement, helpers: ReadonlySet<string>)
  * A same-file helper whose body installs the fake clock counts as installing it.
  */
 export function uncoveredClockReads(source: string, fileName: string): ClockRead[] {
+  if (!mayReadClock(source)) return [];
   const sf = parseSource(source, fileName);
   const helpers = fakeClockHelpers(sf);
   const out: ClockRead[] = [];
 
-  const walk = (node: ts.Node, runCovered: boolean, collectCovered: boolean, atCollection: boolean): void => {
+  const walk = (node: TS.Node, runCovered: boolean, collectCovered: boolean, atCollection: boolean): void => {
     if (isClockRead(node) && !(atCollection ? collectCovered : runCovered)) out.push(readAt(sf, node));
 
     if (ts.isCallExpression(node)) {
@@ -305,9 +321,10 @@ export function uncoveredClockReads(source: string, fileName: string): ClockRead
  * and no test that renders the module can move it.
  */
 export function moduleScopeClockReads(source: string, fileName: string): ClockRead[] {
+  if (!mayReadClock(source)) return [];
   const sf = parseSource(source, fileName);
   const out: ClockRead[] = [];
-  const walk = (node: ts.Node): void => {
+  const walk = (node: TS.Node): void => {
     if (isClockRead(node)) out.push(readAt(sf, node));
     if (ts.isFunctionLike(node)) return;
     if (ts.isPropertyDeclaration(node) && !(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Static)) return;

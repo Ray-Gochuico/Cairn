@@ -37,9 +37,16 @@ async function offenders(): Promise<Map<string, string[]>> {
   return out;
 }
 
+// One scan of src per file run, shared by the two tests below (v1.8.0 W4
+// review, as in test-clock-policy.test.ts). SCAN_TIMEOUT_MS is room for a
+// loaded host, not a pin; every assertion is unchanged.
+let scan: Promise<Map<string, string[]>> | undefined;
+const scanOnce = (): Promise<Map<string, string[]>> => (scan ??= offenders());
+const SCAN_TIMEOUT_MS = 60_000;
+
 describe('src module-scope clock policy', () => {
   it('src files reading the clock at module scope ⊆ frozen allowlist', async () => {
-    const found = await offenders();
+    const found = await scanOnce();
     const fresh = [...found.keys()].filter((f) => !MODULE_SCOPE_CLOCK_ALLOWLIST.has(f));
     if (fresh.length > 0) {
       throw new Error(
@@ -54,12 +61,12 @@ describe('src module-scope clock policy', () => {
       );
     }
     expect(fresh).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   it('allowlist hygiene: entries that no longer offend must be pruned', async () => {
-    const found = await offenders();
+    const found = await scanOnce();
     expect([...MODULE_SCOPE_CLOCK_ALLOWLIST].filter((f) => !found.has(f))).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   describe('the module-scope detector (self-tests)', () => {
     const lines = (src: string) => moduleScopeClockReads(src, 'src/fixture.tsx').map((r) => r.line);

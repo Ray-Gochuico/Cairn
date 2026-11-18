@@ -88,9 +88,17 @@ async function offenders(): Promise<Map<string, string[]>> {
   return out;
 }
 
+// One scan of the tree per file run, shared by the two tests below (v1.8.0 W4
+// review): each test scanned on its own, and on a busy machine the pair ran
+// past vitest's 10 s default. SCAN_TIMEOUT_MS is room for a loaded host, not a
+// pin; every assertion is unchanged.
+let scan: Promise<Map<string, string[]>> | undefined;
+const scanOnce = (): Promise<Map<string, string[]>> => (scan ??= offenders());
+const SCAN_TIMEOUT_MS = 60_000;
+
 describe('test real-clock policy', () => {
   it('test files and helpers reading the real clock outside a faked block ⊆ frozen allowlist', async () => {
-    const found = await offenders();
+    const found = await scanOnce();
     const fresh = [...found.keys()].filter((f) => !REAL_CLOCK_ALLOWLIST.has(f));
     if (fresh.length > 0) {
       throw new Error(
@@ -109,13 +117,13 @@ describe('test real-clock policy', () => {
       );
     }
     expect(fresh).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   it('allowlist hygiene: entries that no longer offend must be pruned', async () => {
-    const found = await offenders();
+    const found = await scanOnce();
     const stale = [...REAL_CLOCK_ALLOWLIST].filter((f) => !found.has(f));
     expect(stale).toEqual([]); // fixed a file? shrink the ratchet in the same PR
-  });
+  }, SCAN_TIMEOUT_MS);
 });
 
 // Planted-violation self-tests (C174): each fixture is a string handed to the
