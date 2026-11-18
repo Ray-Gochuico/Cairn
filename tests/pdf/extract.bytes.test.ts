@@ -14,8 +14,27 @@
  * runs in-thread over its LoopbackPort. That port structuredClone()s each
  * message WITH its transfer list, exactly as Worker.postMessage(msg, transfer)
  * does in WKWebView. Clock-free.
+ *
+ * pdfjs-dist 5.7.284 declares engines node >=22.13.0 || >=24 and calls
+ * Promise.withResolvers, which older Node lacks. GitHub CI still runs Node 20,
+ * so on CI below that floor the real-pdf.js proof is skipped, and the skip
+ * names the floor. Anywhere else below the floor it fails, so the local gate
+ * cannot pass without running the proof (ruling CL-W4L1-7).
  */
 import { describe, expect, it } from 'vitest';
+
+const PDFJS_NODE_FLOOR = '>=22.13.0 || >=24';
+
+/** True when `version` (e.g. '22.13.0' or 'v22.13.0') meets pdfjs-dist's engines floor. */
+function pdfjsSupportsNode(version: string): boolean {
+  const [major, minor] = version.replace(/^v/, '').split('.').map(Number);
+  if (major > 22) return true;
+  return major === 22 && minor >= 13;
+}
+
+const NODE_VERSION = process.versions.node;
+const ON_CI = process.env.CI === 'true';
+const SUPPORTED = pdfjsSupportsNode(NODE_VERSION);
 
 /** A one-page PDF whose only text run is `text` (Helvetica, 12 pt). */
 function minimalPdf(text: string): Uint8Array {
@@ -42,30 +61,47 @@ function minimalPdf(text: string): Uint8Array {
 }
 
 describe('extractTextItems keeps the caller bytes whole (C009)', () => {
-  it('parses the statement through pdf.js and leaves the array the importer archives untouched', async () => {
-    const g = globalThis as Record<string, unknown>;
-    if (typeof g.DOMMatrix === 'undefined') {
-      g.DOMMatrix = class {
-        constructor(_init?: unknown) {}
-      };
-    }
-    g.pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
-    const { extractTextItems } = await import('@/pdf/extract');
+  it.skipIf(ON_CI && !SUPPORTED)(
+    `parses the statement through pdf.js and leaves the array the importer archives untouched (needs Node ${PDFJS_NODE_FLOOR}; skipped on CI below it)`,
+    async () => {
+      if (!SUPPORTED) {
+        throw new Error(
+          `Node ${NODE_VERSION} is below pdfjs-dist's engines floor (${PDFJS_NODE_FLOOR}). Run the suite on a supported Node.`,
+        );
+      }
+      const g = globalThis as Record<string, unknown>;
+      if (typeof g.DOMMatrix === 'undefined') {
+        g.DOMMatrix = class {
+          constructor(_init?: unknown) {}
+        };
+      }
+      g.pdfjsWorker = await import('pdfjs-dist/build/pdf.worker.mjs');
+      const { extractTextItems } = await import('@/pdf/extract');
 
-    // Built exactly as TransactionsSectionImporter builds it: a full-buffer view.
-    const file = new File([minimalPdf('01/15 COFFEE SHOP 12.34')], 'stmt.pdf', {
-      type: 'application/pdf',
-    });
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const before = Array.from(bytes);
-    expect(before.length).toBeGreaterThan(300);
+      // Built exactly as TransactionsSectionImporter builds it: a full-buffer view.
+      const file = new File([minimalPdf('01/15 COFFEE SHOP 12.34')], 'stmt.pdf', {
+        type: 'application/pdf',
+      });
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const before = Array.from(bytes);
+      expect(before.length).toBeGreaterThan(300);
 
-    const items = await extractTextItems(bytes);
+      const items = await extractTextItems(bytes);
 
-    // pdf.js really ran over the statement.
-    expect(items.map((i) => i.str).join(' ')).toContain('COFFEE');
-    // The caller's array still holds every byte of the PDF.
-    expect(bytes.byteLength, 'caller bytes after extractTextItems').toBe(before.length);
-    expect(Array.from(bytes)).toEqual(before);
+      // pdf.js really ran over the statement.
+      expect(items.map((i) => i.str).join(' ')).toContain('COFFEE');
+      // The caller's array still holds every byte of the PDF.
+      expect(bytes.byteLength, 'caller bytes after extractTextItems').toBe(before.length);
+      expect(Array.from(bytes)).toEqual(before);
+    },
+  );
+
+  it(`pdfjsSupportsNode implements pdfjs-dist's engines floor (${PDFJS_NODE_FLOOR})`, () => {
+    expect(pdfjsSupportsNode('20.19.5')).toBe(false);
+    expect(pdfjsSupportsNode('22.12.0')).toBe(false);
+    expect(pdfjsSupportsNode('22.13.0')).toBe(true);
+    expect(pdfjsSupportsNode('23.1.0')).toBe(true);
+    expect(pdfjsSupportsNode('24.0.0')).toBe(true);
+    expect(pdfjsSupportsNode('25.9.0')).toBe(true);
   });
 });
