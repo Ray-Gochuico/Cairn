@@ -12,7 +12,7 @@
  * to literal local days (each `it` sets its own).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -103,6 +103,21 @@ async function saveMonthEnd(user: ReturnType<typeof userEvent.setup>, entries: A
 
 function monthEndSection(): HTMLElement {
   return screen.getByText("Enter last month's balances").closest('section') as HTMLElement;
+}
+
+/** Move the faked clock to a later local moment and tell the page, as a tab coming back would. */
+function moveClockTo(localDateTime: string) {
+  vi.setSystemTime(new Date(localDateTime));
+  act(() => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+}
+
+/** Family HSA and Ray Roth IRA, each entered Sep 10 through the setup gate. */
+async function hsaAndRoth(): Promise<[number, number]> {
+  const hsa = await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Family HSA', type: AccountType.ACCOUNT_HSA }, 8_000, '2026-09-10');
+  const roth = await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Ray Roth IRA', type: AccountType.ACCOUNT_ROTH_IRA }, 30_000, '2026-09-10');
+  return [hsa, roth];
 }
 
 describe("C034: the Monthly check-in lists every account the close counts", () => {
@@ -209,6 +224,51 @@ describe("C034: the Monthly check-in lists every account the close counts", () =
     const card = within(monthEndSection()).getByText('Family HSA').closest('[class*="rounded"]') as HTMLElement;
     await waitFor(() => expect(within(card).getByText('Saved')).toBeInTheDocument());
     expect(screen.queryByText("Confirm last month's values")).not.toBeInTheDocument();
+  });
+
+  it('a page left open into December asks for Nov 30 in a fresh box: no "Saved" and no typed figure carried over', async () => {
+    vi.setSystemTime(new Date('2026-11-30T21:00:00'));
+    const [hsa] = await hsaAndRoth();
+    const user = userEvent.setup();
+    renderMonthly();
+    await waitFor(() => monthEndSection());
+    await user.type(screen.getByLabelText('balance for Ray Roth IRA'), '31000');
+    await saveMonthEnd(user, [['Family HSA', '8100']]);
+    moveClockTo('2026-12-01T09:00:00');
+    expect(await screen.findByText('November 2026 close · December 1, 2026')).toBeInTheDocument();
+    const section = monthEndSection();
+    expect(within(section).getAllByText('What was the balance on Nov 30, 2026?')).toHaveLength(2);
+    expect(within(section).queryByText('Saved')).not.toBeInTheDocument();
+    expect(within(section).getByLabelText('balance for Family HSA')).toHaveValue(null);
+    expect(within(section).getByLabelText('balance for Ray Roth IRA')).toHaveValue(null);
+    await saveMonthEnd(user, [['Family HSA', '8200']]);
+    expect(await rowsFor(hsa)).toEqual([
+      ['2026-09-10', 8_000, 'MANUAL'],
+      ['2026-10-30', 8_100, 'MANUAL'],
+      ['2026-11-30', 8_200, 'MANUAL'],
+    ]);
+  });
+
+  it('a card saved for the October close does not hold its account in the month-end section for November', async () => {
+    vi.setSystemTime(new Date('2026-11-30T21:00:00'));
+    const [hsa] = await hsaAndRoth();
+    const user = userEvent.setup();
+    renderMonthly();
+    await waitFor(() => monthEndSection());
+    await saveMonthEnd(user, [['Family HSA', '8100']]);
+    // The HSA's Nov 30 balance is entered elsewhere while this page stays open.
+    await act(async () => {
+      await useSnapshotsStore.getState().upsert({ accountId: hsa, snapshotDate: '2026-11-30', totalValue: 8_150, source: SnapshotSource.MANUAL });
+    });
+    moveClockTo('2026-12-01T09:00:00');
+    expect(await screen.findByText('November 2026 close · December 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Family HSA · as of Nov 30, 2026')).toBeInTheDocument();
+    expect(within(monthEndSection()).queryByText('Family HSA')).not.toBeInTheDocument();
+    // Saving another account's November card does not bring the HSA back.
+    await saveMonthEnd(user, [['Ray Roth IRA', '31000']]);
+    expect(within(monthEndSection()).queryByText('Family HSA')).not.toBeInTheDocument();
+    expect(screen.getByText('Family HSA · as of Nov 30, 2026')).toBeInTheDocument();
+    expect(pendingNow(new Date(2026, 11, 1))).toEqual([]);
   });
 
   it('an untouched month-end Save says "Enter a number" and writes nothing', async () => {

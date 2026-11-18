@@ -84,6 +84,9 @@ function formatPriorContext(current: number, prior: number): string {
   return `${base} (${sign}${Math.abs(pct).toFixed(1)}%)`;
 }
 
+// The month-end hold of a close with nothing saved yet (C034).
+const NO_ACCOUNT_IDS: ReadonlySet<number> = new Set();
+
 // Save-time "today" from LOCAL parts (Wave 11 T10) — a snapshot stamped by
 // the user's calendar day, not UTC.
 function todayISO(): string {
@@ -412,8 +415,8 @@ interface CashBalanceCardProps {
   latestBalance: number | null;
   /** C034: a month-end balance card — asks for the balance on this day and saves it on this day. */
   asOfDate?: string;
-  /** C034: told just before a month-end save, so the card keeps its place once its row lands. */
-  onSaving?: (accountId: number) => void;
+  /** C034: told just before a month-end save (with the close it saves on), so the card keeps its place once its row lands. */
+  onSaving?: (accountId: number, closeDate: string) => void;
 }
 
 function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBalanceCardProps) {
@@ -432,7 +435,7 @@ function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBal
       return;
     }
     if (!account.id) return;
-    if (asOfDate) onSaving?.(account.id);
+    if (asOfDate) onSaving?.(account.id, asOfDate);
     setBusy(true);
     setError(null);
     try {
@@ -714,9 +717,18 @@ export default function MonthlyMiniWindow() {
   );
   // A month-end card writes its row on lastMonthClose, which would re-file the
   // account as a derived card mid-ritual; once saved here it keeps its place.
-  const [enteredCloseIds, setEnteredCloseIds] = useState<ReadonlySet<number>>(new Set());
-  const onCloseEntry = useCallback((accountId: number) => {
-    setEnteredCloseIds((prev) => (prev.has(accountId) ? prev : new Set(prev).add(accountId)));
+  // The hold belongs to that one close (v1.8.0 W4 review): a page left open
+  // into the next month starts the new close with no account held.
+  const [enteredClose, setEnteredClose] = useState<{ close: string; ids: ReadonlySet<number> } | null>(null);
+  const enteredCloseIds = useMemo<ReadonlySet<number>>(
+    () => (enteredClose?.close === lastMonthClose ? enteredClose.ids : NO_ACCOUNT_IDS),
+    [enteredClose, lastMonthClose],
+  );
+  const onCloseEntry = useCallback((accountId: number, closeDate: string) => {
+    setEnteredClose((prev) => {
+      const ids = prev?.close === closeDate ? prev.ids : NO_ACCOUNT_IDS;
+      return ids.has(accountId) ? prev : { close: closeDate, ids: new Set(ids).add(accountId) };
+    });
   }, []);
 
   /**
@@ -1097,8 +1109,9 @@ export default function MonthlyMiniWindow() {
                 description="These accounts have no derived value for this close, so Cairn asks for the balance instead."
               />
               {closeEntryCards.map(({ account, latestBalance }) => (
+                // Keyed by the close too: a new close mounts a fresh, empty card.
                 <CashBalanceCard
-                  key={account.id}
+                  key={`${account.id}:${lastMonthClose}`}
                   account={account}
                   latestBalance={latestBalance}
                   asOfDate={lastMonthClose}
