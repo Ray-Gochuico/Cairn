@@ -271,6 +271,19 @@ describe("C034: the Monthly check-in lists every account the close counts", () =
     expect(pendingNow(new Date(2026, 11, 1))).toEqual([]);
   });
 
+  it('a month-end box and its Save are described by the question that names the close date; a cash card by its own question', async () => {
+    await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Family HSA', type: AccountType.ACCOUNT_HSA }, 8_000, '2026-09-10');
+    await createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'Joint Checking', type: AccountType.ACCOUNT_CASH }, 12_000, '2026-11-14');
+    renderMonthly();
+    await waitFor(() => monthEndSection());
+    const monthEnd = /^What was the balance on Oct 30, 2026\?/;
+    expect(screen.getByLabelText('balance for Family HSA')).toHaveAccessibleDescription(monthEnd);
+    expect(screen.getByRole('button', { name: 'Save Family HSA balance' })).toHaveAccessibleDescription(monthEnd);
+    const today = /^What's the balance as of today\?/;
+    expect(screen.getByLabelText('balance for Joint Checking')).toHaveAccessibleDescription(today);
+    expect(screen.getByRole('button', { name: 'Save Joint Checking balance' })).toHaveAccessibleDescription(today);
+  });
+
   it('an untouched month-end Save says "Enter a number" and writes nothing', async () => {
     const ids = await setupHousehold('2026-09-10');
     const user = userEvent.setup();

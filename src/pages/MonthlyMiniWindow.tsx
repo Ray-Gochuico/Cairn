@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { useLocalToday } from '@/lib/use-local-today';
@@ -427,6 +427,9 @@ function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBal
   const [value, setValue] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // v1.8.0 W4 review: the box and Save are described by the question, so a
+  // month-end card is heard with its close date and a cash card with "today".
+  const questionId = useId();
 
   const save = async () => {
     const n = Number(value);
@@ -459,7 +462,7 @@ function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBal
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="font-medium">{account.name}</div>
-            <div className="text-sm text-muted-foreground">
+            <div id={questionId} className="text-sm text-muted-foreground">
               {asOfDate
                 ? `What was the balance on ${formatDate(asOfDate)}?`
                 : "What's the balance as of today?"}
@@ -492,13 +495,14 @@ function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBal
               type="number"
               step="any"
               aria-label={`balance for ${account.name}`}
+              aria-describedby={questionId}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               placeholder="0.00"
               className="max-w-[200px]"
             />
             {/* Round-3 M3: entity on aria-label — "Save Checking balance". */}
-            <Button size="sm" disabled={busy} aria-label={`Save ${account.name} balance`} onClick={save}>
+            <Button size="sm" disabled={busy} aria-label={`Save ${account.name} balance`} aria-describedby={questionId} onClick={save}>
               Save
             </Button>
             <Button
