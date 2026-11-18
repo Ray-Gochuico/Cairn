@@ -512,10 +512,9 @@ describe('Dashboard spending cards', () => {
 });
 
 describe('Wave A: person-view honesty (D2/D6/D7)', () => {
-  const localMonth = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  // C174 (v1.8.0 W4): one literal local day, and its month for the fixtures
+  // (the month used to be read from the clock at collection, before any hook).
+  const localMonth = '2026-11';
 
   function primeTwoPersons() {
     usePersonsStore.setState({
@@ -525,8 +524,13 @@ describe('Wave A: person-view honesty (D2/D6/D7)', () => {
   }
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
     resetStores();
     primeTwoPersons();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('C8: budget pill drops the verdict and declares the household figure in p1 view', async () => {
@@ -667,8 +671,14 @@ describe('Dashboard pills — excluded accounts', () => {
 });
 
 describe('net-worth MoM pill (Wave 2 §2)', () => {
+  // C174 (v1.8.0 W4): iso() counts days back from a literal local day.
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
     resetStores();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const iso = (daysAgo: number) =>
