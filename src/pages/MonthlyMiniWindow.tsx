@@ -228,7 +228,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               size="sm"
               variant="ghost"
               aria-label={`Cancel editing ${account.name}`}
-              onClick={() => setEditing(false)}
+              onClick={() => {
+                // v1.8.0 W4 review: an alert speaks for the box or the press that
+                // raised it, so Cancel, Edit and Skip each clear it.
+                setError(null);
+                setEditing(false);
+              }}
             >
               Cancel
             </Button>
@@ -252,6 +257,7 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               aria-label={`Edit ${account.name}`}
               onClick={() => {
                 setEditValue('');
+                setError(null);
                 setEditing(true);
               }}
             >
@@ -261,7 +267,10 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               size="sm"
               variant="ghost"
               aria-label={`Skip ${account.name}`}
-              onClick={() => account.id != null && onSkip(account.id)}
+              onClick={() => {
+                setError(null);
+                if (account.id != null) onSkip(account.id);
+              }}
             >
               Skip
             </Button>

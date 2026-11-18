@@ -1020,6 +1020,36 @@ describe('C006: the derived override refuses an emptied field', () => {
     expect(monthlyInputUnconfirmedFor(today, useAccountsStore.getState().accounts, useSnapshotsStore.getState().snapshots)).toBe(true);
   });
 
+  it('after a refused empty Save, Cancel takes "Enter a number" away with the box', async () => {
+    await seedBrokerage();
+    const user = userEvent.setup();
+    const input = await openEditor(user);
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: `Save ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a number');
+    await user.click(screen.getByRole('button', { name: `Cancel editing ${NAME}` }));
+    expect(screen.queryByLabelText(`override value for ${NAME}`)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it("a failed Confirm's alert goes when Edit opens the box, and when the card is skipped", async () => {
+    await seedBrokerage();
+    useSnapshotsStore.setState({ upsert: async () => { throw new Error('write refused'); } } as never);
+    const user = userEvent.setup();
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: `Confirm ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('write refused');
+    await user.click(screen.getByRole('button', { name: `Edit ${NAME}` }));
+    expect(screen.getByLabelText(`override value for ${NAME}`)).toHaveValue(null);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `Cancel editing ${NAME}` }));
+    await user.click(screen.getByRole('button', { name: `Confirm ${NAME}` }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('write refused');
+    await user.click(screen.getByRole('button', { name: `Skip ${NAME}` }));
+    expect(screen.getByText('Skipped')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('a typed 0 is a real $0 and is confirmed', async () => {
     const id = await seedBrokerage();
     const user = userEvent.setup();
