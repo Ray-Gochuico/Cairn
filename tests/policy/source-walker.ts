@@ -7,7 +7,9 @@
  * import from it.
  */
 import { readdir } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
+import type * as TS from 'typescript';
 
 export async function collectSourceFiles(
   dir: string,
@@ -76,4 +78,269 @@ export function stripComments(source: string): string {
     i += 1;
   }
   return out.join('');
+}
+
+// ---------------------------------------------------------------------------
+// Clock reads (v1.8.0 W4, C174). A syntax-tree walk, not a regex, so a clock
+// read inside a string, a template's text or a comment is never seen, and a
+// read is judged by the block it sits in rather than by the whole file.
+// `typescript` is already a devDependency (no new package).
+//
+// Cost (v1.8.0 W4 review): the compiler loads on the first parse, not when
+// this file is imported, because most policy tests import it only to walk a
+// directory and each test file would pay the load again. A source with no
+// `Date` in its text holds no clock read, so it is never parsed, and no parse
+// keeps parent links (nothing here reads `.parent`).
+// ---------------------------------------------------------------------------
+
+let ts: typeof TS;
+
+/** One flagged clock read: 1-based line and the read's own source text. */
+export interface ClockRead {
+  line: number;
+  text: string;
+}
+
+const SUITE_CALLS: ReadonlySet<string> = new Set(['describe', 'suite']);
+const TEST_CALLS: ReadonlySet<string> = new Set(['it', 'test']);
+const HOOK_CALLS: ReadonlySet<string> = new Set(['beforeEach', 'beforeAll', 'afterEach', 'afterAll']);
+const SETUP_HOOKS: ReadonlySet<string> = new Set(['beforeEach', 'beforeAll']);
+const FAKE_CLOCK_METHODS: ReadonlySet<string> = new Set(['useFakeTimers', 'setSystemTime']);
+
+/** Every clock read names `Date`, so a source without it has none to find. */
+function mayReadClock(source: string): boolean {
+  return source.includes('Date');
+}
+
+function parseSource(source: string, fileName: string): TS.SourceFile {
+  ts ??= createRequire(import.meta.url)('typescript') as typeof TS;
+  return ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+}
+
+/** `Date` itself, or `Date` read off an object: `globalThis.Date`, `window.Date`, `self.Date`. */
+function isDateRef(e: TS.Expression): boolean {
+  return (ts.isIdentifier(e) && e.text === 'Date')
+    || (ts.isPropertyAccessExpression(e) && e.name.text === 'Date');
+}
+
+/** A no-argument `new Date()` (or `new Date`) or a no-argument `Date.now()`, plain or qualified (`globalThis.Date.now()`). */
+function isClockRead(node: TS.Node): boolean {
+  if (ts.isNewExpression(node)) {
+    return isDateRef(node.expression)
+      && (node.arguments === undefined || node.arguments.length === 0);
+  }
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+    return isDateRef(node.expression.expression)
+      && node.expression.name.text === 'now' && node.arguments.length === 0;
+  }
+  return false;
+}
+
+function readAt(sf: TS.SourceFile, node: TS.Node): ClockRead {
+  return { line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1, text: node.getText(sf) };
+}
+
+/** The root name of a call's callee: `describe(…)`, `it.each(rows)(…)` and `describe.skip(…)` → the first identifier. */
+function calleeRoot(call: TS.CallExpression): string | null {
+  let e: TS.Expression = call.expression;
+  while (ts.isPropertyAccessExpression(e) || ts.isCallExpression(e)) e = e.expression;
+  return ts.isIdentifier(e) ? e.text : null;
+}
+
+type FnNode = TS.ArrowFunction | TS.FunctionExpression;
+
+function isFnNode(node: TS.Node | undefined): node is FnNode {
+  return node !== undefined && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+}
+
+function unwrapParens(e: TS.Expression): TS.Expression {
+  while (ts.isParenthesizedExpression(e)) e = e.expression;
+  return e;
+}
+
+/**
+ * Names of the functions in this file whose bodies install the fake clock
+ * (`function pin() { vi.useFakeTimers(); … }`, `const pin = () => …`), so a
+ * hook or test that calls one, or passes one as its callback, counts as
+ * setting the clock.
+ */
+function fakeClockHelpers(sf: TS.SourceFile): ReadonlySet<string> {
+  const names = new Set<string>();
+  const visit = (node: TS.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name && node.body && hasDirectFakeCall(node.body)) {
+      names.add(node.name.text);
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && isFnNode(unwrapParens(node.initializer)) && hasDirectFakeCall(unwrapParens(node.initializer))) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return names;
+}
+
+function isFakeClockCall(node: TS.Node): boolean {
+  return ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+    && FAKE_CLOCK_METHODS.has(node.expression.name.text);
+}
+
+function hasDirectFakeCall(node: TS.Node): boolean {
+  let found = false;
+  const visit = (n: TS.Node): void => {
+    if (found) return;
+    if (isFakeClockCall(n)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
+
+/** Does this node install the fake clock: a `vi.useFakeTimers()` / `vi.setSystemTime()` call, or a call to (or pass of) a same-file helper that does? */
+function installsFakeClock(node: TS.Node, helpers: ReadonlySet<string>): boolean {
+  let found = false;
+  const visit = (n: TS.Node): void => {
+    if (found) return;
+    if (isFakeClockCall(n)) {
+      found = true;
+      return;
+    }
+    if (ts.isCallExpression(n)) {
+      if (ts.isIdentifier(n.expression) && helpers.has(n.expression.text)) {
+        found = true;
+        return;
+      }
+      if (n.arguments.some((a) => ts.isIdentifier(a) && helpers.has(a.text))) {
+        found = true;
+        return;
+      }
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(node);
+  return found;
+}
+
+function statementsOf(fn: FnNode): readonly TS.Statement[] {
+  return ts.isBlock(fn.body) ? fn.body.statements : [];
+}
+
+/** A `beforeEach`/`beforeAll` statement whose hook installs the fake clock. */
+function isFakeSetupHook(stmt: TS.Statement, helpers: ReadonlySet<string>): boolean {
+  if (!ts.isExpressionStatement(stmt) || !ts.isCallExpression(stmt.expression)) return false;
+  const root = calleeRoot(stmt.expression);
+  return root !== null && SETUP_HOOKS.has(root) && installsFakeClock(stmt.expression, helpers);
+}
+
+/** A statement that installs the fake clock as it runs (not inside a hook, test or suite). */
+function isDirectFakeStatement(stmt: TS.Statement, helpers: ReadonlySet<string>): boolean {
+  if (!ts.isExpressionStatement(stmt)) return false;
+  const e = stmt.expression;
+  if (ts.isCallExpression(e)) {
+    const root = calleeRoot(e);
+    if (root !== null && (SUITE_CALLS.has(root) || TEST_CALLS.has(root) || HOOK_CALLS.has(root))) return false;
+  }
+  return installsFakeClock(e, helpers);
+}
+
+/**
+ * C174 (a): every no-argument `new Date()` / `Date.now()` in a TEST source
+ * that no fake clock covers when it runs.
+ *
+ * - Inside an `it`/`test` callback or a hook: covered when the callback
+ *   itself installs the fake clock, or a `beforeEach`/`beforeAll` in its
+ *   describe chain (or at module level) does.
+ * - In a function defined in a describe or at module scope (a helper):
+ *   covered by that describe chain's (or the module's) setup hooks only.
+ * - At collection time (a describe body or module body, outside any function,
+ *   or an immediately invoked function there): it runs before every hook, so
+ *   only a fake-clock call made directly in that body or an enclosing one
+ *   covers it.
+ * A same-file helper whose body installs the fake clock counts as installing it.
+ */
+export function uncoveredClockReads(source: string, fileName: string): ClockRead[] {
+  if (!mayReadClock(source)) return [];
+  const sf = parseSource(source, fileName);
+  const helpers = fakeClockHelpers(sf);
+  const out: ClockRead[] = [];
+
+  const walk = (node: TS.Node, runCovered: boolean, collectCovered: boolean, atCollection: boolean): void => {
+    if (isClockRead(node) && !(atCollection ? collectCovered : runCovered)) out.push(readAt(sf, node));
+
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapParens(node.expression);
+      // An immediately invoked function runs where it stands.
+      if (isFnNode(callee)) {
+        node.arguments.forEach((a) => walk(a, runCovered, collectCovered, atCollection));
+        walk(callee.body, runCovered, collectCovered, atCollection);
+        return;
+      }
+      const root = calleeRoot(node);
+      const cbIndex = node.arguments.findIndex((a) => isFnNode(a));
+      if (root !== null && cbIndex >= 0 && (SUITE_CALLS.has(root) || TEST_CALLS.has(root) || HOOK_CALLS.has(root))) {
+        walk(node.expression, runCovered, collectCovered, atCollection);
+        node.arguments.forEach((a, i) => {
+          if (i !== cbIndex) walk(a, runCovered, collectCovered, atCollection);
+        });
+        const cb = node.arguments[cbIndex] as FnNode;
+        if (SUITE_CALLS.has(root)) {
+          const stmts = statementsOf(cb);
+          const direct = stmts.some((s) => isDirectFakeStatement(s, helpers));
+          const hooked = stmts.some((s) => isFakeSetupHook(s, helpers));
+          walk(cb.body, runCovered || hooked || direct, collectCovered || direct, true);
+        } else {
+          walk(cb.body, runCovered || installsFakeClock(cb, helpers), collectCovered, false);
+        }
+        return;
+      }
+    }
+
+    if (ts.isFunctionLike(node)) {
+      ts.forEachChild(node, (child) => walk(child, runCovered, collectCovered, false));
+      return;
+    }
+    ts.forEachChild(node, (child) => walk(child, runCovered, collectCovered, atCollection));
+  };
+
+  const top = sf.statements;
+  const moduleDirect = top.some((s) => isDirectFakeStatement(s, helpers));
+  const moduleHooked = top.some((s) => isFakeSetupHook(s, helpers));
+  ts.forEachChild(sf, (child) => walk(child, moduleHooked || moduleDirect, moduleDirect, true));
+  return out;
+}
+
+/**
+ * C174 (c): every no-argument `new Date()` / `Date.now()` in a SOURCE file
+ * that runs when the module loads: outside every function, method and
+ * instance initializer (a static class field still counts). A read at module
+ * scope is fixed for the life of the page, so it goes stale across midnight
+ * and no test that renders the module can move it.
+ */
+export function moduleScopeClockReads(source: string, fileName: string): ClockRead[] {
+  if (!mayReadClock(source)) return [];
+  const sf = parseSource(source, fileName);
+  const out: ClockRead[] = [];
+  const walk = (node: TS.Node): void => {
+    if (isClockRead(node)) out.push(readAt(sf, node));
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isPropertyDeclaration(node) && !(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Static)) return;
+    if (ts.isCallExpression(node) && isFnNode(unwrapParens(node.expression))) {
+      // An immediately invoked function runs at load: walk into it.
+      node.arguments.forEach(walk);
+      walk((unwrapParens(node.expression) as FnNode).body);
+      return;
+    }
+    ts.forEachChild(node, walk);
+  };
+  ts.forEachChild(sf, walk);
+  return out;
 }

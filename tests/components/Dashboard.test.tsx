@@ -32,6 +32,12 @@ import {
 } from '@/types/enums';
 import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
+import { SqliteAdapter } from '@/db/sqlite-adapter';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
+import { setDatabase } from '@/db/db';
+import { LoansRepo } from '@/domain/loans';
+import { LoanPaymentsRepo } from '@/domain/loan-payments';
+import { makeLoan } from '../factories';
 import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 import { localTodayISO } from '@/lib/dates';
 
@@ -512,10 +518,9 @@ describe('Dashboard spending cards', () => {
 });
 
 describe('Wave A: person-view honesty (D2/D6/D7)', () => {
-  const localMonth = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  // C174 (v1.8.0 W4): one literal local day, and its month for the fixtures
+  // (the month used to be read from the clock at collection, before any hook).
+  const localMonth = '2026-11';
 
   function primeTwoPersons() {
     usePersonsStore.setState({
@@ -525,8 +530,13 @@ describe('Wave A: person-view honesty (D2/D6/D7)', () => {
   }
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
     resetStores();
     primeTwoPersons();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('C8: budget pill drops the verdict and declares the household figure in p1 view', async () => {
@@ -667,8 +677,14 @@ describe('Dashboard pills — excluded accounts', () => {
 });
 
 describe('net-worth MoM pill (Wave 2 §2)', () => {
+  // C174 (v1.8.0 W4): iso() counts days back from a literal local day.
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
     resetStores();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   const iso = (daysAgo: number) =>
@@ -839,9 +855,10 @@ describe('W13 briefing hero', () => {
   });
 
   it('the amber "Monthly input pending" banner is retired — the cadence ROW carries the ritual', () => {
-    // Day 9 (past grace), one non-manual account with NO June snapshot →
-    // pending, 1 balance to confirm.
-    primeStores({ accounts: [{ id: 1 }] });
+    // Day 9 (past grace), one non-manual account tracked since May with NO
+    // June confirmation → pending, 1 balance to confirm. (C034, v1.8.0 W4: an
+    // account with no snapshot at all has nothing to close, so it needs one.)
+    primeStores({ accounts: [{ id: 1 }], snapshotValues: [{ accountId: 1, snapshotDate: '2026-05-29', totalValue: 1_000 }] });
     renderDashboard();
     expect(screen.queryByText('Monthly input pending')).toBeNull();
     const briefing = screen.getByTestId('briefing-card');
@@ -1152,5 +1169,97 @@ describe('v1.8.0 A-2′ (CR-A2-2): UTC-accessor helpers get the local day at UTC
     expect(within(briefing).getByTestId('briefing-row-net-worth').textContent).toContain(
       'Net worth is up +$10,000 (+10.0%).',
     );
+  });
+});
+
+// C034 (v1.8.0 W4): the Dashboard's "Close {Month}" count and the sidebar dot
+// read ONE selector (pendingCloseAccountIds). An account first entered after
+// the month closed has nothing to close. Fake Date only, at a literal local day.
+describe('C034: the close row counts only accounts the closed month tracked', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-14T12:00:00'));
+    resetStores();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a fresh setup on Nov 14 (balances dated that day) shows no October close row', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Ray 401(k)', type: AccountType.ACCOUNT_401K },
+        { id: 2, name: 'Family HSA', type: AccountType.ACCOUNT_HSA },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-11-14', totalValue: 120_000 },
+        { accountId: 2, snapshotDate: '2026-11-14', totalValue: 8_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(within(screen.getByTestId('briefing-card')).queryByText(/^Close October/)).toBeNull();
+  });
+
+  it('accounts entered in September and not confirmed in October are counted', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Ray 401(k)', type: AccountType.ACCOUNT_401K },
+        { id: 2, name: 'Family HSA', type: AccountType.ACCOUNT_HSA },
+        { id: 3, name: 'New IRA', type: AccountType.ACCOUNT_ROTH_IRA },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-09-10', totalValue: 120_000 },
+        { accountId: 2, snapshotDate: '2026-09-10', totalValue: 8_000 },
+        { accountId: 3, snapshotDate: '2026-11-02', totalValue: 30_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(within(screen.getByTestId('briefing-card')).getByText('Close October — confirm 2 balances.')).toBeInTheDocument();
+  });
+});
+
+// G4-09 (v1.8.0 W4): the close row's loan clause counts the payments /monthly
+// still lists as unrecorded (its next-scheduled-payment rule), read from the
+// real repos. Until those reads resolve the row carries no loan count. Fake
+// Date only, at a literal local day (the October close).
+describe('G4-09: the close row counts only the loan payments /monthly still lists', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-15T12:00:00'));
+    resetStores();
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+  });
+  afterEach(async () => {
+    vi.useRealTimers();
+    await db.close();
+  });
+
+  it('3 active loans, 2 recorded, 1 balance unconfirmed: "Close October — confirm 1 balance, record 1 loan payment."', async () => {
+    const repo = new LoansRepo(db);
+    const payments = new LoanPaymentsRepo(db);
+    const ids: number[] = [];
+    for (const [name, bal, first] of [
+      ['Mortgage', 250_000, '2020-01-01'],
+      ['Car loan', 12_000, '2024-03-20'],
+      ['Student loan', 18_000, '2019-09-05'],
+    ] as const) {
+      ids.push(await repo.create(makeLoan({ name, currentBalance: bal, firstPaymentDate: first })));
+    }
+    for (const id of ids.slice(0, 2)) {
+      const loan = (await repo.findById(id))!;
+      const e = (await repo.projectedSchedule(id, '2026-11-15'))[0];
+      await payments.create({ loanId: id, paymentDate: e.paymentDate, principal: e.principal, interest: e.interest, extra: e.extra, source: 'AMORTIZATION' });
+      await repo.update(id, { currentBalance: Math.max(0, loan.currentBalance - (e.principal + e.extra)) });
+    }
+    primeStores({ accounts: [{ id: 1 }], snapshotValues: [{ accountId: 1, snapshotDate: '2026-09-30', totalValue: 1_000 }] });
+    useLoansStore.setState({ loans: await repo.list(), isLoading: false, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const briefing = screen.getByTestId('briefing-card');
+    // While the per-loan reads are pending, no loan count shows.
+    expect(within(briefing).getByText('Close October — confirm 1 balance.')).toBeInTheDocument();
+    expect(await within(briefing).findByText('Close October — confirm 1 balance, record 1 loan payment.')).toBeInTheDocument();
   });
 });

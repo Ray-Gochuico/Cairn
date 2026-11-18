@@ -1,5 +1,5 @@
 import type { BatchStatement, Database } from '@/db/db';
-import { PropertySchema, type Property } from '@/types/schema';
+import { PropertySchema, PropertyRowSchema, type Property } from '@/types/schema';
 import { PropertyType } from '@/types/enums';
 import { AssetValueSnapshotsRepo } from './asset-value-snapshots';
 
@@ -18,7 +18,7 @@ interface PropertyRow {
 }
 
 function rowToProperty(row: PropertyRow): Property {
-  return PropertySchema.parse({
+  return PropertyRowSchema.parse({
     id: row.id,
     householdId: row.household_id,
     ownerPersonId: row.owner_person_id,

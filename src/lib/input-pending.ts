@@ -67,15 +67,16 @@ export function isMonthlyInputPending(
  * the pending semantics can never fork.
  */
 export function hasUnconfirmedLastMonth(input: InputPendingInput): boolean {
-  return input.accountIds.some((accId) => {
-    const confirmed = input.snapshotsLastMonth.some(
-      (s) =>
-        s.accountId === accId &&
-        (s.source === SnapshotSource.USER_CONFIRMED ||
-          s.source === SnapshotSource.MANUAL),
-    );
-    return !confirmed;
-  });
+  return input.accountIds.some((accId) => !confirmedIn(accId, input.snapshotsLastMonth));
+}
+
+/** A USER_CONFIRMED or MANUAL row for this account among last month's rows. */
+function confirmedIn(accountId: number, snapshotsLastMonth: ReadonlyArray<AccountSnapshot>): boolean {
+  return snapshotsLastMonth.some(
+    (s) =>
+      s.accountId === accountId &&
+      (s.source === SnapshotSource.USER_CONFIRMED || s.source === SnapshotSource.MANUAL),
+  );
 }
 
 /**
@@ -120,10 +121,8 @@ export function shouldShowMonthlyPrompt(args: {
 /**
  * Account types whose balances are entered by hand "as of today" rather
  * than auto-derived — the monthly window gives them a balance card, not a
- * confirm-last-month check, so they never count toward "pending".
- * (Dashboard.tsx keeps a private MANUAL_BALANCE_TYPES copy that predates
- * this export; aligning it is deliberately deferred so Wave 1's Dashboard
- * edits merge cleanly — flagged for a later cleanup.)
+ * confirm-last-month check, so they never count toward "pending". The one
+ * copy since v1.8.0 W4 (C034): Dashboard.tsx and MonthlyMiniWindow.tsx read it.
  */
 export const MANUAL_BALANCE_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
   AccountType.ACCOUNT_CASH,
@@ -167,7 +166,30 @@ export function monthlyInputUnconfirmedFor(
   return hasUnconfirmedLastMonth(eligibleInputs(today, accounts, snapshots));
 }
 
-/** The eligible-id + last-month slices both compositions share. */
+/**
+ * C034 (v1.8.0 W4): THE definition of "balances to confirm" for last month's
+ * close. It is the Dashboard's "Close {Month} — confirm N balances" count, the
+ * set /monthly gives one card each, and (through eligibleInputs) the sidebar
+ * dot and the G3 gap. An account counts when its type is not a hand-entered
+ * one, it is in net worth, it has at least one snapshot dated in or before
+ * last month (an account first entered after the month closed has nothing to
+ * close), and last month has no USER_CONFIRMED or MANUAL row for it.
+ * Household-wide; callers that honor ?view= filter the ids themselves.
+ */
+export function pendingCloseAccountIds(
+  today: Date,
+  accounts: ReadonlyArray<{
+    id?: number | null;
+    type: AccountType;
+    excludedFromNetWorth: boolean;
+  }>,
+  snapshots: ReadonlyArray<AccountSnapshot>,
+): number[] {
+  const { accountIds, snapshotsLastMonth } = eligibleInputs(today, accounts, snapshots);
+  return accountIds.filter((id) => !confirmedIn(id, snapshotsLastMonth));
+}
+
+/** The eligible-id + last-month slices every composition shares. */
 function eligibleInputs(
   today: Date,
   accounts: ReadonlyArray<{
@@ -177,15 +199,21 @@ function eligibleInputs(
   }>,
   snapshots: ReadonlyArray<AccountSnapshot>,
 ): InputPendingInput {
+  const lastMonth = lastMonthYyyymm(today);
+  // C034: tracked by the close = at least one snapshot dated in or before
+  // last month (YYYY-MM compares as a string).
+  const trackedByClose = new Set(
+    snapshots.filter((s) => s.snapshotDate.slice(0, 7) <= lastMonth).map((s) => s.accountId),
+  );
   const accountIds = accounts
     .filter(
       (a) =>
         a.id != null &&
         !a.excludedFromNetWorth &&
-        !MANUAL_BALANCE_ACCOUNT_TYPES.has(a.type),
+        !MANUAL_BALANCE_ACCOUNT_TYPES.has(a.type) &&
+        trackedByClose.has(a.id),
     )
     .map((a) => a.id as number);
-  const lastMonth = lastMonthYyyymm(today);
   const snapshotsLastMonth = snapshots.filter(
     (s) => s.snapshotDate.slice(0, 7) === lastMonth,
   );

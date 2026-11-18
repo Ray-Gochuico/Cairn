@@ -326,6 +326,20 @@ export const EquityGrantSchema = z.object({
 });
 export type EquityGrant = z.infer<typeof EquityGrantSchema>;
 
+// C046 (v1.8.0 W4): the READ side of the six clock-capped dates. "Not in the
+// future" is a write rule. Re-checked on every read, against the reading
+// machine's local day, one row dated ahead of it (entered while a time zone
+// ahead, or under a clock later corrected backward) threw inside list() and
+// emptied the whole list. Only the rowTo* mappers parse with these; every
+// create, update() and form resolver keeps the capped schema above. Each
+// swaps only the date's cap, so the inferred types are unchanged.
+export const PersonRowSchema = PersonSchema.extend({ dateOfBirth: isoDateString });
+export const DependentRowSchema = DependentSchema.extend({ dateOfBirth: isoDateString });
+export const ContributionRowSchema = ContributionSchema.extend({ date: isoDateString });
+export const PropertyRowSchema = PropertySchema.extend({ purchaseDate: isoDateString.nullable() });
+export const VehicleRowSchema = VehicleSchema.extend({ purchaseDate: isoDateString.nullable() });
+export const EquityGrantRowSchema = EquityGrantSchema.extend({ grantDate: isoDateString });
+
 export const AssetClass = {
   US_TOTAL_MARKET: 'US_TOTAL_MARKET',
   US_LARGE_CAP: 'US_LARGE_CAP',

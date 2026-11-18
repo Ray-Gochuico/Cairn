@@ -1,5 +1,5 @@
 import type { Database } from '@/db/db';
-import { PersonSchema, type Person } from '@/types/schema';
+import { PersonSchema, PersonRowSchema, type Person } from '@/types/schema';
 
 interface PersonRow {
   id: number;
@@ -44,7 +44,7 @@ function boolToInt(v: boolean | null | undefined): number | null {
 }
 
 function rowToPerson(row: PersonRow): Person {
-  return PersonSchema.parse({
+  return PersonRowSchema.parse({
     id: row.id,
     householdId: row.household_id,
     name: row.name,

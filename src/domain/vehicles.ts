@@ -1,5 +1,5 @@
 import type { BatchStatement, Database } from '@/db/db';
-import { VehicleSchema, type Vehicle } from '@/types/schema';
+import { VehicleSchema, VehicleRowSchema, type Vehicle } from '@/types/schema';
 import { AssetValueSnapshotsRepo } from './asset-value-snapshots';
 import { InterviewAnswersRepo } from './interview-answers-repo';
 
@@ -19,7 +19,7 @@ interface VehicleRow {
 }
 
 function rowToVehicle(row: VehicleRow): Vehicle {
-  return VehicleSchema.parse({
+  return VehicleRowSchema.parse({
     id: row.id,
     householdId: row.household_id,
     ownerPersonId: row.owner_person_id,
