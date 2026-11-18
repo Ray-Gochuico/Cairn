@@ -129,7 +129,9 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
     snapshot.source === SnapshotSource.MANUAL;
   const mode: CardMode = sourceConfirmed ? 'confirmed' : isSkipped ? 'skipped' : localMode;
   const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
+  // C003 (v1.8.0 W4): the override starts empty (the derived figure is shown
+  // large above it), so a typed figure is never glued onto the old one.
+  const [editValue, setEditValue] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // W10 T6: confirming unmounts the focused button; move focus to the
@@ -251,7 +253,10 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               size="sm"
               variant="outline"
               aria-label={`Edit ${account.name}`}
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setEditValue('');
+                setEditing(true);
+              }}
             >
               Edit
             </Button>
@@ -404,9 +409,9 @@ interface CashBalanceCardProps {
 function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
   const [mode, setMode] = useState<CardMode>('pending');
-  const [value, setValue] = useState<string>(
-    latestBalance != null ? String(latestBalance) : '',
-  );
+  // C003 (v1.8.0 W4): the balance box starts empty, so a typed balance is never
+  // glued onto the last one; '(Last entered: $X)' beside the question anchors it.
+  const [value, setValue] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -512,9 +517,9 @@ interface AssetValueCardProps {
 
 function AssetValueCard({ name, currentValue, kind, onSave }: AssetValueCardProps) {
   const [mode, setMode] = useState<CardMode>('pending');
-  const [value, setValue] = useState<string>(
-    currentValue != null ? String(currentValue) : '',
-  );
+  // C003 (v1.8.0 W4): the value box starts empty; the current value stays
+  // beside the question.
+  const [value, setValue] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
