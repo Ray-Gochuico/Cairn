@@ -210,8 +210,13 @@ export function ImportCsvButton({ entity }: Props) {
       ? { current: totalRef.current - queue.length + 1, total: totalRef.current }
       : undefined;
 
-  const advance = () => {
+  // v1.8.0 W4 (PG-4, C041): move past `file` only while it is still the one
+  // on screen. A late call for a file already left behind (a commit that
+  // lands after its file was skipped) moves nothing, so the next file is
+  // never dropped unreviewed.
+  const advancePast = (file: PendingCsv) => {
     setQueue((prev) => {
+      if (prev[0] !== file) return prev;
       const next = prev.slice(1);
       if (next.length === 0) totalRef.current = 0;
       return next;
@@ -299,18 +304,19 @@ export function ImportCsvButton({ entity }: Props) {
           ctx={ctx}
           open={true}
           onOpenChange={(o) => {
-            // Closing the modal (Cancel / Skip this file / Escape / overlay)
-            // advances past just the CURRENT file rather than dropping the
+            // Closing the preview (Cancel / Skip this file / the X, or Escape,
+            // which asks first once rows are edited; an outside click never
+            // closes it, v1.8.0 O2) skips just THIS file rather than the
             // whole batch — so cancelling file 1 of N keeps files 2..N (M4).
-            // A single-file queue advances to empty, which closes the modal
-            // (equivalent to the old behavior). Bulk drop is the explicit
-            // "Cancel all" → onCancelAll below.
-            if (!o) advance();
+            // A single-file queue advances to empty, which closes the modal.
+            // Bulk drop is the explicit "Cancel all" → onCancelAll below.
+            // Nothing closes it while its commit is in flight (PG-4).
+            if (!o) advancePast(current);
           }}
           queuePosition={position}
           queueLength={queue.length}
           onCancelAll={dropAll}
-          onSaved={() => advance()}
+          onSaved={() => advancePast(current)}
         />
       )}
     </>

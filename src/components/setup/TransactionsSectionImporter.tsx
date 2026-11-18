@@ -218,8 +218,13 @@ export default function TransactionsSectionImporter({
     }
   };
 
-  const advance = () => {
+  // v1.8.0 W4 (PG-4, C041): move past `item` only while it is still the one
+  // on screen. A late call for a file already left behind (a save that lands
+  // after its review was closed) moves nothing, so the next file is never
+  // dropped unreviewed.
+  const advancePast = (item: PendingImport) => {
     setQueue((prev) => {
+      if (prev[0] !== item) return prev;
       const next = prev.slice(1);
       if (next.length === 0) totalRef.current = 0;
       return next;
@@ -312,7 +317,7 @@ export default function TransactionsSectionImporter({
           filename={current.filename}
           fileBytes={current.fileBytes}
           existing={transactions}
-          onClose={advance}
+          onClose={() => advancePast(current)}
           onSaved={async (_insertedCount, fileBytes) => {
             // The review stays locked until this settles (PG-4). The rows
             // are saved; the archive reports its own failures as a warning,
@@ -320,7 +325,7 @@ export default function TransactionsSectionImporter({
             try {
               await archivePdfAfterSave(current.filename, fileBytes);
             } finally {
-              advance();
+              advancePast(current);
             }
           }}
         />
@@ -334,12 +339,12 @@ export default function TransactionsSectionImporter({
           onOpenChange={(o) => {
             // Wave-9 S80 (mirrors ImportCsvButton's M4 fix): closing skips
             // just the CURRENT file; "Cancel all" is the explicit batch drop.
-            if (!o) advance();
+            if (!o) advancePast(current);
           }}
           queuePosition={position}
           queueLength={queue.length}
           onCancelAll={dropAll}
-          onSaved={() => advance()}
+          onSaved={() => advancePast(current)}
         />
       )}
     </div>
