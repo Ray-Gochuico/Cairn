@@ -16,6 +16,17 @@ const loadInitialMigration = () =>
 // row is keyed the same way (a UTC key is the next local day on a US evening).
 const todayISO = () => localTodayISO();
 
+// C174 (v1.8.0 W4, A2 chip (b)): the TTL tests run on one literal local day, so
+// the row key is a literal day. SQLite's own 'now' (the test adapter reads the
+// OS clock) still times fetched_at on both sides of the 6-hour check, and the
+// quote's fetchedAt is never read by PriceCache (it stamps CURRENT_TIMESTAMP).
+const PIN_NOW = new Date('2026-11-14T12:00:00');
+const QUOTE_FETCHED_AT = '2026-11-14T17:00:00.000Z';
+function pinLocalDay() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(PIN_NOW);
+}
+
 describe('PriceCache', () => {
   let db: SqliteAdapter;
   let mockYahoo: YahooClient;
@@ -38,13 +49,18 @@ describe('PriceCache', () => {
   });
 
   describe('currentPrice', () => {
+    beforeEach(pinLocalDay);
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('hits cache on a second call within the 6h TTL', async () => {
       quoteFn.mockResolvedValueOnce({
         ticker: 'VTI',
         price: 250.55,
         changePct: 0.5,
         currency: 'USD',
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: QUOTE_FETCHED_AT,
       });
 
       const cache = new PriceCache(db, mockYahoo);
@@ -70,7 +86,7 @@ describe('PriceCache', () => {
         price: 200,
         changePct: 0,
         currency: 'USD',
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: QUOTE_FETCHED_AT,
       });
 
       const cache = new PriceCache(db, mockYahoo);
@@ -231,6 +247,11 @@ describe('PriceCache', () => {
   });
 
   describe('upsert idiom (ON CONFLICT, no rowid churn)', () => {
+    beforeEach(pinLocalDay);
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
     it('historicalPrice re-write of the same (ticker, date) updates in place without cycling the rowid', async () => {
       // Seed an initial row directly so we control fetched_at.
       await db.execute(
@@ -292,7 +313,7 @@ describe('PriceCache', () => {
         price: 321.5,
         changePct: 0,
         currency: 'USD',
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: QUOTE_FETCHED_AT,
       });
 
       const cache = new PriceCache(db, mockYahoo);

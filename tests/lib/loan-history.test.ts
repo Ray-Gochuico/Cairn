@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { localTodayISO } from '@/lib/dates';
 import type { Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 import { loanBalanceHistory } from '@/lib/loan-history';
@@ -21,11 +20,23 @@ const mortgage: Loan = {
   linkedVehicleId: null,
 };
 
+// C174 (v1.8.0 W4, A2 chip (b)): the default-anchor tests below run on one
+// literal local day, so every window end is a literal date, not the clock.
+const TODAY_ISO = '2026-11-14';
+
 describe('loanBalanceHistory', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${TODAY_ISO}T12:00:00`));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('returns the current balance for a single-bucket query at "today"', () => {
     // v1.8.0 A-2′: the default anchor is the LOCAL day, so "today" is too (the UTC day
     // is the next local day on a US evening — a future bucket, not the anchor).
-    const today = localTodayISO();
+    const today = TODAY_ISO;
     const out = loanBalanceHistory(mortgage, today, today, 'DAY');
     expect(out).toHaveLength(1);
     expect(out[0].balance).toBeCloseTo(350000, 0);
@@ -33,14 +44,8 @@ describe('loanBalanceHistory', () => {
 
   it('walks backward — balance was higher 12+ months ago', () => {
     // Use a window that includes today as the anchor so the back-walk has somewhere to start.
-    const today = new Date();
-    const todayISO = today.toISOString().slice(0, 10);
-    const oneYearAgo = new Date(
-      Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), today.getUTCDate()),
-    )
-      .toISOString()
-      .slice(0, 10);
-    const out = loanBalanceHistory(mortgage, oneYearAgo, todayISO, 'MONTH');
+    const oneYearAgo = '2025-11-14';
+    const out = loanBalanceHistory(mortgage, oneYearAgo, TODAY_ISO, 'MONTH');
     expect(out.length).toBeGreaterThan(1);
     // Sorted ascending by bucketEnd; the most recent bucket holds currentBalance,
     // earlier buckets walk backward to a HIGHER balance.
@@ -50,14 +55,14 @@ describe('loanBalanceHistory', () => {
   });
 
   it('returns 0 once the analytical walk goes beyond origination (balance reaches original)', () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = TODAY_ISO;
     const out = loanBalanceHistory(mortgage, '1990-01-01', today, 'YEAR');
     // Some buckets should have balance == 0 (before the loan existed)
     expect(out.some((b) => b.balance === 0)).toBe(true);
   });
 
   it('handles a fully-paid loan (currentBalance=0)', () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = TODAY_ISO;
     const out = loanBalanceHistory(
       { ...mortgage, currentBalance: 0 },
       '2025-01-01',
@@ -69,7 +74,7 @@ describe('loanBalanceHistory', () => {
   });
 
   it('produces bucket ends sorted ascending', () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = TODAY_ISO;
     const out = loanBalanceHistory(mortgage, '2024-01-01', today, 'MONTH');
     for (let i = 1; i < out.length; i++) {
       expect(out[i].bucketEnd > out[i - 1].bucketEnd).toBe(true);
@@ -78,13 +83,8 @@ describe('loanBalanceHistory', () => {
 
   it('holds the balance flat at currentBalance for future buckets (no projection)', () => {
     // Force a window entirely in the future so every bucket is past the anchor.
-    const today = new Date();
-    const future1 = new Date(Date.UTC(today.getUTCFullYear() + 1, 0, 1))
-      .toISOString()
-      .slice(0, 10);
-    const future2 = new Date(Date.UTC(today.getUTCFullYear() + 2, 11, 31))
-      .toISOString()
-      .slice(0, 10);
+    const future1 = '2027-01-01';
+    const future2 = '2028-12-31';
     const out = loanBalanceHistory(mortgage, future1, future2, 'YEAR');
     expect(out.length).toBeGreaterThan(0);
     for (const row of out) {
