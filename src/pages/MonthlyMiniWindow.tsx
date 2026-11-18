@@ -15,7 +15,7 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { AccountType, SnapshotSource } from '@/types/enums';
 import { lastBusinessDayOfMonth } from '@/lib/business-days';
-import { lastMonthYyyymm } from '@/lib/input-pending';
+import { lastMonthYyyymm, MANUAL_BALANCE_ACCOUNT_TYPES, pendingCloseAccountIds } from '@/lib/input-pending';
 import { LoansRepo } from '@/domain/loans';
 import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { getDatabase } from '@/db/db';
@@ -52,18 +52,15 @@ import type { ScheduleEntry } from '@/lib/amortization';
  *      current_balance so subsequent net-worth calculations move forward.
  *   3. **Cash account balances** — CASH/SAVINGS aren't ticker-derivable,
  *      so the user enters today's balance directly (source = MANUAL).
+ *      C034 (v1.8.0 W4): an account the close counts that has no derived row
+ *      in last month gets a month-end balance card instead (the same card,
+ *      asked and saved on last month's close date).
  *   4. **Property/vehicle values** — purely optional nudges; the user
  *      typically updates these quarterly. Always rendered so users can
  *      drop in a new value when they have one.
  */
 
 type CardMode = 'pending' | 'confirmed' | 'skipped';
-
-const MANUAL_BALANCE_TYPES = new Set<AccountType>([
-  AccountType.ACCOUNT_CASH,
-  AccountType.ACCOUNT_SAVINGS,
-  AccountType.ACCOUNT_CRYPTO,
-]);
 
 function formatUSD(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -404,9 +401,13 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
 interface CashBalanceCardProps {
   account: Account;
   latestBalance: number | null;
+  /** C034: a month-end balance card — asks for the balance on this day and saves it on this day. */
+  asOfDate?: string;
+  /** C034: told just before a month-end save, so the card keeps its place once its row lands. */
+  onSaving?: (accountId: number) => void;
 }
 
-function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
+function CashBalanceCard({ account, latestBalance, asOfDate, onSaving }: CashBalanceCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
   const [mode, setMode] = useState<CardMode>('pending');
   // C003 (v1.8.0 W4): the balance box starts empty, so a typed balance is never
@@ -422,12 +423,13 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
       return;
     }
     if (!account.id) return;
+    if (asOfDate) onSaving?.(account.id);
     setBusy(true);
     setError(null);
     try {
       await upsertSnapshot({
         accountId: account.id,
-        snapshotDate: todayISO(),
+        snapshotDate: asOfDate ?? todayISO(),
         totalValue: n,
         source: SnapshotSource.MANUAL,
       });
@@ -446,7 +448,9 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
           <div>
             <div className="font-medium">{account.name}</div>
             <div className="text-sm text-muted-foreground">
-              What's the balance as of today?
+              {asOfDate
+                ? `What was the balance on ${formatDate(asOfDate)}?`
+                : "What's the balance as of today?"}
               {latestBalance != null && (
                 <span className="ml-1">
                   (Last entered: {formatUSD(latestBalance)})
@@ -691,41 +695,77 @@ export default function MonthlyMiniWindow() {
     [visibleAccounts],
   );
 
-  // --- Section 1: derived value cards ----------------------------------------
+  // --- Section 1 + month-end balances: one card per account the close counts --
+
+  // C034 (v1.8.0 W4): the Dashboard's "confirm N balances" counts exactly
+  // these accounts (household), so each gets one card here.
+  const pendingCloseIds = useMemo(
+    () => new Set(pendingCloseAccountIds(today, accounts, snapshots)),
+    [today, accounts, snapshots],
+  );
+  // A month-end card writes its row on lastMonthClose, which would re-file the
+  // account as a derived card mid-ritual; once saved here it keeps its place.
+  const [enteredCloseIds, setEnteredCloseIds] = useState<ReadonlySet<number>>(new Set());
+  const onCloseEntry = useCallback((accountId: number) => {
+    setEnteredCloseIds((prev) => (prev.has(accountId) ? prev : new Set(prev).add(accountId)));
+  }, []);
 
   /**
-   * Only show cards for accounts that already have an AUTO_DERIVED snapshot
-   * for last month's close. If derivation hasn't run yet (no snapshot), we
-   * have nothing to ratify — skip the card rather than fabricate a zero.
+   * (a) A row dated exactly on last month's close: its derived card, whatever
+   *     its source (confirmed cards stay visible with a checkmark so the user
+   *     sees their progress through the ritual).
+   * (b) Else, for an account the close counts, the latest AUTO_DERIVED row
+   *     dated in last month: a derived card of that row ("as of Oct 29"),
+   *     confirmed on that row's own date. Once confirmed it is the latest
+   *     USER_CONFIRMED row of the month and its card stays, checked.
+   * (c) Else, for an account the close counts, a month-end balance card: the
+   *     balance is asked for on the close date and saved there (MANUAL). It
+   *     needs a typed figure, so Confirm all never batches it.
+   * Nothing is fabricated: an account with no row to ratify and nothing to
+   * close gets no card.
    */
-  const allDerivedCards = useMemo(() => {
-    return accounts
-      .filter((a) => a.id !== undefined)
-      .filter((a) => !MANUAL_BALANCE_TYPES.has(a.type))
-      .filter((a) => !a.excludedFromNetWorth)
-      .flatMap((account) => {
-        const snap = snapshots.find(
-          (s) =>
-            s.accountId === account.id &&
-            s.snapshotDate === lastMonthClose,
-        );
-        if (!snap) return [];
-        // T25: the latest value strictly BEFORE this close — the prior-month
-        // anchor. Sourced from the snapshots the page already loads (no store).
-        const prior = snapshots
-          .filter((s) => s.accountId === account.id && s.snapshotDate < lastMonthClose)
-          .sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate))[0];
-        const priorValue: number | null = prior?.totalValue ?? null;
-        // Show the card regardless of source. Pending cards drive the
-        // banner; confirmed cards stay visible with a checkmark so the
-        // user sees their progress through the ritual.
-        return [{ account, snapshot: snap, priorValue }];
-      });
-  }, [accounts, snapshots, lastMonthClose]);
+  const { allDerivedCards, allCloseEntryCards } = useMemo(() => {
+    const derived: Array<{ account: Account; snapshot: AccountSnapshot; priorValue: number | null }> = [];
+    const entry: Array<{ account: Account; latestBalance: number | null }> = [];
+    for (const account of accounts) {
+      if (account.id === undefined || MANUAL_BALANCE_ACCOUNT_TYPES.has(account.type) || account.excludedFromNetWorth) {
+        continue;
+      }
+      const own = snapshots
+        .filter((s) => s.accountId === account.id)
+        .sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate));
+      if (enteredCloseIds.has(account.id)) {
+        entry.push({ account, latestBalance: own[0]?.totalValue ?? null });
+        continue;
+      }
+      const inLastMonth = own.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth);
+      let snap = own.find((s) => s.snapshotDate === lastMonthClose);
+      if (!snap && pendingCloseIds.has(account.id)) {
+        snap = inLastMonth.find((s) => s.source === SnapshotSource.AUTO_DERIVED);
+        if (!snap) {
+          entry.push({ account, latestBalance: own[0]?.totalValue ?? null });
+          continue;
+        }
+      } else if (!snap) {
+        snap = inLastMonth.find((s) => s.source === SnapshotSource.USER_CONFIRMED);
+      }
+      if (!snap) continue;
+      const shown = snap;
+      // T25: the latest value strictly BEFORE the row being ratified — the
+      // prior-month anchor. Sourced from the snapshots the page already loads.
+      const prior = own.find((s) => s.snapshotDate < shown.snapshotDate);
+      derived.push({ account, snapshot: shown, priorValue: prior?.totalValue ?? null });
+    }
+    return { allDerivedCards: derived, allCloseEntryCards: entry };
+  }, [accounts, snapshots, lastMonth, lastMonthClose, pendingCloseIds, enteredCloseIds]);
 
   const derivedCards = useMemo(
     () => allDerivedCards.filter(({ account }) => visibleAccountIdSet.has(account.id!)),
     [allDerivedCards, visibleAccountIdSet],
+  );
+  const closeEntryCards = useMemo(
+    () => allCloseEntryCards.filter(({ account }) => visibleAccountIdSet.has(account.id!)),
+    [allCloseEntryCards, visibleAccountIdSet],
   );
 
   // --- "Confirm all" batch over the derived cards -----------------------------
@@ -869,7 +909,7 @@ export default function MonthlyMiniWindow() {
         (a) =>
           a.type === AccountType.ACCOUNT_CASH ||
           a.type === AccountType.ACCOUNT_SAVINGS ||
-          // Round-3 E1: crypto is a MANUAL_BALANCE_TYPES member (wallets are
+          // Round-3 E1: crypto is a MANUAL_BALANCE_ACCOUNT_TYPES member (wallets are
           // user-entered, Yahoo stays observe-only) — it gets the same
           // monthly balance check-in as cash/savings.
           a.type === AccountType.ACCOUNT_CRYPTO,
@@ -923,10 +963,14 @@ export default function MonthlyMiniWindow() {
 
   // Hidden-count disclosures (constraint 3): the terminal states must never
   // read "done" while a hidden person's items still await review.
+  const stillToClose = (cards: ReadonlyArray<{ account: Account }>) =>
+    cards.filter(({ account }) => pendingCloseIds.has(account.id!)).length;
   const hiddenPendingCount =
     (allPendingDerived.length - pendingDerived.length) +
     (allLoanCards.filter((c) => !c.alreadyRecorded).length -
-      loanCards.filter((c) => !c.alreadyRecorded).length);
+      loanCards.filter((c) => !c.alreadyRecorded).length) +
+    // C034: a hidden month-end card still waiting for its balance.
+    (stillToClose(allCloseEntryCards) - stillToClose(closeEntryCards));
   // Review fix: "still awaiting review" counts hidden PENDING work only —
   // an already-confirmed snapshot or an already-recorded loan payment is not
   // awaiting anything. Cash and asset cards have no confirmed state (manual
@@ -938,11 +982,13 @@ export default function MonthlyMiniWindow() {
 
   const nothingToDo =
     derivedCards.length === 0 &&
+    closeEntryCards.length === 0 &&
     loanCards.length === 0 &&
     cashCards.length === 0 &&
     assetCards.length === 0;
   const householdNothingToDo =
     allDerivedCards.length === 0 &&
+    allCloseEntryCards.length === 0 &&
     allLoanCards.length === 0 &&
     allCashCards.length === 0 &&
     allAssetCards.length === 0;
@@ -1030,6 +1076,24 @@ export default function MonthlyMiniWindow() {
                   isSkipped={account.id != null && skippedIds.has(account.id)}
                   onSkip={onSkip}
                   priorValue={priorValue}
+                />
+              ))}
+            </section>
+          )}
+
+          {closeEntryCards.length > 0 && (
+            <section className="space-y-2">
+              <SectionTitle
+                title="Enter last month's balances"
+                description="These accounts have no derived value for this close, so Cairn asks for the balance instead."
+              />
+              {closeEntryCards.map(({ account, latestBalance }) => (
+                <CashBalanceCard
+                  key={account.id}
+                  account={account}
+                  latestBalance={latestBalance}
+                  asOfDate={lastMonthClose}
+                  onSaving={onCloseEntry}
                 />
               ))}
             </section>
