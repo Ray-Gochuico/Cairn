@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { categorize } from '@/lib/categorize';
-import { transactionDedupKey, filterDuplicates } from '@/lib/dedup';
+import { filterDuplicates } from '@/lib/dedup';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -142,11 +142,14 @@ export function PdfReviewModal({
         result.transactions,
         existing,
       );
-      const dupKeys = new Set(dupTransactions.map(transactionDedupKey));
+      // v1.8.0 W4 (C040): flag exactly the rows filterDuplicates called copies,
+      // by identity (the parser emits one object per row). By key, every copy
+      // of a charge listed twice was flagged, the one it kept as fresh too.
+      const dupRows = new Set(dupTransactions);
 
       const built: EditableRow[] = result.transactions.map((t) => {
         const predictedCategoryId = categorize(t.merchant, freshOverrides, seeds);
-        const isDuplicate = dupKeys.has(transactionDedupKey(t));
+        const isDuplicate = dupRows.has(t);
         const { propertyId, vehicleId } = defaultPropertyVehicleFromFresh(predictedCategoryId);
         return {
           date: t.date,
