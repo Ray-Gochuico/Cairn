@@ -59,6 +59,12 @@ export async function archiveStatementPdf(
   filename: string,
   bytes: Uint8Array,
 ): Promise<string | null> {
+  // v1.8.0 W4 (C009): an empty array is not a statement. pdf.js once emptied
+  // the importer's copy and the archive wrote 0-byte files without a word;
+  // write nothing and say so instead.
+  if (bytes.byteLength === 0) {
+    return 'Could not archive the statement PDF: the copy Cairn held was empty, so nothing was written. The import itself was saved.';
+  }
   try {
     if (!(await exists(folder))) {
       return `Statements archive folder not found: ${folder}. The import was saved; the PDF was not archived.`;

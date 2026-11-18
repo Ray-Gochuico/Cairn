@@ -109,3 +109,40 @@ describe('archiveStatementPdf', () => {
     expect(warning).toContain('disk full');
   });
 });
+
+// v1.8.0 W4 (C009): an empty array is never written as an "archived" PDF.
+describe('archiveStatementPdf — empty bytes (C009)', () => {
+  const EMPTY_WARNING =
+    'Could not archive the statement PDF: the copy Cairn held was empty, so nothing was written. The import itself was saved.';
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockExists.mockResolvedValue(true);
+    mockReadDir.mockResolvedValue([]);
+    mockWriteFile.mockResolvedValue(undefined);
+    mockJoin.mockImplementation(async (...parts: string[]) => parts.join('/'));
+  });
+
+  it('a zero-length array writes nothing and returns the empty-copy warning', async () => {
+    const warning = await archiveStatementPdf('/Users/me/Statements', 'mar.pdf', new Uint8Array(0));
+    expect(warning).toBe(EMPTY_WARNING);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(mockReadDir).not.toHaveBeenCalled();
+  });
+
+  it('an array whose buffer was transferred away (detached) is treated the same', async () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    structuredClone(bytes.buffer, { transfer: [bytes.buffer] });
+    expect(bytes.byteLength).toBe(0);
+    const warning = await archiveStatementPdf('/Users/me/Statements', 'mar.pdf', bytes);
+    expect(warning).toBe(EMPTY_WARNING);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('a one-byte array is still written (the guard is exactly zero length)', async () => {
+    const one = new Uint8Array([0x25]);
+    const warning = await archiveStatementPdf('/Users/me/Statements', 'mar.pdf', one);
+    expect(warning).toBeNull();
+    expect(mockWriteFile).toHaveBeenCalledWith('/Users/me/Statements/mar.pdf', one);
+  });
+});
