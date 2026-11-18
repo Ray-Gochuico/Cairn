@@ -76,6 +76,10 @@ import { useSettingsStore } from '@/stores/settings-store';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 
 let db: SqliteAdapter;
+/** The review's async start (the extract module's dynamic import, the parse,
+ *  five store loads on a migrated database) can outrun RTL's 1 s default
+ *  under a loaded suite; this budget stays below vitest's 10 s testTimeout. */
+const REVIEW_OPENS = { timeout: 5000 };
 
 beforeEach(async () => {
   h.handedToPdfjs.length = 0;
@@ -117,7 +121,7 @@ describe('TransactionsSectionImporter archives the whole statement PDF (C009)', 
     const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [pdf], configurable: true });
     fireEvent.change(input);
-    expect(await screen.findByDisplayValue('ALPHA MART')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('ALPHA MART', {}, REVIEW_OPENS)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(warnings).toEqual([null]));

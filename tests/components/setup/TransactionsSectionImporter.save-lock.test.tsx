@@ -53,6 +53,10 @@ import TransactionsSectionImporter from '@/components/setup/TransactionsSectionI
 
 const ASK = 'Discard unsaved entries?';
 const ORIGINAL_CREATE_MANY = useTransactionsStore.getState().createMany;
+/** A review's async start (the extract module's dynamic import, the parse,
+ *  five store loads on a migrated database) can outrun RTL's 1 s default
+ *  under a loaded suite; this budget stays below vitest's 10 s testTimeout. */
+const REVIEW_OPENS = { timeout: 5000 };
 let db: SqliteAdapter;
 
 beforeEach(async () => {
@@ -91,7 +95,7 @@ async function queueTwoPdfs() {
   const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
   Object.defineProperty(input, 'files', { value: [a, b], configurable: true });
   fireEvent.change(input);
-  expect(await screen.findByDisplayValue('ALPHA MART')).toBeInTheDocument();
+  expect(await screen.findByDisplayValue('ALPHA MART', {}, REVIEW_OPENS)).toBeInTheDocument();
   return { user };
 }
 
@@ -128,7 +132,7 @@ describe('PDF review: locked from Save until the importer is done with the PDF (
     await act(async () => { write.release(); });
     await waitFor(() => expect(h.archives).toHaveLength(1));
     await act(async () => { h.archives[0](); });
-    expect(await screen.findByDisplayValue('BRAVO CAFE')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
     await settle();
     expect(screen.getByDisplayValue('BRAVO CAFE')).toBeInTheDocument();
     expect(await stored()).toEqual(['ALPHA MART']);
@@ -143,7 +147,7 @@ describe('PDF review: locked from Save until the importer is done with the PDF (
     expect(screen.getByRole('button', { name: /^Sav/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     await act(async () => { h.archives[0](); });
-    expect(await screen.findByDisplayValue('BRAVO CAFE')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
     await settle();
@@ -176,7 +180,7 @@ describe('PDF review: locked from Save until the importer is done with the PDF (
     await act(async () => { write.release(); });
     await waitFor(() => expect(h.archives).toHaveLength(1));
     await act(async () => { h.archives[0](); });
-    expect(await screen.findByDisplayValue('BRAVO CAFE')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('BRAVO CAFE', {}, REVIEW_OPENS)).toBeInTheDocument();
     expect(await stored()).toEqual(['ALPHA MARKET']);
   });
 });
