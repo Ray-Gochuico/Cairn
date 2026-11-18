@@ -13,7 +13,10 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({ release: null as (() => void) | null }));
+const h = vi.hoisted(() => ({
+  release: null as (() => void) | null,
+  fail: null as (() => void) | null,
+}));
 
 vi.mock('@/lib/import/commit', () => ({
   commitTransactionImport: vi.fn(),
@@ -34,6 +37,8 @@ vi.mock('@/db/db', () => ({
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import { ImportPreviewModal } from '@/components/import/ImportPreviewModal';
+import { commitTransactionImport } from '@/lib/import/commit';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 
@@ -116,5 +121,76 @@ describe('CSV import preview: locked while its commit is in flight (PG-4, C041)'
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
     await land();
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  // Fix round: the commit has taken the rows, so the preview is read-only
+  // until it lands; an edit made then would not be committed.
+  it('mid-commit the rows and Update all / Skip all are read-only, and file 2 comes up live', async () => {
+    await startCommit(2);
+    const removes = () => screen.getAllByRole('button', { name: 'Remove row' });
+    expect(removes()).toHaveLength(2);
+    removes().forEach((b) => expect(b).toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Update all' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Skip all' })).toBeDisabled();
+    // A cell opened for editing opens read-only. (A browser still delivers a
+    // click on the cell's text, a span; user-event refuses every click inside
+    // a disabled fieldset, so the click is dispatched directly.)
+    fireEvent.click(screen.getByText('1000'));
+    expect(screen.getByDisplayValue('1000')).toBeDisabled();
+    await land();
+    expect(await screen.findByText(/File 2 of 2/)).toBeInTheDocument();
+    expect(removes()).toHaveLength(2);
+    removes().forEach((b) => expect(b).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Update all' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Skip all' })).toBeEnabled();
+  });
+});
+
+describe('CSV transaction preview: Flip signs and the duplicate choices are read-only mid-commit (PG-4 fix round)', () => {
+  const FLIP = 'Flip signs (treat negatives as spending)';
+  // ALPHA is saved already (a duplicate); ALPHA TWO is new. Both negative,
+  // so the preview offers Flip signs.
+  const parsed = {
+    headers: ['date', 'account', 'amount', 'merchant'],
+    rows: [
+      { date: '2026-04-01', account: 'Chase Checking', amount: '-12.00', merchant: 'ALPHA' },
+      { date: '2026-04-02', account: 'Chase Checking', amount: '-8.50', merchant: 'ALPHA TWO' },
+    ],
+    errors: [],
+  };
+  const ctx = {
+    accounts: [{ id: 1, name: 'Chase Checking' }],
+    categories: [],
+    persons: [],
+    existingTransactionKeys: new Set(['1|2026-04-01|-12|alpha']),
+  };
+
+  beforeEach(() => {
+    h.fail = null;
+    vi.mocked(commitTransactionImport).mockImplementation(
+      () => new Promise((_resolve, reject) => { h.fail = () => reject(new Error('disk full')); }),
+    );
+  });
+
+  it('mid-commit Flip signs, the duplicate choices and the rows are disabled; a failed commit gives them back', async () => {
+    const user = userEvent.setup();
+    render(<ImportPreviewModal entity="transaction" parsed={parsed} ctx={ctx} open onOpenChange={vi.fn()} />);
+    expect(screen.getByText('1 duplicate')).toBeInTheDocument();
+    const controls = () => [
+      screen.getByRole('checkbox', { name: FLIP }),
+      screen.getByRole('button', { name: 'Insert all duplicates' }),
+      screen.getByRole('button', { name: 'Skip all duplicates' }),
+      screen.getByDisplayValue('Skip'),
+      ...screen.getAllByRole('button', { name: 'Remove row' }),
+    ];
+    expect(controls()).toHaveLength(6);
+    await user.click(screen.getByRole('button', { name: /^Commit \(/ }));
+    await waitFor(() => expect(h.fail).not.toBeNull());
+    controls().forEach((c) => expect(c).toBeDisabled());
+    await user.click(screen.getByRole('checkbox', { name: FLIP }));
+    expect(screen.getByRole('checkbox', { name: FLIP })).not.toBeChecked();
+    await act(async () => { h.fail!(); });
+    expect(await screen.findByText('Commit failed: disk full')).toBeInTheDocument();
+    controls().forEach((c) => expect(c).toBeEnabled());
   });
 });

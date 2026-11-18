@@ -410,6 +410,7 @@ export function ImportPreviewModal({
         <SummaryBar
           state={state as unknown as ImportPreviewState<ImportEntity>}
           entity={entity}
+          locked={committing}
         />
 
         {showFlipPrompt && (
@@ -420,6 +421,7 @@ export function ImportPreviewModal({
               <input
                 type="checkbox"
                 checked={flipSigns}
+                disabled={committing}
                 onChange={(e) => setFlipSigns(e.target.checked)}
               />
               Flip signs (treat negatives as spending)
@@ -430,8 +432,12 @@ export function ImportPreviewModal({
             (max-h-[55vh] overflow-auto) so the virtualizer can measure a finite
             viewport; an outer scroll wrapper here would nest two scrollers and
             defeat the windowing. The empty-state path has no scroll and renders
-            fine inside this plain container. */}
-        <div>{previewTable}</div>
+            fine inside this plain container. While a commit is in flight the
+            fieldset disables every control in the rows, a cell's edit field
+            included: the commit has taken the rows, so an edit made then would
+            not be committed (v1.8.0 W4 fix round). The bulk choices and Flip
+            signs above are disabled with them. */}
+        <fieldset disabled={committing}>{previewTable}</fieldset>
 
         {commitError && (
           <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
@@ -477,9 +483,12 @@ export function ImportPreviewModal({
 function SummaryBar({
   state,
   entity,
+  locked,
 }: {
   state: ImportPreviewState<ImportEntity>;
   entity: ImportEntity;
+  /** A commit is in flight: the bulk choices change nothing it writes. */
+  locked: boolean;
 }) {
   return (
     <div className="flex gap-2 items-center text-xs flex-wrap">
@@ -502,20 +511,20 @@ function SummaryBar({
       <div className="ml-auto flex gap-2">
         {entity === 'snapshot' && (
           <>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('update')}>
               Update all
             </Button>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('skip')}>
               Skip all
             </Button>
           </>
         )}
         {(entity === 'transaction' || entity === 'contribution') && state.summary.duplicate > 0 && (
           <>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('update')}>
               Insert all duplicates
             </Button>
-            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+            <Button size="sm" variant="outline" disabled={locked} onClick={() => state.bulkSetConflict('skip')}>
               Skip all duplicates
             </Button>
           </>
@@ -525,6 +534,7 @@ function SummaryBar({
             size="sm"
             variant="outline"
             className="text-destructive-soft-foreground"
+            disabled={locked}
             onClick={() => state.deleteAllErrors()}
           >
             Delete errors
