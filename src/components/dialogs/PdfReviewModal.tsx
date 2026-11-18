@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { categorize } from '@/lib/categorize';
+import { formatCurrencyCents } from '@/lib/format';
 import { filterDuplicates } from '@/lib/dedup';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
@@ -257,6 +258,18 @@ export function PdfReviewModal({
   };
 
   const includedCount = rows.filter((r) => r.included).length;
+  // v1.8.0 W4 (G2-10 ⚑): the totals of the rows to be saved, to check against
+  // the statement's own. Charges are the positive amounts (money spent, the
+  // sign convention of src/pdf/types.ts), credits the negative ones, shown as
+  // amounts. Summed in whole cents.
+  let chargesCents = 0;
+  let creditsCents = 0;
+  for (const r of rows) {
+    if (!r.included) continue;
+    const cents = Math.round(r.amount * 100);
+    if (cents > 0) chargesCents += cents;
+    else creditsCents -= cents;
+  }
 
   return (
     <Dialog
@@ -492,7 +505,15 @@ export function PdfReviewModal({
 
         <DialogFooter className="px-6 py-4 border-t flex items-center justify-between sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            {includedCount} of {rows.length} rows will be saved
+            {rows.length > 0 && (
+              <span>
+                Charges {formatCurrencyCents(chargesCents / 100)} · Credits{' '}
+                {formatCurrencyCents(creditsCents / 100)} ·{' '}
+              </span>
+            )}
+            <span>
+              {includedCount} of {rows.length} rows will be saved
+            </span>
           </div>
           <div className="flex items-center gap-3">
             {/* Wave-4 a11y: live region mounts EMPTY so SRs announce the
