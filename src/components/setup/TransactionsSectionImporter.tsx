@@ -39,6 +39,13 @@ interface BatchImportError {
   message: string;
 }
 
+/** v1.8.0 W4 fix round (PG-4, ⚑ D-W4L1-14): how long a saved PDF review waits
+ *  for the statements archive before the queue moves on without it. */
+const ARCHIVE_WAIT_MS = 10_000;
+/** ⚑ CC-4: reported when an archive outlasts that wait. The archive keeps
+ *  going, and its own result (a warning, or null) replaces this line. */
+const STILL_ARCHIVING = 'Still archiving the statement PDF. The import itself was saved.';
+
 interface Props {
   /**
    * Optional callback fired after a successful PDF archive step, with a
@@ -46,6 +53,12 @@ interface Props {
    * page so the user sees archive failures next to the page header.
    */
   onArchiveWarning?: (warning: string | null) => void;
+  /**
+   * How long a saved PDF review waits for the archive step before the queue
+   * moves on (default 10 s). The archive keeps going and reports when it
+   * settles. Tests pass a short wait.
+   */
+  archiveWaitMs?: number;
 }
 
 /**
@@ -62,6 +75,7 @@ interface Props {
  */
 export default function TransactionsSectionImporter({
   onArchiveWarning,
+  archiveWaitMs = ARCHIVE_WAIT_MS,
 }: Props = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<PendingImport[]>([]);
@@ -75,6 +89,10 @@ export default function TransactionsSectionImporter({
   // processFiles, never inside a setQueue updater (StrictMode runs those
   // twice), so a PDF's id never changes while its review is open.
   const nextPdfIdRef = useRef<number>(0);
+  // v1.8.0 W4 fix round: the last archive started. Each one waits for it, so
+  // archives run one at a time, in save order, and two PDFs never pick the
+  // same free name in the folder.
+  const archiveChainRef = useRef<Promise<void>>(Promise.resolve());
   const [dragOver, setDragOver] = useState(false);
 
   const accounts = useAccountsStore((s) => s.accounts);
@@ -209,17 +227,38 @@ export default function TransactionsSectionImporter({
       settings = useSettingsStore.getState().settings;
     }
     const folder = settings?.statementsFolderPath ?? null;
+    if (!folder) {
+      onArchiveWarning?.(null);
+      return;
+    }
     // archiveStatementPdf never throws — a failure returns a warning string.
-    if (folder) {
+    // (It runs whether or not anyone listens: the setup mounts pass no
+    // onArchiveWarning, and an optional call skips its arguments.)
+    const archived = archiveChainRef.current.then(async () => {
       const warning = await archiveStatementPdf(folder, filename, fileBytes);
       onArchiveWarning?.(warning);
-    } else {
-      onArchiveWarning?.(null);
-    }
+    });
+    archiveChainRef.current = archived;
+    // v1.8.0 W4 fix round (PG-4): the review stays locked until this returns,
+    // so it waits for the folder at most archiveWaitMs. A folder that does
+    // not answer (a dropped network share) must not keep Save, Cancel, the X
+    // and Escape shut for good; the archive keeps going and reports itself.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const waited = new Promise<'waited'>((resolve) => {
+      timer = setTimeout(() => resolve('waited'), archiveWaitMs);
+    });
+    const first = await Promise.race([archived, waited]);
+    clearTimeout(timer);
+    if (first === 'waited') onArchiveWarning?.(STILL_ARCHIVING);
   };
 
-  const advance = () => {
+  // v1.8.0 W4 (PG-4, C041): move past `item` only while it is still the one
+  // on screen. A late call for a file already left behind (a save that lands
+  // after its review was closed) moves nothing, so the next file is never
+  // dropped unreviewed.
+  const advancePast = (item: PendingImport) => {
     setQueue((prev) => {
+      if (prev[0] !== item) return prev;
       const next = prev.slice(1);
       if (next.length === 0) totalRef.current = 0;
       return next;
@@ -312,10 +351,16 @@ export default function TransactionsSectionImporter({
           filename={current.filename}
           fileBytes={current.fileBytes}
           existing={transactions}
-          onClose={advance}
+          onClose={() => advancePast(current)}
           onSaved={async (_insertedCount, fileBytes) => {
-            await archivePdfAfterSave(current.filename, fileBytes);
-            advance();
+            // The review stays locked until this settles (PG-4). The rows
+            // are saved; the archive reports its own failures as a warning,
+            // and the queue moves on whatever happens there.
+            try {
+              await archivePdfAfterSave(current.filename, fileBytes);
+            } finally {
+              advancePast(current);
+            }
           }}
         />
       )}
@@ -328,12 +373,12 @@ export default function TransactionsSectionImporter({
           onOpenChange={(o) => {
             // Wave-9 S80 (mirrors ImportCsvButton's M4 fix): closing skips
             // just the CURRENT file; "Cancel all" is the explicit batch drop.
-            if (!o) advance();
+            if (!o) advancePast(current);
           }}
           queuePosition={position}
           queueLength={queue.length}
           onCancelAll={dropAll}
-          onSaved={() => advance()}
+          onSaved={() => advancePast(current)}
         />
       )}
     </div>

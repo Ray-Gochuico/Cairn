@@ -1,4 +1,4 @@
-import { writeFile, readDir, exists } from '@tauri-apps/plugin-fs';
+import { writeFile, readDir } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 
 /**
@@ -41,12 +41,28 @@ export function resolveArchivePath(filename: string, existingNames: string[]): s
 }
 
 /**
+ * The OS errors that mean "there is no folder at this path": ENOENT (2) and
+ * ENOTDIR (20), and on Windows ERROR_PATH_NOT_FOUND (3) and ERROR_DIRECTORY
+ * (267). The fs plugin's readDir rejects with a message that ends in
+ * "(os error N)".
+ */
+const FOLDER_NOT_FOUND_RE = /\(os error (2|3|20|267)\)/;
+
+/**
  * Best-effort: copy a confirmed import's PDF bytes into the archive `folder`.
  *
  * Returns `null` on success, or a human-readable warning string on any
- * failure (folder missing, permission denied, write error). It NEVER throws
- * — the design spec mandates that an archiving failure surfaces a
- * non-blocking warning and never fails the import that triggered it.
+ * failure (folder missing, permission denied, write error, empty bytes). It
+ * NEVER throws — the design spec mandates that an archiving failure surfaces
+ * a non-blocking warning and never fails the import that triggered it.
+ *
+ * The folder is a path the user picked in Settings, often in an earlier
+ * session, when the dialog's session-only fs grant is gone. So the folder is
+ * read with readDir and written with writeFile, both of which have a static
+ * $HOME scope (src-tauri/capabilities/default.json), and never probed with
+ * exists(), which has none (v1.8.0 W4, C009). A readDir rejection whose OS
+ * error means "no such folder" reads as the folder-not-found warning; any
+ * other failure reads as the could-not-archive warning with its reason.
  *
  * Impure: it touches the `tauri-plugin-fs` API and the async `join` from
  * `@tauri-apps/api/path` (platform-correct separators — `\` on Windows).
@@ -59,11 +75,23 @@ export async function archiveStatementPdf(
   filename: string,
   bytes: Uint8Array,
 ): Promise<string | null> {
+  // v1.8.0 W4 (C009): an empty array is not a statement. pdf.js once emptied
+  // the importer's copy and the archive wrote 0-byte files without a word;
+  // write nothing and say so instead.
+  if (bytes.byteLength === 0) {
+    return 'Could not archive the statement PDF: the copy Cairn held was empty, so nothing was written. The import itself was saved.';
+  }
   try {
-    if (!(await exists(folder))) {
-      return `Statements archive folder not found: ${folder}. The import was saved; the PDF was not archived.`;
+    let entries: Awaited<ReturnType<typeof readDir>>;
+    try {
+      entries = await readDir(folder);
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      if (FOLDER_NOT_FOUND_RE.test(reason)) {
+        return `Statements archive folder not found: ${folder}. The import was saved; the PDF was not archived.`;
+      }
+      throw e;
     }
-    const entries = await readDir(folder);
     const existingNames = entries.map((e) => e.name);
     const name = resolveArchivePath(filename, existingNames);
     const target = await join(folder, name);

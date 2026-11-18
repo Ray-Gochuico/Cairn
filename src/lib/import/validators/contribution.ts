@@ -1,6 +1,7 @@
 // src/lib/import/validators/contribution.ts
 import { ContributionSource } from '@/types/enums';
 import type { Contribution } from '@/types/schema';
+import { contributionDupKey } from '@/lib/import/conflict-detector';
 import type {
   CellError,
   PreviewRow,
@@ -113,8 +114,8 @@ export function validateContributionRow(
   if (errors.length > 0) {
     status = 'error';
   } else if (ctx.existingContributionDupKeys) {
-    const key = `${accountId}::${date}::${amount}`;
-    if (ctx.existingContributionDupKeys.has(key)) {
+    // The saved side builds its keys with the same helper (C040).
+    if (ctx.existingContributionDupKeys.has(contributionDupKey(resolved))) {
       status = 'duplicate';
     }
   }

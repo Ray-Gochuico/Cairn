@@ -35,6 +35,7 @@ import { vehicleTemplateCsv } from '@/lib/import/validators/vehicle';
 import { equityGrantTemplateCsv } from '@/lib/import/validators/equity-grant';
 import { contributionTemplateCsv } from '@/lib/import/validators/contribution';
 import { assetValueSnapshotTemplateCsv } from '@/lib/import/validators/asset-value-snapshot';
+import { CTX_SOURCES, type CtxSource } from '@/lib/import/ctx-sources';
 import type { ImportEntity, ValidationContext } from '@/lib/import/types';
 
 const ENTITY_LABEL: Record<ImportEntity, string> = {
@@ -110,6 +111,10 @@ export function ImportCsvButton({ entity }: Props) {
   const contributions = useContributionsStore((s) => s.contributions);
   const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
 
+  // v1.8.0 W4 (O1 chip (e)): a store the entity does not read stands in as
+  // null, so its reloads never change the memo's inputs (CTX_SOURCES).
+  const reads = CTX_SOURCES[entity];
+  const dep = <T,>(source: CtxSource, list: T): T | null => (reads.includes(source) ? list : null);
   const ctx: ValidationContext = useMemo(() => ({
     accounts: accounts.map((a) => ({ id: a.id!, name: a.name })),
     persons: persons.map((p) => ({ id: p.id!, name: p.name })),
@@ -157,19 +162,20 @@ export function ImportCsvButton({ entity }: Props) {
       entity === 'asset_value_snapshot'
         ? buildAssetValueSnapshotConflictMap(assetValueSnapshots)
         : undefined,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [
-    accounts,
-    persons,
-    categories,
-    snapshots,
-    transactions,
-    holdings,
-    loans,
-    properties,
-    vehicles,
-    equityGrants,
-    contributions,
-    assetValueSnapshots,
+    dep('accounts', accounts),
+    dep('persons', persons),
+    dep('categories', categories),
+    dep('snapshots', snapshots),
+    dep('transactions', transactions),
+    dep('holdings', holdings),
+    dep('loans', loans),
+    dep('properties', properties),
+    dep('vehicles', vehicles),
+    dep('equityGrants', equityGrants),
+    dep('contributions', contributions),
+    dep('assetValueSnapshots', assetValueSnapshots),
     entity,
   ]);
 
@@ -210,8 +216,13 @@ export function ImportCsvButton({ entity }: Props) {
       ? { current: totalRef.current - queue.length + 1, total: totalRef.current }
       : undefined;
 
-  const advance = () => {
+  // v1.8.0 W4 (PG-4, C041): move past `file` only while it is still the one
+  // on screen. A late call for a file already left behind (a commit that
+  // lands after its file was skipped) moves nothing, so the next file is
+  // never dropped unreviewed.
+  const advancePast = (file: PendingCsv) => {
     setQueue((prev) => {
+      if (prev[0] !== file) return prev;
       const next = prev.slice(1);
       if (next.length === 0) totalRef.current = 0;
       return next;
@@ -299,18 +310,19 @@ export function ImportCsvButton({ entity }: Props) {
           ctx={ctx}
           open={true}
           onOpenChange={(o) => {
-            // Closing the modal (Cancel / Skip this file / Escape / overlay)
-            // advances past just the CURRENT file rather than dropping the
+            // Closing the preview (Cancel / Skip this file / the X, or Escape,
+            // which asks first once rows are edited; an outside click never
+            // closes it, v1.8.0 O2) skips just THIS file rather than the
             // whole batch — so cancelling file 1 of N keeps files 2..N (M4).
-            // A single-file queue advances to empty, which closes the modal
-            // (equivalent to the old behavior). Bulk drop is the explicit
-            // "Cancel all" → onCancelAll below.
-            if (!o) advance();
+            // A single-file queue advances to empty, which closes the modal.
+            // Bulk drop is the explicit "Cancel all" → onCancelAll below.
+            // Nothing closes it while its commit is in flight (PG-4).
+            if (!o) advancePast(current);
           }}
           queuePosition={position}
           queueLength={queue.length}
           onCancelAll={dropAll}
-          onSaved={() => advance()}
+          onSaved={() => advancePast(current)}
         />
       )}
     </>

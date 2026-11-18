@@ -137,3 +137,31 @@ describe('ratchet self-test — the parser cannot silently drop scopes (F2b)', (
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// v1.8.0 W4 (C009): the statements archive writes into a folder picked in an
+// EARLIER session. The dialog's grant for it is session-only, so after a
+// relaunch every fs call the archive makes must be allowed by a static scope
+// that reaches a folder under $HOME. exists() had none (fs:default covers the
+// app's own folders only), so archiving failed on every import after a
+// relaunch. A new fs call in statements-archive.ts fails here until its
+// permission carries the $HOME scope (or the archive moves behind a narrower
+// grant, C089, and this ratchet with it).
+// ---------------------------------------------------------------------------
+describe('the statements archive reaches its folder after a relaunch (C009)', () => {
+  it('every @tauri-apps/plugin-fs function statements-archive.ts imports has a static $HOME scope', () => {
+    const src = readFileSync(path.join(ROOT, 'src', 'lib', 'statements-archive.ts'), 'utf8');
+    const imported = src.match(/import\s*\{([^}]*)\}\s*from\s*'@tauri-apps\/plugin-fs'/);
+    expect(imported, 'statements-archive.ts imports from @tauri-apps/plugin-fs').not.toBeNull();
+    const fns = imported![1].split(',').map((s) => s.trim()).filter(Boolean);
+    expect(fns.length).toBeGreaterThan(0);
+    const scopes = Object.fromEntries(fsPermissions().map((p) => [p.identifier, p.paths]));
+    for (const fn of fns) {
+      const permission = `fs:allow-${fn.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+      expect(
+        scopes[permission] ?? [],
+        `${fn} needs ${permission} with a $HOME scope, or it is refused on the first import after a relaunch`,
+      ).toContain('$HOME/**/*');
+    }
+  });
+});
