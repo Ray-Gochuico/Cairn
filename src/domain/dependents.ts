@@ -1,5 +1,5 @@
 import type { Database } from '@/db/db';
-import { DependentSchema, type Dependent } from '@/types/schema';
+import { DependentSchema, DependentRowSchema, type Dependent } from '@/types/schema';
 import { DependentType } from '@/types/enums';
 
 interface DependentRow {
@@ -11,7 +11,7 @@ interface DependentRow {
 }
 
 function rowToDependent(row: DependentRow): Dependent {
-  return DependentSchema.parse({
+  return DependentRowSchema.parse({
     id: row.id,
     householdId: row.household_id,
     name: row.name,

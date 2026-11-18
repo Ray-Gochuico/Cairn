@@ -1,5 +1,5 @@
 import type { BatchStatement, Database } from '@/db/db';
-import { ContributionSchema, type Contribution } from '@/types/schema';
+import { ContributionSchema, ContributionRowSchema, type Contribution } from '@/types/schema';
 import { ContributionSource } from '@/types/enums';
 
 interface ContributionRow {
@@ -12,7 +12,7 @@ interface ContributionRow {
 }
 
 function rowToContribution(row: ContributionRow): Contribution {
-  return ContributionSchema.parse({
+  return ContributionRowSchema.parse({
     id: row.id,
     accountId: row.account_id,
     personId: row.person_id,

@@ -1,5 +1,5 @@
 import type { BatchStatement, Database } from '@/db/db';
-import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
+import { EquityGrantSchema, EquityGrantRowSchema, type EquityGrant } from '@/types/schema';
 import type { GrantType } from '@/types/enums';
 
 // Note on schema/SQL asymmetry: company_name is TEXT (nullable) at the SQL
@@ -48,7 +48,7 @@ function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
   } catch {
     // leave as []
   }
-  return EquityGrantSchema.parse({
+  return EquityGrantRowSchema.parse({
     id: row.id,
     householdId: row.household_id,
     ownerPersonId: row.owner_person_id,
